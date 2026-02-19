@@ -77,6 +77,8 @@ const Config = {
     6: '#FFD700',
     7: '#00FF88',
     8: '#FF69B4',
+    9: '#44DDFF',
+    10: '#FF2222',
   },
 
   // 砖块（基础值，章节具体值从 ChapterConfig 读取）

@@ -56,41 +56,41 @@ class ChapterConfig {
     // v6.0 重新设计：前30秒就开始加压，节奏更紧凑
     // 总时长10分钟 = 600秒，全程持续施压
     var phases = [
-      // 0~30秒：短暂热身，但已经有节奏感
-      { time: 0,      phase: 'warmup',    intensity: 0.4,  hpRange: [1, 1], spawnMult: 0.8,  types: ['normal'],
-        scrollAccel: 0.002 }, // 每秒scrollSpeed += scrollAccel
-      // 30~80秒：第一波压力，fast砖登场，HP开始爬升
-      { time: 30000,  phase: 'wave1',     intensity: 0.55, hpRange: [1, 2], spawnMult: 1.0,  types: ['normal', 'fast'],
-        scrollAccel: 0.003 },
-      // 80~120秒：第一波高潮，阵型砖登场，密度增加
-      { time: 80000,  phase: 'surge1',    intensity: 0.7,  hpRange: [2, 3], spawnMult: 1.2,  types: ['normal', 'fast', 'formation'],
+      // 0~25秒：热身，已有2HP砖混入
+      { time: 0,      phase: 'warmup',    intensity: 0.4,  hpRange: [1, 2], spawnMult: 0.8,  types: ['normal'],
         scrollAccel: 0.002 },
-      // 120~140秒：短喘息（20秒），让玩家享受清场爽感
-      { time: 120000, phase: 'breather1', intensity: 0.3,  hpRange: [1, 2], spawnMult: 0.6,  types: ['normal'],
-        scrollAccel: 0 },
-      // 140~200秒：第二波压力，护盾+分裂砖登场，HP更高
-      { time: 140000, phase: 'wave2',     intensity: 0.75, hpRange: [2, 4], spawnMult: 1.2,  types: ['normal', 'fast', 'formation', 'shield', 'split'],
+      // 25~70秒：第一波，HP快速爬升到3
+      { time: 25000,  phase: 'wave1',     intensity: 0.55, hpRange: [2, 3], spawnMult: 1.0,  types: ['normal', 'fast'],
         scrollAccel: 0.003 },
-      // 200~260秒：高压期，砖块HP和密度大幅上升
-      { time: 200000, phase: 'highpres',  intensity: 0.9,  hpRange: [3, 5], spawnMult: 1.4,  types: ['normal', 'fast', 'formation', 'shield', 'split'],
+      // 70~110秒：第一波高潮，HP到4，阵型砖
+      { time: 70000,  phase: 'surge1',    intensity: 0.7,  hpRange: [3, 5], spawnMult: 1.2,  types: ['normal', 'fast', 'formation'],
+        scrollAccel: 0.002 },
+      // 110~130秒：短喘息（20秒）
+      { time: 110000, phase: 'breather1', intensity: 0.3,  hpRange: [2, 3], spawnMult: 0.6,  types: ['normal'],
+        scrollAccel: 0 },
+      // 130~190秒：第二波，护盾+分裂，HP到5
+      { time: 130000, phase: 'wave2',     intensity: 0.75, hpRange: [3, 6], spawnMult: 1.2,  types: ['normal', 'fast', 'formation', 'shield', 'split'],
         scrollAccel: 0.003 },
-      // 260~280秒：第二次喘息
-      { time: 260000, phase: 'breather2', intensity: 0.35, hpRange: [2, 2], spawnMult: 0.5,  types: ['normal'],
+      // 190~250秒：高压期，HP到7
+      { time: 190000, phase: 'highpres',  intensity: 0.9,  hpRange: [4, 7], spawnMult: 1.4,  types: ['normal', 'fast', 'formation', 'shield', 'split'],
+        scrollAccel: 0.003 },
+      // 250~270秒：第二次喘息
+      { time: 250000, phase: 'breather2', intensity: 0.35, hpRange: [3, 4], spawnMult: 0.5,  types: ['normal'],
         scrollAccel: 0 },
-      // 280~360秒：第三波，全种类砖块，密度继续爬升
-      { time: 280000, phase: 'wave3',     intensity: 0.85, hpRange: [3, 5], spawnMult: 1.3,  types: ['normal', 'fast', 'formation', 'shield', 'split', 'stealth'],
+      // 270~350秒：第三波，HP到8
+      { time: 270000, phase: 'wave3',     intensity: 0.85, hpRange: [5, 8], spawnMult: 1.3,  types: ['normal', 'fast', 'formation', 'shield', 'split', 'stealth'],
         scrollAccel: 0.004 },
-      // 360~430秒：极限冲刺，最高难度
-      { time: 360000, phase: 'sprint',    intensity: 1.0,  hpRange: [4, 6], spawnMult: 1.6,  types: ['normal', 'fast', 'formation', 'shield', 'split', 'stealth', 'healer'],
+      // 350~420秒：极限冲刺
+      { time: 350000, phase: 'sprint',    intensity: 1.0,  hpRange: [6, 10], spawnMult: 1.6, types: ['normal', 'fast', 'formation', 'shield', 'split', 'stealth', 'healer'],
         scrollAccel: 0.004 },
-      // 430~450秒：最后喘息
-      { time: 430000, phase: 'breather3', intensity: 0.3,  hpRange: [2, 3], spawnMult: 0.4,  types: ['normal'],
+      // 420~445秒：最后喘息
+      { time: 420000, phase: 'breather3', intensity: 0.3,  hpRange: [3, 4], spawnMult: 0.4,  types: ['normal'],
         scrollAccel: 0 },
-      // 450~480秒：Boss预热（清场阶段）
-      { time: 450000, phase: 'preBoss',   intensity: 0.1,  hpRange: [1, 1], spawnMult: 0.2,  types: ['normal'],
+      // 445~475秒：Boss预热
+      { time: 445000, phase: 'preBoss',   intensity: 0.1,  hpRange: [1, 2], spawnMult: 0.2,  types: ['normal'],
         scrollAccel: 0 },
-      // 480秒：Boss战
-      { time: 480000, phase: 'boss',      intensity: 0,    hpRange: [0, 0], spawnMult: 0,    types: [],
+      // 475秒：Boss战
+      { time: 475000, phase: 'boss',      intensity: 0,    hpRange: [0, 0], spawnMult: 0,    types: [],
         scrollAccel: 0 },
     ];
 
