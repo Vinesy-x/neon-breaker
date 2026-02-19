@@ -66,7 +66,7 @@ const Config = {
   // 砖块
   BRICK_COLS: 7,
   BRICK_PADDING: 4,
-  BRICK_TOP_OFFSET: _safeTop + 30, // 砖块起始Y（安全区下方）
+  BRICK_TOP_OFFSET: _safeTop + 30,
   BRICK_HEIGHT: 20,
   BRICK_HP_COLORS: {
     1: null,
@@ -75,13 +75,17 @@ const Config = {
     4: '#AA00FF',
   },
 
-  // 砖块前移
-  BRICK_ADVANCE_INTERVAL: 10000,
-  BRICK_ADVANCE_STEP: 24,
-  BRICK_DANGER_Y: 0.75,
+  // 砖块持续下移（无限模式）
+  BRICK_SCROLL_SPEED: 0.15,       // 每帧下移像素（很慢）
+  BRICK_SPAWN_INTERVAL: 3000,     // 每3秒生成新一行
+  BRICK_INIT_ROWS: 5,             // 初始行数
+  BRICK_GAP_CHANCE: 0.15,         // 每个位置15%概率空洞
+  BRICK_DANGER_Y: 0.78,           // 危险线位置（屏幕比例）
+  BRICK_SPEED_INCREMENT: 0.02,    // 每次难度提升增加的速度
+  DIFFICULTY_INTERVAL: 30000,     // 每30秒难度+1
 
   // Boss
-  BOSS_TRIGGER_INTERVAL: 5,
+  BOSS_TRIGGER_TIME: 60000,  // 每60秒触发Boss
   BOSS_WIDTH: 160,
   BOSS_HEIGHT: 40,
   BOSS_SPEED: 2,
@@ -206,7 +210,7 @@ const Config = {
     { key: 'fireRate', name: '射速', desc: '射速+15%', icon: '»', color: '#FFF050', maxLevel: 5 },
     { key: 'spread', name: '散射', desc: '子弹+1发', icon: '⋮', color: '#FF14FF', maxLevel: 4 },
     { key: 'bulletDmg', name: '弹伤', desc: '子弹伤害+1', icon: '↑', color: '#50FFB4', maxLevel: 4 },
-    { key: 'extraLife', name: '+命', desc: '额外生命+1', icon: '♥', color: '#FF14FF', maxLevel: 3 },
+    { key: 'clearBomb', name: '清屏', desc: '清除底部一行砖块', icon: '💥', color: '#FF14FF', maxLevel: 3 },
     { key: 'magnet', name: '磁力', desc: '道具自动吸附', icon: '⊕', color: '#FFF050', maxLevel: 1 },
     { key: 'crit', name: '暴击', desc: '子弹20%双倍伤害', icon: '✕', color: '#FF3333', maxLevel: 3 },
     { key: 'pierce', name: '穿透', desc: '子弹穿透+1层', icon: '↟', color: '#00FFFF', maxLevel: 3 },
@@ -219,7 +223,7 @@ const Config = {
     lightning: { weapon: 'lightning', buff: 'pierce' },
     missile: { weapon: 'missile', buff: 'spread' },
     laserBeam: { weapon: 'laserBeam', buff: 'bulletDmg' },
-    iceField: { weapon: 'iceField', buff: 'extraLife' },
+    iceField: { weapon: 'iceField', buff: 'clearBomb' },
   },
 
   // 游戏状态
@@ -228,12 +232,9 @@ const Config = {
     TITLE: 'TITLE',
     PLAYING: 'PLAYING',
     BOSS: 'BOSS',
-    LEVEL_CLEAR: 'LEVEL_CLEAR',
     LEVEL_UP: 'LEVEL_UP',
     GAME_OVER: 'GAME_OVER',
   },
-
-  INITIAL_LIVES: 3,
 
   // ===== 经验系统 =====
   EXP_PER_BRICK: 8,         // 每个砖块基础经验

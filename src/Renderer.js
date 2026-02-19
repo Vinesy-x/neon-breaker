@@ -195,11 +195,10 @@ class Renderer {
     ctx.fillText('BOSS P' + (boss.phase + 1), x + width / 2, y + height / 2);
   }
 
-  // ===== 危险线 =====
-  drawDangerLine(dangerY, warning) {
+  // ===== 危险线（固定，不闪烁） =====
+  drawDangerLine(dangerY) {
     const ctx = this.ctx;
-    const alpha = warning ? 0.4 + Math.sin(Date.now() * 0.01) * 0.3 : 0.15;
-    ctx.strokeStyle = 'rgba(255, 50, 50, ' + alpha + ')';
+    ctx.strokeStyle = 'rgba(255, 50, 50, 0.2)';
     ctx.lineWidth = 1;
     ctx.setLineDash([8, 4]);
     ctx.beginPath();
@@ -207,26 +206,6 @@ class Renderer {
     ctx.lineTo(Config.SCREEN_WIDTH, dangerY);
     ctx.stroke();
     ctx.setLineDash([]);
-    if (warning) {
-      ctx.fillStyle = 'rgba(255, 50, 50, ' + alpha + ')';
-      ctx.font = '10px monospace';
-      ctx.textAlign = 'right';
-      ctx.textBaseline = 'bottom';
-      ctx.fillText('DANGER', Config.SCREEN_WIDTH - 8, dangerY - 3);
-    }
-  }
-
-  // ===== 前移进度条 =====
-  drawAdvanceBar(timer, interval) {
-    const ctx = this.ctx;
-    const ratio = timer / interval;
-    const barY = Config.SAFE_TOP - 4;
-    ctx.fillStyle = 'rgba(255,255,255,0.05)';
-    ctx.fillRect(0, barY, Config.SCREEN_WIDTH, 3);
-    const r = Math.floor(255 * ratio);
-    const g = Math.floor(100 * (1 - ratio));
-    ctx.fillStyle = 'rgb(' + r + ', ' + g + ', 50)';
-    ctx.fillRect(0, barY, Config.SCREEN_WIDTH * ratio, 3);
   }
 
   // ===== 武器视觉渲染 =====
@@ -538,7 +517,7 @@ class Renderer {
   }
 
   // ===== HUD =====
-  drawHUD(score, lives, combo, level, soundEnabled) {
+  drawHUD(score, combo, playerLevel, difficulty, soundEnabled) {
     const ctx = this.ctx;
     const top = Config.SAFE_TOP;
 
@@ -549,12 +528,11 @@ class Renderer {
     ctx.fillText('SCORE:' + score, 10, top);
     ctx.fillStyle = Config.NEON_GREEN;
     ctx.textAlign = 'center';
-    ctx.fillText('LV ' + level, Config.SCREEN_WIDTH / 2, top);
-    ctx.fillStyle = Config.NEON_PINK;
+    ctx.fillText('Lv.' + playerLevel, Config.SCREEN_WIDTH / 2, top);
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '10px monospace';
     ctx.textAlign = 'right';
-    let livesText = '';
-    for (let i = 0; i < Math.min(lives, 10); i++) livesText += '♥';
-    ctx.fillText(livesText, Config.SCREEN_WIDTH - 8, top);
+    ctx.fillText('WAVE ' + (difficulty + 1), Config.SCREEN_WIDTH - 8, top);
     if (combo > 1) {
       ctx.fillStyle = Config.NEON_YELLOW;
       ctx.font = 'bold 13px monospace';
@@ -598,13 +576,13 @@ class Renderer {
     ctx.fillText('霓虹碎核', cx, cy + 20);
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
     ctx.font = '11px monospace';
-    ctx.fillText('射击肉鸽 · 弹幕清砖 · 满屏特效', cx, cy + 45);
+    ctx.fillText('无限射击 · 弹幕清砖 · 满屏特效', cx, cy + 45);
     ctx.fillStyle = 'rgba(255,255,255,0.6)';
     ctx.font = '16px monospace';
     ctx.fillText('点击屏幕开始', cx, cy + 90);
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
     ctx.font = '10px monospace';
-    ctx.fillText('v4.0.0', cx, Config.SCREEN_HEIGHT - 30);
+    ctx.fillText('v4.1.0', cx, Config.SCREEN_HEIGHT - 30);
   }
 
   // ===== 经验球 =====
@@ -807,7 +785,7 @@ class Renderer {
   }
 
   // ===== Game Over =====
-  drawGameOver(score, level, playerLevel, ownedList) {
+  drawGameOver(score, playerLevel, ownedList) {
     const ctx = this.ctx;
     const cx = Config.SCREEN_WIDTH / 2;
     const cy = Config.SCREEN_HEIGHT / 2;
@@ -824,7 +802,7 @@ class Renderer {
     ctx.font = '16px monospace';
     ctx.fillText('得分: ' + score, cx, cy - 60);
     ctx.fillStyle = Config.NEON_GREEN;
-    ctx.fillText('关卡: ' + level + '  等级: Lv.' + playerLevel, cx, cy - 35);
+    ctx.fillText('等级: Lv.' + playerLevel, cx, cy - 35);
 
     if (ownedList && ownedList.length > 0) {
       ctx.fillStyle = 'rgba(255,255,255,0.5)';
