@@ -236,10 +236,10 @@ const Config = {
   INITIAL_LIVES: 3,
 
   // ===== 经验系统 =====
-  EXP_PER_BRICK: 10,        // 每个砖块基础经验
-  EXP_PER_HP: 5,            // 每点HP额外经验
-  EXP_BASE_TO_LEVEL: 50,    // 1级升级所需经验
-  EXP_GROWTH: 1.25,         // 每级经验增长系数
+  EXP_PER_BRICK: 8,         // 每个砖块基础经验
+  EXP_PER_HP: 3,            // 每点HP额外经验
+  EXP_BASE_TO_LEVEL: 120,   // 1级升级所需经验
+  EXP_GROWTH: 1.4,          // 每级经验增长系数
   EXP_ORB_SPEED: 6,         // 经验球飞行速度
   EXP_ORB_SIZE: 4,          // 经验球大小
   EXP_ORB_COLOR: '#AAFFFF', // 经验球颜色
