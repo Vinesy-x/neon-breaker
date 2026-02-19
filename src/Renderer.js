@@ -152,6 +152,18 @@ class Renderer {
     if (!brick.alive) return;
     const ctx = this.ctx;
     const { x, y, width, height, color, hp, maxHp } = brick;
+    const type = brick.type || 'normal';
+
+    // 隐身砖块不可见时只画鬼影
+    if (type === 'stealth' && !brick.visible) {
+      ctx.globalAlpha = 0.12;
+      ctx.fillStyle = Config.BRICK_TYPE_COLORS.stealth;
+      ctx.beginPath();
+      ctx.roundRect(x, y, width, height, 3);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      return;
+    }
 
     // 接近危险线时变红
     const dangerY = Config.SCREEN_HEIGHT * Config.BRICK_DANGER_Y;
@@ -163,16 +175,84 @@ class Renderer {
       brick.flashTimer--;
       ctx.fillStyle = '#FFFFFF';
     } else if (dangerRatio > 0.5) {
-      // 接近底线闪红
       const pulse = 0.5 + Math.sin(Date.now() * 0.01) * 0.3;
       ctx.fillStyle = 'rgba(255, ' + Math.floor(50 * (1 - dangerRatio)) + ', ' + Math.floor(50 * (1 - dangerRatio)) + ', ' + (0.7 + pulse * 0.3) + ')';
     } else {
       ctx.fillStyle = color;
     }
 
+    // 隐身砖块渐隐
+    if (type === 'stealth') {
+      ctx.globalAlpha = 0.6 + Math.sin(Date.now() * 0.003) * 0.2;
+    }
+
     ctx.beginPath();
     ctx.roundRect(x, y, width, height, 3);
     ctx.fill();
+
+    // === 砖块类型特殊视觉 ===
+
+    // 快速砖块：向下速度线
+    if (type === 'fast') {
+      ctx.strokeStyle = 'rgba(255,136,0,0.5)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 2; i++) {
+        const lx = x + width * 0.3 + i * width * 0.4;
+        ctx.beginPath();
+        ctx.moveTo(lx, y - 3);
+        ctx.lineTo(lx, y + 6);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(lx - 2, y + 3);
+        ctx.lineTo(lx, y + 6);
+        ctx.lineTo(lx + 2, y + 3);
+        ctx.stroke();
+      }
+    }
+
+    // 护盾砖块：外层白色半透明框
+    if (type === 'shield' && brick.shieldHp > 0) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(x - 2, y - 2, width + 4, height + 4, 5);
+      ctx.stroke();
+    }
+
+    // 分裂砖块：X裂纹
+    if (type === 'split') {
+      ctx.strokeStyle = 'rgba(0,255,200,0.5)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x + 3, y + 3);
+      ctx.lineTo(x + width - 3, y + height - 3);
+      ctx.moveTo(x + width - 3, y + 3);
+      ctx.lineTo(x + 3, y + height - 3);
+      ctx.stroke();
+    }
+
+    // 治愈砖块：脉冲绿色光环
+    if (type === 'healer') {
+      const healPulse = (brick.healTimer || 0) / 3000;
+      if (healPulse > 0.7) {
+        const ring = (healPulse - 0.7) / 0.3;
+        ctx.globalAlpha = (1 - ring) * 0.4;
+        ctx.strokeStyle = Config.NEON_GREEN;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(x + width / 2, y + height / 2, width / 2 + ring * 12, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      // 红十字标记
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      const cx = x + width / 2;
+      const cy = y + height / 2;
+      ctx.fillRect(cx - 1, cy - 4, 2, 8);
+      ctx.fillRect(cx - 4, cy - 1, 8, 2);
+    }
+
+    ctx.globalAlpha = 1;
 
     // 高HP砖块发光边框
     if (maxHp >= 4) {
@@ -181,7 +261,7 @@ class Renderer {
       ctx.beginPath();
       ctx.roundRect(x, y, width, height, 3);
       ctx.stroke();
-    } else if (maxHp > 1) {
+    } else if (maxHp > 1 && type !== 'shield') {
       ctx.strokeStyle = 'rgba(255,255,255,0.4)';
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -632,7 +712,7 @@ class Renderer {
     ctx.fillText('点击屏幕开始', cx, cy + 90);
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
     ctx.font = '10px monospace';
-    ctx.fillText('v4.2.1', cx, Config.SCREEN_HEIGHT - 30);
+    ctx.fillText('v5.0.0', cx, Config.SCREEN_HEIGHT - 30);
   }
 
   // ===== 经验球 =====
@@ -910,6 +990,755 @@ class Renderer {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('LOADING...', cx, cy);
+  }
+
+  // ===== v5.0 章节选择界面 =====
+  drawChapterSelect(maxChapter, records, coins) {
+    const ctx = this.ctx;
+    const sw = Config.SCREEN_WIDTH;
+    const sh = Config.SCREEN_HEIGHT;
+    const top = Config.SAFE_TOP;
+
+    // 背景
+    ctx.fillStyle = 'rgba(0,0,0,0.9)';
+    ctx.fillRect(0, 0, sw, sh);
+
+    // 顶部栏
+    ctx.fillStyle = Config.NEON_YELLOW;
+    ctx.font = 'bold 14px monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('💰 ' + coins, 12, top);
+
+    ctx.fillStyle = Config.NEON_GREEN;
+    ctx.font = 'bold 12px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText('[升级]', sw - 12, top);
+    this._upgradeButtonArea = { x: sw - 60, y: top - 4, w: 56, h: 22 };
+
+    // 标题
+    ctx.fillStyle = Config.NEON_CYAN;
+    ctx.font = 'bold 18px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('选择章节', sw / 2, top + 28);
+
+    // 章节网格 3列
+    const cols = 3;
+    const gap = 10;
+    const margin = 16;
+    const cardW = Math.floor((sw - margin * 2 - gap * (cols - 1)) / cols);
+    const cardH = 64;
+    const gridTop = top + 58;
+    const bossIcons = { charger: '🔴', guardian: '🔵', summoner: '🟣', laser: '🟡', phantom: '⚪' };
+    const bossTypes = ['charger', 'guardian', 'summoner', 'laser', 'phantom'];
+
+    this._chapterHitAreas = [];
+
+    const totalRows = Math.ceil(100 / cols);
+    const scrollY = this._chapterScrollY || 0;
+
+    for (let i = 0; i < 100; i++) {
+      const row = Math.floor(i / cols);
+      const col = i % cols;
+      const chapter = i + 1;
+      const x = margin + col * (cardW + gap);
+      const y = gridTop + row * (cardH + gap) - scrollY;
+
+      // 裁剪不可见的
+      if (y + cardH < gridTop - 10 || y > sh + 10) continue;
+
+      const unlocked = chapter <= maxChapter;
+      const cleared = records[chapter] && records[chapter].cleared;
+      const bossType = bossTypes[(chapter - 1) % 5];
+
+      // 卡片背景
+      if (!unlocked) {
+        ctx.fillStyle = 'rgba(40,40,60,0.5)';
+      } else if (cleared) {
+        ctx.fillStyle = 'rgba(0,60,40,0.6)';
+      } else {
+        ctx.fillStyle = 'rgba(20,10,60,0.8)';
+      }
+      ctx.beginPath();
+      ctx.roundRect(x, y, cardW, cardH, 8);
+      ctx.fill();
+
+      // 边框
+      ctx.strokeStyle = unlocked ? (cleared ? Config.NEON_GREEN : Config.NEON_CYAN) : 'rgba(100,100,100,0.3)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(x, y, cardW, cardH, 8);
+      ctx.stroke();
+
+      const ccx = x + cardW / 2;
+
+      if (!unlocked) {
+        ctx.fillStyle = 'rgba(150,150,150,0.5)';
+        ctx.font = '20px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🔒', ccx, y + cardH / 2);
+      } else {
+        // 章节号
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 14px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText('' + chapter, ccx, y + 6);
+
+        // Boss图标
+        ctx.font = '18px monospace';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(bossIcons[bossType] || '⚪', ccx, y + 34);
+
+        // 通关标记
+        if (cleared) {
+          ctx.fillStyle = Config.NEON_GREEN;
+          ctx.font = '10px monospace';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText('✅', ccx, y + cardH - 4);
+        }
+      }
+
+      if (unlocked) {
+        this._chapterHitAreas.push({ chapter: chapter, x: x, y: y, w: cardW, h: cardH });
+      }
+    }
+
+    // 底部提示
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText('上下滑动浏览', sw / 2, sh - Config.SAFE_BOTTOM - 4);
+  }
+
+  // ===== 升级商店 =====
+  drawUpgradeShop(saveManager) {
+    const ctx = this.ctx;
+    const sw = Config.SCREEN_WIDTH;
+    const sh = Config.SCREEN_HEIGHT;
+    const top = Config.SAFE_TOP;
+
+    ctx.fillStyle = 'rgba(0,0,0,0.95)';
+    ctx.fillRect(0, 0, sw, sh);
+
+    // 顶部
+    ctx.fillStyle = Config.NEON_YELLOW;
+    ctx.font = 'bold 14px monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('💰 ' + saveManager.getCoins(), 12, top);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.font = '12px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText('[返回]', sw - 12, top);
+    this._shopBackArea = { x: sw - 50, y: top - 4, w: 46, h: 22 };
+
+    ctx.fillStyle = Config.NEON_PINK;
+    ctx.font = 'bold 16px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('永久升级', sw / 2, top + 28);
+
+    const upgrades = [
+      { key: 'attack', name: '基础攻击', desc: '子弹伤害+1', icon: '⚔' },
+      { key: 'fireRate', name: '基础射速', desc: '射击间隔-2%', icon: '»' },
+      { key: 'crit', name: '暴击率', desc: '暴击+1%', icon: '✕' },
+      { key: 'startLevel', name: '起始等级', desc: '开局自带等级', icon: '⬆' },
+      { key: 'coinBonus', name: '金币加成', desc: '金币+5%', icon: '💰' },
+      { key: 'expBonus', name: '经验加成', desc: '经验+3%', icon: '✧' },
+    ];
+
+    const itemH = 56;
+    const itemGap = 6;
+    const startY = top + 56;
+    const itemMargin = 12;
+
+    this._shopUpgradeAreas = [];
+
+    for (let i = 0; i < upgrades.length; i++) {
+      const u = upgrades[i];
+      const y = startY + i * (itemH + itemGap);
+      const lv = saveManager.getUpgrade(u.key);
+      const maxed = saveManager.isUpgradeMaxed(u.key);
+      const cost = saveManager.getUpgradeCost(u.key);
+      const canAfford = saveManager.getCoins() >= cost;
+
+      // 行背景
+      ctx.fillStyle = 'rgba(20,10,50,0.8)';
+      ctx.beginPath();
+      ctx.roundRect(itemMargin, y, sw - itemMargin * 2, itemH, 8);
+      ctx.fill();
+
+      // 图标
+      ctx.fillStyle = maxed ? Config.NEON_GREEN : Config.NEON_CYAN;
+      ctx.font = '20px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(u.icon, itemMargin + 24, y + itemH / 2);
+
+      // 名称 + 等级
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 12px monospace';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText(u.name, itemMargin + 46, y + 8);
+
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.font = '10px monospace';
+      ctx.fillText(u.desc, itemMargin + 46, y + 24);
+
+      // 等级条
+      const SaveManagerClass = require('./SaveManager');
+      const maxLvl = SaveManagerClass.UPGRADE_CONFIG[u.key] ? SaveManagerClass.UPGRADE_CONFIG[u.key].maxLevel : 1;
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.font = '9px monospace';
+      ctx.fillText('Lv.' + lv + '/' + maxLvl, itemMargin + 46, y + 38);
+
+      // 升级按钮
+      const btnW = 64;
+      const btnH = 28;
+      const btnX = sw - itemMargin - btnW - 8;
+      const btnY = y + (itemH - btnH) / 2;
+
+      if (maxed) {
+        ctx.fillStyle = 'rgba(80,255,80,0.15)';
+        ctx.beginPath();
+        ctx.roundRect(btnX, btnY, btnW, btnH, 6);
+        ctx.fill();
+        ctx.fillStyle = Config.NEON_GREEN;
+        ctx.font = 'bold 10px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('MAX', btnX + btnW / 2, btnY + btnH / 2);
+      } else {
+        ctx.fillStyle = canAfford ? 'rgba(0,200,255,0.2)' : 'rgba(100,100,100,0.15)';
+        ctx.beginPath();
+        ctx.roundRect(btnX, btnY, btnW, btnH, 6);
+        ctx.fill();
+        ctx.strokeStyle = canAfford ? Config.NEON_CYAN : 'rgba(100,100,100,0.3)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(btnX, btnY, btnW, btnH, 6);
+        ctx.stroke();
+        ctx.fillStyle = canAfford ? '#FFFFFF' : 'rgba(150,150,150,0.5)';
+        ctx.font = 'bold 10px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('💰' + cost, btnX + btnW / 2, btnY + btnH / 2);
+      }
+
+      if (!maxed) {
+        this._shopUpgradeAreas.push({ key: u.key, x: btnX, y: btnY, w: btnW, h: btnH });
+      }
+    }
+  }
+
+  // ===== 章节通关结算 =====
+  drawChapterClear(chapter, score, playerLevel, maxCombo, ownedList, coinsEarned, isFirstClear) {
+    const ctx = this.ctx;
+    const sw = Config.SCREEN_WIDTH;
+    const sh = Config.SCREEN_HEIGHT;
+    const cx = sw / 2;
+
+    ctx.fillStyle = 'rgba(0,0,0,0.9)';
+    ctx.fillRect(0, 0, sw, sh);
+
+    // 标题
+    const pulse = 0.8 + Math.sin(Date.now() * 0.005) * 0.2;
+    ctx.globalAlpha = pulse;
+    ctx.fillStyle = Config.NEON_YELLOW;
+    ctx.font = 'bold 22px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('✨ CHAPTER ' + chapter + ' CLEAR ✨', cx, sh * 0.15);
+    ctx.globalAlpha = 1;
+
+    // 数据
+    ctx.fillStyle = Config.NEON_CYAN;
+    ctx.font = '14px monospace';
+    ctx.fillText('得分: ' + score, cx, sh * 0.26);
+    ctx.fillStyle = Config.NEON_GREEN;
+    ctx.fillText('等级: Lv.' + playerLevel, cx, sh * 0.32);
+    ctx.fillStyle = Config.NEON_PINK;
+    ctx.fillText('最高Combo: ' + maxCombo, cx, sh * 0.38);
+
+    // Build
+    if (ownedList && ownedList.length > 0) {
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.font = '11px monospace';
+      ctx.fillText('你的 Build:', cx, sh * 0.46);
+
+      const perRow = 6;
+      const icoSz = 22;
+      const icoGap = 6;
+      const totalW = Math.min(ownedList.length, perRow) * (icoSz + icoGap) - icoGap;
+      const startX = cx - totalW / 2;
+      for (let i = 0; i < ownedList.length; i++) {
+        const p = ownedList[i];
+        const row = Math.floor(i / perRow);
+        const col = i % perRow;
+        const px = startX + col * (icoSz + icoGap) + icoSz / 2;
+        const py = sh * 0.52 + row * (icoSz + icoGap + 4);
+        ctx.fillStyle = p.color;
+        ctx.font = (icoSz - 4) + 'px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(p.icon, px, py);
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.font = '7px monospace';
+        ctx.fillText(typeof p.level === 'number' ? 'Lv.' + p.level : p.level, px, py + 12);
+      }
+    }
+
+    // 金币
+    ctx.fillStyle = Config.NEON_YELLOW;
+    ctx.font = 'bold 16px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('💰 +' + coinsEarned + ' 金币', cx, sh * 0.68);
+    if (isFirstClear) {
+      ctx.fillStyle = Config.NEON_ORANGE;
+      ctx.font = '12px monospace';
+      ctx.fillText('(首通 ×2!)', cx, sh * 0.73);
+    }
+
+    // 按钮
+    const btnW = 100;
+    const btnH = 36;
+    const btnGap = 16;
+
+    // 下一章
+    const nextX = cx - btnW - btnGap / 2;
+    const nextY = sh * 0.80;
+    ctx.fillStyle = 'rgba(0,200,100,0.2)';
+    ctx.beginPath();
+    ctx.roundRect(nextX, nextY, btnW, btnH, 8);
+    ctx.fill();
+    ctx.strokeStyle = Config.NEON_GREEN;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(nextX, nextY, btnW, btnH, 8);
+    ctx.stroke();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 13px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('下一章', nextX + btnW / 2, nextY + btnH / 2);
+
+    // 返回
+    const backX = cx + btnGap / 2;
+    const backY = sh * 0.80;
+    ctx.fillStyle = 'rgba(100,100,100,0.2)';
+    ctx.beginPath();
+    ctx.roundRect(backX, backY, btnW, btnH, 8);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(backX, backY, btnW, btnH, 8);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.font = 'bold 13px monospace';
+    ctx.fillText('返回', backX + btnW / 2, backY + btnH / 2);
+
+    this._clearNextArea = { x: nextX, y: nextY, w: btnW, h: btnH };
+    this._clearBackArea = { x: backX, y: backY, w: btnW, h: btnH };
+  }
+
+  // ===== Boss警告 =====
+  drawBossWarning(bossType) {
+    const ctx = this.ctx;
+    const sw = Config.SCREEN_WIDTH;
+    const sh = Config.SCREEN_HEIGHT;
+    const cx = sw / 2;
+
+    const flash = Math.sin(Date.now() * 0.01) > 0 ? 0.6 : 0.3;
+    ctx.fillStyle = 'rgba(255,0,0,' + (flash * 0.15) + ')';
+    ctx.fillRect(0, 0, sw, sh);
+
+    ctx.fillStyle = 'rgba(255,50,50,' + flash + ')';
+    ctx.font = 'bold 28px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('⚠ WARNING ⚠', cx, sh * 0.4);
+
+    const bossNames = {
+      charger: '冲锋者',
+      guardian: '护盾卫士',
+      summoner: '召唤师',
+      laser: '激光炮台',
+      phantom: '幽影刺客',
+    };
+    const bossIcons = {
+      charger: '🔴',
+      guardian: '🔵',
+      summoner: '🟣',
+      laser: '🟡',
+      phantom: '⚪',
+    };
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.globalAlpha = flash;
+    ctx.font = 'bold 16px monospace';
+    ctx.fillText(bossIcons[bossType] + ' ' + (bossNames[bossType] || 'BOSS') + ' 来袭!', cx, sh * 0.5);
+    ctx.globalAlpha = 1;
+  }
+
+  // ===== 章节内HUD =====
+  drawChapterHUD(chapter, score, combo, playerLevel, elapsedMs, soundEnabled) {
+    const ctx = this.ctx;
+    const top = Config.SAFE_TOP;
+
+    // 章节号
+    ctx.fillStyle = Config.NEON_PINK;
+    ctx.font = 'bold 12px monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('CH.' + chapter, 10, top);
+
+    // 分数
+    ctx.fillStyle = Config.NEON_CYAN;
+    ctx.font = 'bold 14px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('' + score, Config.SCREEN_WIDTH / 2, top);
+
+    // 等级
+    ctx.fillStyle = Config.NEON_GREEN;
+    ctx.font = '11px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText('Lv.' + playerLevel, Config.SCREEN_WIDTH - 8, top);
+
+    // 时间
+    const sec = Math.floor(elapsedMs / 1000);
+    const min = Math.floor(sec / 60);
+    const s = sec % 60;
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(min + ':' + (s < 10 ? '0' : '') + s, Config.SCREEN_WIDTH - 8, top + 14);
+
+    // Combo
+    if (combo > 1) {
+      ctx.fillStyle = Config.NEON_YELLOW;
+      ctx.font = 'bold 13px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText('COMBO x' + combo, 10, top + 16);
+    }
+
+    // 音效
+    ctx.fillStyle = soundEnabled ? 'rgba(255,255,255,0.5)' : 'rgba(255,50,50,0.5)';
+    ctx.font = '14px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(soundEnabled ? '♪' : '♪̶', 10, Config.SCREEN_HEIGHT - Config.SAFE_BOTTOM - 48);
+  }
+
+  // ===== 新Boss渲染 =====
+  drawBoss(boss) {
+    if (!boss || !boss.alive) return;
+    const ctx = this.ctx;
+    const { x, y, width, height, type } = boss;
+
+    switch (type) {
+      case 'charger': this._drawChargerBoss(boss, ctx); break;
+      case 'guardian': this._drawGuardianBoss(boss, ctx); break;
+      case 'summoner': this._drawSummonerBoss(boss, ctx); break;
+      case 'laser': this._drawLaserBoss(boss, ctx); break;
+      case 'phantom': this._drawPhantomBoss(boss, ctx); break;
+      default: this._drawDefaultBoss(boss, ctx); break;
+    }
+
+    // HP条（所有Boss通用）
+    const barW = boss.width;
+    const barH = 6;
+    const barX = boss.x;
+    const barY = boss.y - 14;
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.fillRect(barX, barY, barW, barH);
+    const hpRatio = boss.hp / boss.maxHp;
+    const hpColor = hpRatio > 0.5 ? Config.NEON_CYAN : hpRatio > 0.25 ? Config.NEON_YELLOW : Config.NEON_RED;
+    ctx.fillStyle = hpColor;
+    ctx.fillRect(barX, barY, barW * hpRatio, barH);
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(barX, barY, barW, barH);
+  }
+
+  _drawChargerBoss(boss, ctx) {
+    const { x, y, width, height } = boss;
+    const isCharging = boss.state === 'charging' || boss.state === 'dashing';
+
+    // 闪烁警告
+    if (boss.state === 'charging') {
+      const flash = Math.sin(Date.now() * 0.02) > 0;
+      ctx.globalAlpha = flash ? 1 : 0.4;
+    }
+
+    // 主体（红色宽体）
+    ctx.fillStyle = isCharging ? '#FF4444' : '#CC2222';
+    ctx.beginPath();
+    ctx.roundRect(x, y, width, height, 6);
+    ctx.fill();
+
+    // 受击闪白
+    if (boss.flashTimer > 0) {
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.beginPath();
+      ctx.roundRect(x, y, width, height, 6);
+      ctx.fill();
+    }
+
+    // 冲锋时火焰拖影
+    if (boss.state === 'dashing') {
+      for (let i = 0; i < 3; i++) {
+        ctx.globalAlpha = 0.2 - i * 0.06;
+        ctx.fillStyle = Config.NEON_ORANGE;
+        ctx.fillRect(x + 10 + i * 8, y - 10 - i * 6, width - 20 - i * 16, 4);
+      }
+    }
+
+    ctx.globalAlpha = 1;
+
+    // Boss名
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('冲锋者', x + width / 2, y + height / 2);
+  }
+
+  _drawGuardianBoss(boss, ctx) {
+    const { x, y, width, height } = boss;
+
+    // 主体（蓝色方块）
+    ctx.fillStyle = boss.flashTimer > 0 ? '#FFFFFF' : '#2244CC';
+    ctx.beginPath();
+    ctx.roundRect(x, y, width, height, 8);
+    ctx.fill();
+
+    // 旋转护盾
+    if (boss.shields) {
+      const cx = x + width / 2;
+      const cy = y + height / 2;
+      const shieldR = Math.max(width, height) / 2 + 12;
+      for (let i = 0; i < boss.shields.length; i++) {
+        const s = boss.shields[i];
+        if (s.hp <= 0) continue;
+        const angle = (boss.shieldAngle || 0) + (Math.PI * 2 / boss.shields.length) * i;
+        const sx = cx + Math.cos(angle) * shieldR;
+        const sy = cy + Math.sin(angle) * shieldR;
+
+        ctx.globalAlpha = 0.6;
+        ctx.fillStyle = '#6688FF';
+        ctx.beginPath();
+        ctx.arc(sx, sy, 10, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 0.3;
+        ctx.strokeStyle = '#AACCFF';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 13, angle - 0.5, angle + 0.5);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('卫士', x + width / 2, y + height / 2);
+  }
+
+  _drawSummonerBoss(boss, ctx) {
+    const { x, y, width, height } = boss;
+
+    // 紫色核心
+    ctx.fillStyle = boss.flashTimer > 0 ? '#FFFFFF' : '#8822CC';
+    ctx.beginPath();
+    ctx.roundRect(x, y, width, height, 10);
+    ctx.fill();
+
+    // 召唤状态光环
+    if (boss.state === 'summoning') {
+      ctx.globalAlpha = 0.4;
+      ctx.strokeStyle = Config.NEON_PINK;
+      ctx.lineWidth = 2;
+      const pulse = 15 + Math.sin(Date.now() * 0.01) * 5;
+      ctx.beginPath();
+      ctx.arc(x + width / 2, y + height / 2, pulse + width / 2, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    // 无敌标记
+    if (boss.state === 'summoning') {
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.beginPath();
+      ctx.roundRect(x, y, width, height, 10);
+      ctx.fill();
+    }
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('召唤师', x + width / 2, y + height / 2);
+  }
+
+  _drawLaserBoss(boss, ctx) {
+    const { x, y, width, height } = boss;
+
+    // 黄色三角体
+    const cx = x + width / 2;
+    ctx.fillStyle = boss.flashTimer > 0 ? '#FFFFFF' : '#CCAA00';
+    ctx.beginPath();
+    ctx.moveTo(cx, y);
+    ctx.lineTo(x + width, y + height);
+    ctx.lineTo(x, y + height);
+    ctx.closePath();
+    ctx.fill();
+
+    // 充能核心
+    if (boss.state === 'charging') {
+      const chargeProgress = boss.stateTimer / 2000;
+      const coreR = 4 + chargeProgress * 8;
+      ctx.fillStyle = Config.NEON_YELLOW;
+      ctx.globalAlpha = 0.5 + chargeProgress * 0.5;
+      ctx.beginPath();
+      ctx.arc(cx, y + height * 0.4, coreR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // 激光发射
+    if (boss.state === 'firing' && boss.laserX !== undefined) {
+      const lx = boss.laserX;
+      const lw = boss.laserWidth || 8;
+      ctx.globalAlpha = 0.8;
+      ctx.fillStyle = 'rgba(255,50,50,0.1)';
+      ctx.fillRect(lx - lw * 3, y + height, lw * 6, Config.SCREEN_HEIGHT);
+      ctx.fillStyle = 'rgba(255,80,80,0.3)';
+      ctx.fillRect(lx - lw * 1.5, y + height, lw * 3, Config.SCREEN_HEIGHT);
+      ctx.fillStyle = Config.NEON_YELLOW;
+      ctx.fillRect(lx - lw / 2, y + height, lw, Config.SCREEN_HEIGHT);
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.fillRect(lx - 1, y + height, 2, Config.SCREEN_HEIGHT);
+      ctx.globalAlpha = 1;
+    }
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('炮台', cx, y + height * 0.65);
+  }
+
+  _drawPhantomBoss(boss, ctx) {
+    const { x, y, width, height } = boss;
+
+    // 瞬移消失时半透明
+    if (boss.state === 'blinking') {
+      ctx.globalAlpha = 0.15;
+    } else if (boss.state === 'appearing') {
+      ctx.globalAlpha = 0.5 + Math.sin(Date.now() * 0.02) * 0.3;
+    }
+
+    // 白色半透明体
+    ctx.fillStyle = boss.flashTimer > 0 ? '#FFFFFF' : 'rgba(200,200,220,0.8)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, width, height, 12);
+    ctx.fill();
+
+    // 残影
+    if (boss.afterImages) {
+      for (let i = 0; i < boss.afterImages.length; i++) {
+        const img = boss.afterImages[i];
+        ctx.globalAlpha = img.alpha * 0.3;
+        ctx.fillStyle = 'rgba(200,200,220,0.5)';
+        ctx.beginPath();
+        ctx.roundRect(img.x, img.y, width, height, 12);
+        ctx.fill();
+      }
+    }
+
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('幽影', x + width / 2, y + height / 2);
+  }
+
+  _drawDefaultBoss(boss, ctx) {
+    const { x, y, width, height } = boss;
+    const color = Config.NEON_CYAN;
+    ctx.fillStyle = boss.flashTimer > 0 ? '#FFFFFF' : color;
+    ctx.beginPath();
+    ctx.roundRect(x, y, width, height, 6);
+    ctx.fill();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 12px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('BOSS', x + width / 2, y + height / 2);
+  }
+
+  // ===== 点击判定方法 =====
+
+  getChapterSelectHit(tap) {
+    // 升级按钮
+    if (this._upgradeButtonArea) {
+      const a = this._upgradeButtonArea;
+      if (tap.x >= a.x && tap.x <= a.x + a.w && tap.y >= a.y && tap.y <= a.y + a.h) {
+        return 'upgrade';
+      }
+    }
+    // 章节卡片
+    if (this._chapterHitAreas) {
+      for (let i = 0; i < this._chapterHitAreas.length; i++) {
+        const a = this._chapterHitAreas[i];
+        if (tap.x >= a.x && tap.x <= a.x + a.w && tap.y >= a.y && tap.y <= a.y + a.h) {
+          return a.chapter;
+        }
+      }
+    }
+    return null;
+  }
+
+  getUpgradeShopHit(tap) {
+    // 返回按钮
+    if (this._shopBackArea) {
+      const a = this._shopBackArea;
+      if (tap.x >= a.x && tap.x <= a.x + a.w && tap.y >= a.y && tap.y <= a.y + a.h) {
+        return 'back';
+      }
+    }
+    // 升级按钮
+    if (this._shopUpgradeAreas) {
+      for (let i = 0; i < this._shopUpgradeAreas.length; i++) {
+        const a = this._shopUpgradeAreas[i];
+        if (tap.x >= a.x && tap.x <= a.x + a.w && tap.y >= a.y && tap.y <= a.y + a.h) {
+          return a.key;
+        }
+      }
+    }
+    return null;
+  }
+
+  getChapterClearHit(tap) {
+    if (this._clearNextArea) {
+      const a = this._clearNextArea;
+      if (tap.x >= a.x && tap.x <= a.x + a.w && tap.y >= a.y && tap.y <= a.y + a.h) {
+        return 'next';
+      }
+    }
+    if (this._clearBackArea) {
+      const a = this._clearBackArea;
+      if (tap.x >= a.x && tap.x <= a.x + a.w && tap.y >= a.y && tap.y <= a.y + a.h) {
+        return 'back';
+      }
+    }
+    return null;
   }
 }
 

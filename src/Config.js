@@ -79,17 +79,26 @@ const Config = {
     8: '#FF69B4',
   },
 
-  // 砖块持续下移（无限模式）
-  BRICK_SCROLL_SPEED: 0.16,       // 降速
-  BRICK_SPAWN_INTERVAL: 2200,     // 2.2秒一行
+  // 砖块（基础值，章节具体值从 ChapterConfig 读取）
   BRICK_INIT_ROWS: 6,
-  BRICK_GAP_CHANCE: 0.12,         // 更多空洞
   BRICK_DANGER_Y: 0.78,
-  BRICK_SPEED_INCREMENT: 0.015,
-  DIFFICULTY_INTERVAL: 25000,     // 25秒难度+1
 
-  // Boss
-  BOSS_TRIGGER_TIME: 60000,  // 每60秒触发Boss
+  // 章节相关默认值
+  CHAPTER_DURATION: 600000,       // 10分钟
+  BOSS_WARNING_DURATION: 3000,    // Boss警告3秒
+
+  // 砖块类型颜色
+  BRICK_TYPE_COLORS: {
+    normal: null,           // 随机霓虹色
+    fast: '#FF8800',
+    formation: '#AA44FF',
+    shield: '#4488FF',
+    split: '#00DDAA',
+    stealth: '#AAAAAA',
+    healer: '#FF4466',
+  },
+
+  // Boss（基础尺寸，具体HP从 ChapterConfig/BossFactory 读取）
   BOSS_WIDTH: 160,
   BOSS_HEIGHT: 40,
   BOSS_SPEED: 2,
@@ -234,9 +243,12 @@ const Config = {
   STATE: {
     LOADING: 'LOADING',
     TITLE: 'TITLE',
+    CHAPTER_SELECT: 'CHAPTER_SELECT',
+    UPGRADE_SHOP: 'UPGRADE_SHOP',
     PLAYING: 'PLAYING',
     BOSS: 'BOSS',
     LEVEL_UP: 'LEVEL_UP',
+    CHAPTER_CLEAR: 'CHAPTER_CLEAR',
     GAME_OVER: 'GAME_OVER',
   },
 
