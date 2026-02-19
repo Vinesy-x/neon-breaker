@@ -13,10 +13,12 @@ class Brick {
     this.maxHp = hp;
     this.color = color;
     this.alive = true;
+    this.flashTimer = 0;
   }
 
   hit(damage) {
     this.hp -= (damage || 1);
+    this.flashTimer = 4; // 受击闪白
     if (this.hp <= 0) {
       this.alive = false;
       return true;
@@ -53,23 +55,23 @@ function generateBrickRow(gameAreaWidth, y, difficulty) {
 
     const x = padding + c * (brickWidth + padding);
 
-    // HP 随难度递增（整体更硬）
-    let hp = 2; // 基础2HP
+    // HP 随难度递增
+    let hp = 2;
     if (difficulty >= 8) {
+      const roll = Math.random();
+      if (roll < 0.25) hp = 8;
+      else if (roll < 0.5) hp = 6;
+      else if (roll < 0.8) hp = 5;
+      else hp = 4;
+    } else if (difficulty >= 5) {
       const roll = Math.random();
       if (roll < 0.2) hp = 6;
       else if (roll < 0.5) hp = 5;
-      else if (roll < 0.8) hp = 4;
-      else hp = 3;
-    } else if (difficulty >= 5) {
-      const roll = Math.random();
-      if (roll < 0.15) hp = 5;
-      else if (roll < 0.45) hp = 4;
-      else hp = 3;
+      else hp = 4;
     } else if (difficulty >= 2) {
-      hp = Math.random() < 0.4 ? 4 : 3;
+      hp = Math.random() < 0.5 ? 4 : 3;
     } else if (difficulty >= 1) {
-      hp = Math.random() < 0.4 ? 3 : 2;
+      hp = Math.random() < 0.5 ? 3 : 2;
     }
 
     let color;

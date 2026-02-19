@@ -37,6 +37,7 @@ class Game {
     this.upgrades = new UpgradeManager();
     this.boss = null;
     this.floatingTexts = [];
+    this.screenShake = 0; // 屏幕震动
 
     // ===== 经验系统 =====
     this.playerLevel = 1;
@@ -262,6 +263,9 @@ class Game {
   _onBrickDestroyed(brick, source) {
     const center = brick.getCenter();
     this.particles.emitBrickBreak(brick.x, brick.y, brick.width, brick.height, brick.color);
+
+    // 高HP砖块摧毁时屏幕震动
+    if (brick.maxHp >= 3) this.screenShake = Math.min(this.screenShake + 2, 8);
 
     this.combo++;
     if (this.combo > this.maxCombo) this.maxCombo = this.combo;
@@ -680,6 +684,18 @@ class Game {
   }
 
   _renderGame() {
+    // 屏幕震动
+    let shaking = false;
+    if (this.screenShake > 0.5) {
+      shaking = true;
+      const shakeX = (Math.random() - 0.5) * this.screenShake;
+      const shakeY = (Math.random() - 0.5) * this.screenShake;
+      this.renderer.ctx.save();
+      this.renderer.ctx.translate(shakeX * this.renderer.dpr, shakeY * this.renderer.dpr);
+      this.screenShake *= 0.85;
+      if (this.screenShake < 0.5) this.screenShake = 0;
+    }
+
     // 危险线
     const dangerY = this.gameHeight * Config.BRICK_DANGER_Y;
     this.renderer.drawDangerLine(dangerY);
@@ -700,6 +716,8 @@ class Game {
 
     this.renderer.drawHUD(this.score, this.combo, this.playerLevel, this.difficulty, Sound.enabled);
     this.renderer.drawExpBar(this.exp, this.expToNext, this.playerLevel);
+
+    if (shaking) this.renderer.ctx.restore();
   }
 }
 

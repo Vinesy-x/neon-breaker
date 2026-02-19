@@ -115,18 +115,41 @@ class Renderer {
     if (!brick.alive) return;
     const ctx = this.ctx;
     const { x, y, width, height, color, hp, maxHp } = brick;
-    ctx.fillStyle = color;
+
+    // 受击闪白
+    if (brick.flashTimer > 0) {
+      brick.flashTimer--;
+      ctx.fillStyle = '#FFFFFF';
+    } else {
+      ctx.fillStyle = color;
+    }
+
     ctx.beginPath();
     ctx.roundRect(x, y, width, height, 3);
     ctx.fill();
-    if (maxHp > 1) {
-      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+
+    // 高HP砖块发光边框
+    if (maxHp >= 4) {
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 6;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.roundRect(x, y, width, height, 3);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    } else if (maxHp > 1) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.4)';
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.roundRect(x, y, width, height, 3);
       ctx.stroke();
-      ctx.fillStyle = '#FFFFFF';
-      ctx.font = '10px monospace';
+    }
+
+    // HP数字
+    if (hp > 1) {
+      ctx.fillStyle = brick.flashTimer > 0 ? '#000000' : '#FFFFFF';
+      ctx.font = 'bold 10px monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(hp.toString(), x + width / 2, y + height / 2);

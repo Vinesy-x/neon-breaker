@@ -60,7 +60,7 @@ const Config = {
   BULLET_MAX: 60,
   BULLET_TRAIL_LENGTH: 4,
   BULLET_COLOR: '#00FFFF',
-  BULLET_FIRE_INTERVAL: 450, // ms，自动发射间隔
+  BULLET_FIRE_INTERVAL: 500, // ms
   BULLET_GLOW_COLOR: 'rgba(0, 255, 255, 0.4)',
 
   // 砖块
@@ -75,16 +75,18 @@ const Config = {
     4: '#AA00FF',
     5: '#FFFFFF',
     6: '#FFD700',
+    7: '#00FF88',
+    8: '#FF69B4',
   },
 
   // 砖块持续下移（无限模式）
-  BRICK_SCROLL_SPEED: 0.18,       // 每帧下移像素（更快）
-  BRICK_SPAWN_INTERVAL: 2000,     // 每2秒生成新一行（更密）
+  BRICK_SCROLL_SPEED: 0.22,       // 更快
+  BRICK_SPAWN_INTERVAL: 1800,     // 1.8秒一行
   BRICK_INIT_ROWS: 6,
-  BRICK_GAP_CHANCE: 0.08,         // 空洞更少
+  BRICK_GAP_CHANCE: 0.06,         // 几乎不空
   BRICK_DANGER_Y: 0.78,
-  BRICK_SPEED_INCREMENT: 0.02,    // 难度增速
-  DIFFICULTY_INTERVAL: 20000,     // 每20秒难度+1（更快）
+  BRICK_SPEED_INCREMENT: 0.025,
+  DIFFICULTY_INTERVAL: 18000,     // 18秒难度+1
 
   // Boss
   BOSS_TRIGGER_TIME: 60000,  // 每60秒触发Boss

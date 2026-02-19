@@ -39,11 +39,19 @@ class ParticleManager {
   }
 
   emitBrickBreak(x, y, w, h, color) {
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 16; i++) {
       this._add(
         x + Math.random() * w, y + Math.random() * h,
-        (Math.random() - 0.5) * 7, (Math.random() - 0.5) * 7 - 2,
-        color, 22 + Math.random() * 15, 2 + Math.random() * 4
+        (Math.random() - 0.5) * 9, (Math.random() - 0.5) * 9 - 3,
+        color, 25 + Math.random() * 18, 2 + Math.random() * 5
+      );
+    }
+    // 额外白色闪光碎片
+    for (let i = 0; i < 4; i++) {
+      this._add(
+        x + w / 2, y + h / 2,
+        (Math.random() - 0.5) * 12, (Math.random() - 0.5) * 12,
+        '#FFFFFF', 10, 1 + Math.random() * 2
       );
     }
   }
