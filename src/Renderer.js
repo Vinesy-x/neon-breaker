@@ -826,31 +826,31 @@ class Renderer {
       const ccx = cardX + cardW / 2;
 
       const typeLabel = c.type === 'weapon' ? '武器' : '强化';
-      ctx.fillStyle = 'rgba(255,255,255,0.3)';
-      ctx.font = '9px monospace';
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.font = '11px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText(typeLabel, ccx, cardY + 18);
+      ctx.fillText(typeLabel, ccx, cardY + 20);
 
       if (isNew) {
         ctx.fillStyle = Config.NEON_YELLOW;
-        ctx.font = 'bold 9px monospace';
-        ctx.fillText('NEW!', ccx, cardY + 32);
+        ctx.font = 'bold 11px monospace';
+        ctx.fillText('NEW!', ccx, cardY + 36);
       }
 
       ctx.fillStyle = c.color;
-      ctx.font = '32px monospace';
+      ctx.font = '38px monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(c.icon, ccx, cardY + cardH * 0.3);
 
       ctx.fillStyle = '#FFFFFF';
-      ctx.font = 'bold 12px monospace';
+      ctx.font = 'bold 14px monospace';
       ctx.textBaseline = 'middle';
-      this._drawTextWrap(ctx, c.name, ccx, cardY + cardH * 0.52, cardW - 12, 13);
+      this._drawTextWrap(ctx, c.name, ccx, cardY + cardH * 0.52, cardW - 10, 16);
 
-      ctx.fillStyle = 'rgba(255,255,255,0.55)';
-      ctx.font = '9px monospace';
-      this._drawTextWrap(ctx, c.desc, ccx, cardY + cardH * 0.68, cardW - 12, 12);
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.font = '11px monospace';
+      this._drawTextWrap(ctx, c.desc, ccx, cardY + cardH * 0.66, cardW - 10, 14);
 
       if (c.type === 'weapon') {
         const def = Config.WEAPONS[c.key];
@@ -884,8 +884,8 @@ class Renderer {
   }
 
   _drawLevelDots(ctx, cx, y, curLv, maxLv, color, cardW) {
-    const dotSize = 5;
-    const dotGap = 3;
+    const dotSize = 7;
+    const dotGap = 4;
     const totalW = maxLv * dotSize + (maxLv - 1) * dotGap;
     const startX = cx - totalW / 2;
 
@@ -1391,20 +1391,20 @@ class Renderer {
 
     // 章节号
     ctx.fillStyle = Config.NEON_PINK;
-    ctx.font = 'bold 12px monospace';
+    ctx.font = 'bold 14px monospace';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     ctx.fillText('CH.' + chapter, 10, top);
 
     // 分数
     ctx.fillStyle = Config.NEON_CYAN;
-    ctx.font = 'bold 14px monospace';
+    ctx.font = 'bold 16px monospace';
     ctx.textAlign = 'center';
     ctx.fillText('' + score, Config.SCREEN_WIDTH / 2, top);
 
     // 等级
     ctx.fillStyle = Config.NEON_GREEN;
-    ctx.font = '11px monospace';
+    ctx.font = 'bold 13px monospace';
     ctx.textAlign = 'right';
     ctx.fillText('Lv.' + playerLevel, Config.SCREEN_WIDTH - 8, top);
 
@@ -1412,17 +1412,17 @@ class Renderer {
     const sec = Math.floor(elapsedMs / 1000);
     const min = Math.floor(sec / 60);
     const s = sec % 60;
-    ctx.fillStyle = 'rgba(255,255,255,0.4)';
-    ctx.font = '10px monospace';
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = '12px monospace';
     ctx.textAlign = 'right';
-    ctx.fillText(min + ':' + (s < 10 ? '0' : '') + s, Config.SCREEN_WIDTH - 8, top + 14);
+    ctx.fillText(min + ':' + (s < 10 ? '0' : '') + s, Config.SCREEN_WIDTH - 8, top + 16);
 
     // Combo
     if (combo > 1) {
       ctx.fillStyle = Config.NEON_YELLOW;
-      ctx.font = 'bold 13px monospace';
+      ctx.font = 'bold 14px monospace';
       ctx.textAlign = 'left';
-      ctx.fillText('COMBO x' + combo, 10, top + 16);
+      ctx.fillText('COMBO x' + combo, 10, top + 18);
     }
 
     // 音效
