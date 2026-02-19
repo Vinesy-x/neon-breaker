@@ -64,16 +64,27 @@ class ParticleManager {
   }
 
   emitCombo(x, y, combo) {
-    const count = 4 + Math.min(combo, 12);
+    const count = 6 + Math.min(combo, 16);
     for (let i = 0; i < count; i++) {
-      this._add(x, y, (Math.random() - 0.5) * 5, -Math.random() * 5 - 1, Config.NEON_YELLOW, 20, 2);
+      const angle = (Math.PI * 2 / count) * i;
+      const speed = 3 + Math.random() * 3;
+      this._add(x, y, Math.cos(angle) * speed, Math.sin(angle) * speed - 2, Config.NEON_YELLOW, 22, 2 + Math.random() * 2);
+    }
+    // 爆发光环
+    if (combo >= 10) {
+      for (let i = 0; i < 8; i++) {
+        const angle = (Math.PI * 2 / 8) * i;
+        this._add(x, y, Math.cos(angle) * 6, Math.sin(angle) * 6, '#FFFFFF', 15, 3);
+      }
     }
   }
 
   emitHitSpark(x, y, color) {
-    for (let i = 0; i < 4; i++) {
-      this._add(x, y, (Math.random() - 0.5) * 4, (Math.random() - 0.5) * 4, color || '#FFFFFF', 10, 2);
+    for (let i = 0; i < 6; i++) {
+      this._add(x, y, (Math.random() - 0.5) * 5, (Math.random() - 0.5) * 5, color || '#FFFFFF', 12, 2);
     }
+    // 冲击波小环（白色向外扩散）
+    this._add(x, y, 0, 0, 'rgba(255,255,255,0.5)', 8, 6);
   }
 
   emitAdvanceWarning(gameAreaWidth) {

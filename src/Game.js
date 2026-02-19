@@ -28,6 +28,7 @@ class Game {
     this.score = 0;
     this.combo = 0;
     this.maxCombo = 0;
+    this.comboTimer = 0; // combo断裂计时（ms）
 
     this.bullets = [];
     this.bricks = [];
@@ -90,6 +91,7 @@ class Game {
     this.expOrbs = [];
     this.combo = 0;
     this.fireTimer = 0;
+    this.comboTimer = 0;
     this.spawnTimer = 0;
     this.difficulty = 0;
     this.difficultyTimer = 0;
@@ -268,6 +270,7 @@ class Game {
     if (brick.maxHp >= 3) this.screenShake = Math.min(this.screenShake + 2, 8);
 
     this.combo++;
+    this.comboTimer = 0; // 重置combo断裂计时
     if (this.combo > this.maxCombo) this.maxCombo = this.combo;
     const multiplier = 1 + Math.floor(this.combo / 5) * 0.5;
     const points = Math.floor(Config.COMBO_SCORE_BASE * brick.maxHp * multiplier);
@@ -400,6 +403,15 @@ class Game {
     this.particles.update(dt);
     this._updateFloatingTexts(dt);
 
+    // Combo 断裂（2秒没打中）
+    if (this.combo > 0) {
+      this.comboTimer += dtMs;
+      if (this.comboTimer > 2000) {
+        this.combo = 0;
+        this.comboTimer = 0;
+      }
+    }
+
     // 检查升级
     this._tryShowLevelUpChoice();
     if (this.state === Config.STATE.LEVEL_UP) return;
@@ -496,8 +508,11 @@ class Game {
     if (this.difficultyTimer >= Config.DIFFICULTY_INTERVAL) {
       this.difficultyTimer -= Config.DIFFICULTY_INTERVAL;
       this.difficulty++;
-      // 砖块下移速度缓慢增加
       this.brickSpeed = Config.BRICK_SCROLL_SPEED + this.difficulty * Config.BRICK_SPEED_INCREMENT;
+      // WAVE 提示
+      this._addFloatingText('WAVE ' + (this.difficulty + 1), this.gameWidth / 2, this.gameHeight * 0.3, Config.NEON_PINK, 24);
+      this.screenShake = 6;
+      Sound.advanceWarning();
     }
   }
 

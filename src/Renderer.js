@@ -12,6 +12,20 @@ class Renderer {
     canvas.width = Config.CANVAS_WIDTH;
     canvas.height = Config.CANVAS_HEIGHT;
     this.ctx.scale(this.dpr, this.dpr);
+
+    // 背景星空（预生成）
+    this.stars = [];
+    for (let i = 0; i < 60; i++) {
+      this.stars.push({
+        x: Math.random() * Config.SCREEN_WIDTH,
+        y: Math.random() * Config.SCREEN_HEIGHT,
+        size: 0.5 + Math.random() * 1.5,
+        speed: 0.1 + Math.random() * 0.3,
+        alpha: 0.2 + Math.random() * 0.5,
+        twinkle: Math.random() * Math.PI * 2,
+      });
+    }
+    this._frameCount = 0;
   }
 
   clear() {
@@ -19,6 +33,22 @@ class Renderer {
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.fillStyle = Config.BG_COLOR;
     ctx.fillRect(0, 0, Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT);
+
+    // 星空背景
+    this._frameCount++;
+    for (let i = 0; i < this.stars.length; i++) {
+      const s = this.stars[i];
+      s.y += s.speed;
+      if (s.y > Config.SCREEN_HEIGHT) {
+        s.y = -2;
+        s.x = Math.random() * Config.SCREEN_WIDTH;
+      }
+      const twinkle = Math.sin(this._frameCount * 0.03 + s.twinkle) * 0.3;
+      ctx.globalAlpha = Math.max(0.05, s.alpha + twinkle);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(s.x, s.y, s.size, s.size);
+    }
+    ctx.globalAlpha = 1;
   }
 
   // ===== 子弹 =====
@@ -101,10 +131,28 @@ class Renderer {
       ctx.globalAlpha = 1;
     }
 
-    // 底部引擎光效
-    ctx.fillStyle = 'rgba(0, 255, 255, 0.15)';
+    // 底部引擎尾焰（动态闪烁）
+    const flameH = 8 + Math.random() * 6;
+    const flameW = width / 3;
+    const grad = ctx.createLinearGradient(cx, y + height, cx, y + height + flameH);
+    grad.addColorStop(0, 'rgba(0, 255, 255, 0.6)');
+    grad.addColorStop(0.5, 'rgba(0, 150, 255, 0.3)');
+    grad.addColorStop(1, 'rgba(0, 50, 255, 0)');
+    ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.arc(cx, y + height + 2, width / 3, 0, Math.PI);
+    ctx.moveTo(cx - flameW, y + height);
+    ctx.lineTo(cx, y + height + flameH);
+    ctx.lineTo(cx + flameW, y + height);
+    ctx.closePath();
+    ctx.fill();
+    // 内焰
+    const innerH = 4 + Math.random() * 4;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.beginPath();
+    ctx.moveTo(cx - flameW * 0.4, y + height);
+    ctx.lineTo(cx, y + height + innerH);
+    ctx.lineTo(cx + flameW * 0.4, y + height);
+    ctx.closePath();
     ctx.fill();
 
     ctx.shadowBlur = 0;
@@ -116,10 +164,19 @@ class Renderer {
     const ctx = this.ctx;
     const { x, y, width, height, color, hp, maxHp } = brick;
 
+    // 接近危险线时变红
+    const dangerY = Config.SCREEN_HEIGHT * Config.BRICK_DANGER_Y;
+    const dangerDist = dangerY - (y + height);
+    const dangerRatio = dangerDist < 80 ? 1 - dangerDist / 80 : 0;
+
     // 受击闪白
     if (brick.flashTimer > 0) {
       brick.flashTimer--;
       ctx.fillStyle = '#FFFFFF';
+    } else if (dangerRatio > 0.5) {
+      // 接近底线闪红
+      const pulse = 0.5 + Math.sin(Date.now() * 0.01) * 0.3;
+      ctx.fillStyle = 'rgba(255, ' + Math.floor(50 * (1 - dangerRatio)) + ', ' + Math.floor(50 * (1 - dangerRatio)) + ', ' + (0.7 + pulse * 0.3) + ')';
     } else {
       ctx.fillStyle = color;
     }
@@ -174,14 +231,24 @@ class Renderer {
     const { x, y, size, color, time } = powerUp;
     const pulse = 0.8 + Math.sin(time * 0.15) * 0.2;
     const drawSize = size * pulse;
+    // 外发光
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 10;
     ctx.fillStyle = color;
     ctx.beginPath();
     ctx.arc(x, y, drawSize / 2, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+    ctx.shadowBlur = 0;
+    // 白色高光
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.beginPath();
+    ctx.arc(x - 2, y - 2, drawSize / 4, 0, Math.PI * 2);
+    ctx.fill();
+    // 外圈
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(x, y, drawSize / 2 + 2, 0, Math.PI * 2);
+    ctx.arc(x, y, drawSize / 2 + 3, 0, Math.PI * 2);
     ctx.stroke();
   }
 
@@ -218,10 +285,11 @@ class Renderer {
     ctx.fillText('BOSS P' + (boss.phase + 1), x + width / 2, y + height / 2);
   }
 
-  // ===== 危险线（固定，不闪烁） =====
+  // ===== 危险线（动态呼吸） =====
   drawDangerLine(dangerY) {
     const ctx = this.ctx;
-    ctx.strokeStyle = 'rgba(255, 50, 50, 0.2)';
+    const pulse = 0.15 + Math.sin(Date.now() * 0.003) * 0.08;
+    ctx.strokeStyle = 'rgba(255, 50, 50, ' + pulse + ')';
     ctx.lineWidth = 1;
     ctx.setLineDash([8, 4]);
     ctx.beginPath();
@@ -229,6 +297,12 @@ class Renderer {
     ctx.lineTo(Config.SCREEN_WIDTH, dangerY);
     ctx.stroke();
     ctx.setLineDash([]);
+    // 渐变警告区域
+    const grad = ctx.createLinearGradient(0, dangerY - 30, 0, dangerY);
+    grad.addColorStop(0, 'rgba(255, 0, 0, 0)');
+    grad.addColorStop(1, 'rgba(255, 0, 0, ' + (pulse * 0.3) + ')');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, dangerY - 30, Config.SCREEN_WIDTH, 30);
   }
 
   // ===== 武器视觉渲染 =====

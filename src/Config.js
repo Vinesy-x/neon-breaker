@@ -96,7 +96,7 @@ const Config = {
   BOSS_BASE_HP: [80, 120, 160],
 
   // 粒子
-  PARTICLE_MAX: 200,
+  PARTICLE_MAX: 350,
 
   // 道具
   POWERUP_DROP_CHANCE: 0.15,
