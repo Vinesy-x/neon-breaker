@@ -51,8 +51,8 @@ class BrickFactory {
    * 根据当前阶段配置生成一行砖块
    * @param {number} gameAreaWidth
    * @param {number} y - 行的Y坐标
-   * @param {object} phase - 当前阶段 { types, hpRange, spawnMult }
-   * @param {object} chapterConfig - 章节配置 { hpMultiplier, gapChance }
+   * @param {object} phase - 当前阶段 { types, timeCurve, spawnMult }
+   * @param {object} chapterConfig - 章节配置 { baseHP, chapterScale, gapChance }
    * @returns {Brick[]}
    */
   static generateRow(gameAreaWidth, y, phase, chapterConfig) {
@@ -60,7 +60,7 @@ class BrickFactory {
 
     // 概率选择是否生成阵型
     if (phase.types.indexOf('formation') !== -1 && Math.random() < 0.15) {
-      var formHP = BrickFactory._randomHP(phase.hpRange, chapterConfig.hpMultiplier);
+      var formHP = BrickFactory.calcHP(chapterConfig, phase.timeCurve, 'formation', true);
       return BrickFactory.generateFormation(gameAreaWidth, y, null, formHP);
     }
 
@@ -81,10 +81,12 @@ class BrickFactory {
       if (Math.random() < gapChance) continue;
 
       var x = padding + c * (brickWidth + padding);
-      var hp = BrickFactory._randomHP(phase.hpRange, chapterConfig.hpMultiplier);
 
       // 随机选类型（normal 权重更高）
       var type = BrickFactory._pickType(availableTypes);
+
+      // v6.2: 四层正交HP公式
+      var hp = BrickFactory.calcHP(chapterConfig, phase.timeCurve, type, false);
 
       var color = BrickFactory._getColor(type, hp);
       var brick = new Brick(x, y, brickWidth, brickHeight, hp, color);
@@ -94,9 +96,6 @@ class BrickFactory {
       switch (type) {
         case 'fast':
           brick.speedMult = 2.0;
-          // 快速砖块 HP 取 80%
-          brick.hp = Math.max(1, Math.round(hp * 0.8));
-          brick.maxHp = brick.hp;
           break;
         case 'shield':
           brick.shieldHp = 1;
@@ -104,15 +103,9 @@ class BrickFactory {
         case 'stealth':
           brick.visible = true;
           brick.stealthTimer = 0;
-          // 隐身砖块 HP 取 70%
-          brick.hp = Math.max(1, Math.round(hp * 0.7));
-          brick.maxHp = brick.hp;
           break;
         case 'healer':
           brick.healTimer = 0;
-          // 治愈砖块 HP 取 60%
-          brick.hp = Math.max(1, Math.round(hp * 0.6));
-          brick.maxHp = brick.hp;
           break;
       }
 
@@ -242,11 +235,34 @@ class BrickFactory {
 
   // ===== 内部工具 =====
 
-  static _randomHP(hpRange, hpMultiplier) {
-    var min = hpRange[0];
-    var max = hpRange[1];
-    var base = min + Math.floor(Math.random() * (max - min + 1));
-    return Math.max(1, Math.round(base * hpMultiplier));
+  // ===== 第三层：砖块类型HP系数 =====
+  // ===== 第四层：阵型HP系数 =====
+
+  /**
+   * v6.2 四层正交HP公式
+   * finalHP = ceil( baseHP * chapterScale * timeCurve * typeMult * formationMult )
+   */
+  static calcHP(chapterConfig, timeCurve, brickType, isFormation) {
+    var base = chapterConfig.baseHP * chapterConfig.chapterScale;
+    // 时间曲线随机
+    var tMin = timeCurve[0];
+    var tMax = timeCurve[1];
+    var tMult = tMin + Math.random() * (tMax - tMin);
+    // 类型系数
+    var TYPE_MULT = {
+      normal: 1.0,
+      fast: 0.7,
+      formation: 1.0,
+      shield: 1.2,
+      split: 0.8,
+      stealth: 0.6,
+      healer: 0.5,
+    };
+    var typeMult = TYPE_MULT[brickType] || 1.0;
+    // 阵型系数
+    var formMult = isFormation ? 1.3 : 1.0;
+
+    return Math.max(1, Math.ceil(base * tMult * typeMult * formMult));
   }
 
   static _pickType(types) {

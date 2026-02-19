@@ -9,11 +9,20 @@ class ChapterConfig {
    * @param {number} chapter - 章节号 (1~100)
    */
   static get(chapter) {
+    // ===== 四层正交数值公式 =====
+    // 最终HP = ceil( baseHP × timeCurve × typeMult × formationMult )
+    //
+    // 第一层：章节基准HP
+    var baseHP = 1 + (chapter - 1) * 0.5;  // ch1=1, ch5=3, ch10=5.5, ch20=10.5
+    // 章节缩放（额外乘数，拉开高章节差距）
+    var chapterScale = 1.0 + (chapter - 1) * 0.03;  // ch1=1.0, ch10=1.27, ch50=2.47
+
     return {
       chapter: chapter,
 
-      // 砖块数值缩放
-      hpMultiplier: 1.0 + (chapter - 1) * 0.06,
+      // ===== 第一层：章节难度 =====
+      baseHP: baseHP,
+      chapterScale: chapterScale,
       scrollSpeed: Math.min(0.45, 0.18 + (chapter - 1) * 0.003),
       spawnInterval: Math.max(1200, 2000 - (chapter - 1) * 10),
       gapChance: Math.max(0.03, 0.12 - (chapter - 1) * 0.001),
@@ -50,47 +59,38 @@ class ChapterConfig {
 
   /**
    * 难度节奏时间线
-   * 返回数组：[{ time, phase, intensity, hpRange, spawnMult, types }]
+   * 返回数组：[{ time, phase, intensity, timeCurve, spawnMult, scrollAccel, types }]
    */
   static _getTimeline(chapter) {
     // v6.0 重新设计：前30秒就开始加压，节奏更紧凑
     // 总时长10分钟 = 600秒，全程持续施压
+    // v6.2: timeCurve 对标玩家DPS成长（每级+50%伤害）
+    // Lv1=1x, Lv3=2x, Lv5=3x, Lv7=4x, Lv10=5.5x, Lv12=6.5x, Lv15=8x
+    // timeCurve = [min, max]，砖块HP在范围内随机
     var phases = [
-      // 0~25秒：热身，已有2HP砖混入
-      { time: 0,      phase: 'warmup',    intensity: 0.4,  hpRange: [1, 2], spawnMult: 0.8,  types: ['normal'],
+      { time: 0,      phase: 'warmup',    intensity: 0.4,  timeCurve: [1.0, 1.0],  spawnMult: 0.8,  types: ['normal'],
         scrollAccel: 0.002 },
-      // 25~70秒：第一波，HP快速爬升到3
-      { time: 25000,  phase: 'wave1',     intensity: 0.55, hpRange: [2, 3], spawnMult: 1.0,  types: ['normal', 'fast'],
+      { time: 25000,  phase: 'wave1',     intensity: 0.55, timeCurve: [1.5, 2.0],  spawnMult: 1.0,  types: ['normal', 'fast'],
         scrollAccel: 0.003 },
-      // 70~110秒：第一波高潮，HP到4，阵型砖
-      { time: 70000,  phase: 'surge1',    intensity: 0.7,  hpRange: [3, 5], spawnMult: 1.2,  types: ['normal', 'fast', 'formation'],
+      { time: 70000,  phase: 'surge1',    intensity: 0.7,  timeCurve: [2.5, 3.5],  spawnMult: 1.2,  types: ['normal', 'fast', 'formation'],
         scrollAccel: 0.002 },
-      // 110~130秒：短喘息（20秒）
-      { time: 110000, phase: 'breather1', intensity: 0.3,  hpRange: [2, 3], spawnMult: 0.6,  types: ['normal'],
+      { time: 110000, phase: 'breather1', intensity: 0.3,  timeCurve: [1.5, 2.0],  spawnMult: 0.6,  types: ['normal'],
         scrollAccel: 0 },
-      // 130~190秒：第二波，护盾+分裂，HP到5
-      { time: 130000, phase: 'wave2',     intensity: 0.75, hpRange: [3, 6], spawnMult: 1.2,  types: ['normal', 'fast', 'formation', 'shield', 'split'],
+      { time: 130000, phase: 'wave2',     intensity: 0.75, timeCurve: [3.0, 4.5],  spawnMult: 1.2,  types: ['normal', 'fast', 'formation', 'shield', 'split'],
         scrollAccel: 0.003 },
-      // 190~250秒：高压期，HP到7
-      { time: 190000, phase: 'highpres',  intensity: 0.9,  hpRange: [4, 7], spawnMult: 1.4,  types: ['normal', 'fast', 'formation', 'shield', 'split'],
+      { time: 190000, phase: 'highpres',  intensity: 0.9,  timeCurve: [4.5, 6.0],  spawnMult: 1.4,  types: ['normal', 'fast', 'formation', 'shield', 'split'],
         scrollAccel: 0.003 },
-      // 250~270秒：第二次喘息
-      { time: 250000, phase: 'breather2', intensity: 0.35, hpRange: [3, 4], spawnMult: 0.5,  types: ['normal'],
+      { time: 250000, phase: 'breather2', intensity: 0.35, timeCurve: [3.0, 4.0],  spawnMult: 0.5,  types: ['normal'],
         scrollAccel: 0 },
-      // 270~350秒：第三波，HP到8
-      { time: 270000, phase: 'wave3',     intensity: 0.85, hpRange: [5, 8], spawnMult: 1.3,  types: ['normal', 'fast', 'formation', 'shield', 'split', 'stealth'],
+      { time: 270000, phase: 'wave3',     intensity: 0.85, timeCurve: [5.5, 7.0],  spawnMult: 1.3,  types: ['normal', 'fast', 'formation', 'shield', 'split', 'stealth'],
         scrollAccel: 0.004 },
-      // 350~420秒：极限冲刺
-      { time: 350000, phase: 'sprint',    intensity: 1.0,  hpRange: [6, 10], spawnMult: 1.6, types: ['normal', 'fast', 'formation', 'shield', 'split', 'stealth', 'healer'],
+      { time: 350000, phase: 'sprint',    intensity: 1.0,  timeCurve: [7.0, 8.5],  spawnMult: 1.6,  types: ['normal', 'fast', 'formation', 'shield', 'split', 'stealth', 'healer'],
         scrollAccel: 0.004 },
-      // 420~445秒：最后喘息
-      { time: 420000, phase: 'breather3', intensity: 0.3,  hpRange: [3, 4], spawnMult: 0.4,  types: ['normal'],
+      { time: 420000, phase: 'breather3', intensity: 0.3,  timeCurve: [4.0, 5.0],  spawnMult: 0.4,  types: ['normal'],
         scrollAccel: 0 },
-      // 445~475秒：Boss预热
-      { time: 445000, phase: 'preBoss',   intensity: 0.1,  hpRange: [1, 2], spawnMult: 0.2,  types: ['normal'],
+      { time: 445000, phase: 'preBoss',   intensity: 0.1,  timeCurve: [1.5, 2.0],  spawnMult: 0.2,  types: ['normal'],
         scrollAccel: 0 },
-      // 475秒：Boss战
-      { time: 475000, phase: 'boss',      intensity: 0,    hpRange: [0, 0], spawnMult: 0,    types: [],
+      { time: 475000, phase: 'boss',      intensity: 0,    timeCurve: [0, 0],      spawnMult: 0,    types: [],
         scrollAccel: 0 },
     ];
 
@@ -101,7 +101,7 @@ class ChapterConfig {
         time: p.time,
         phase: p.phase,
         intensity: p.intensity,
-        hpRange: p.hpRange,
+        timeCurve: p.timeCurve,
         spawnMult: p.spawnMult,
         scrollAccel: p.scrollAccel || 0,
         types: p.types.filter(function(t) { return unlocked.indexOf(t) !== -1; }),

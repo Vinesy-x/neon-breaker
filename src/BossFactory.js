@@ -350,20 +350,18 @@ class SummonerBoss extends BossBase {
 
   _summonBricks() {
     var y = this.y + this.height + 10;
-    // 简单阶段配置用于生成
     var phase = {
       types: ['normal'],
-      hpRange: [1, 2],
+      timeCurve: [2.0, 3.0],
       spawnMult: 1.0,
     };
-
-    // cycle增强：特殊砖块
     if (this.cycle >= 2) {
       phase.types = ['normal', 'fast', 'shield'];
+      phase.timeCurve = [3.0, 4.0];
     }
-
     var config = {
-      hpMultiplier: this.hpMult,
+      baseHP: 1 + this.cycle * 0.5,
+      chapterScale: this.hpMult,
       gapChance: 0.2,
     };
 
@@ -565,11 +563,12 @@ class PhantomBoss extends BossBase {
     var y = this.y + this.height + 5;
     var phase = {
       types: this.cycle >= 2 ? ['split'] : ['fast'],
-      hpRange: [1, 1],
+      timeCurve: [1.5, 2.0],
       spawnMult: 1.0,
     };
     var config = {
-      hpMultiplier: this.hpMult * 0.5,
+      baseHP: 1,
+      chapterScale: this.hpMult * 0.5,
       gapChance: 0.3,
     };
     var row = BrickFactory.generateRow(this.gameAreaWidth, y, phase, config);
