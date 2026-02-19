@@ -60,7 +60,7 @@ const Config = {
   BULLET_MAX: 60,
   BULLET_TRAIL_LENGTH: 4,
   BULLET_COLOR: '#00FFFF',
-  BULLET_FIRE_INTERVAL: 350, // ms，自动发射间隔（慢一些）
+  BULLET_FIRE_INTERVAL: 450, // ms，自动发射间隔
   BULLET_GLOW_COLOR: 'rgba(0, 255, 255, 0.4)',
 
   // 砖块
@@ -74,16 +74,17 @@ const Config = {
     3: '#FF3333',
     4: '#AA00FF',
     5: '#FFFFFF',
+    6: '#FFD700',
   },
 
   // 砖块持续下移（无限模式）
-  BRICK_SCROLL_SPEED: 0.12,       // 每帧下移像素
-  BRICK_SPAWN_INTERVAL: 2500,     // 每2.5秒生成新一行
-  BRICK_INIT_ROWS: 5,
-  BRICK_GAP_CHANCE: 0.12,         // 每个位置12%概率空洞
+  BRICK_SCROLL_SPEED: 0.18,       // 每帧下移像素（更快）
+  BRICK_SPAWN_INTERVAL: 2000,     // 每2秒生成新一行（更密）
+  BRICK_INIT_ROWS: 6,
+  BRICK_GAP_CHANCE: 0.08,         // 空洞更少
   BRICK_DANGER_Y: 0.78,
-  BRICK_SPEED_INCREMENT: 0.015,   // 难度增速更缓
-  DIFFICULTY_INTERVAL: 25000,     // 每25秒难度+1
+  BRICK_SPEED_INCREMENT: 0.02,    // 难度增速
+  DIFFICULTY_INTERVAL: 20000,     // 每20秒难度+1（更快）
 
   // Boss
   BOSS_TRIGGER_TIME: 60000,  // 每60秒触发Boss
@@ -238,10 +239,10 @@ const Config = {
   },
 
   // ===== 经验系统 =====
-  EXP_PER_BRICK: 5,         // 每个砖块基础经验（降低）
-  EXP_PER_HP: 2,            // 每点HP额外经验
-  EXP_BASE_TO_LEVEL: 200,   // 1级升级所需经验（大幅提高）
-  EXP_GROWTH: 1.5,          // 每级经验增长系数（更陡）
+  EXP_PER_BRICK: 3,         // 每个砖块基础经验
+  EXP_PER_HP: 1,            // 每点HP额外经验
+  EXP_BASE_TO_LEVEL: 300,   // 1级升级所需经验
+  EXP_GROWTH: 1.6,          // 每级经验增长系数
   EXP_ORB_SPEED: 6,         // 经验球飞行速度
   EXP_ORB_SIZE: 4,          // 经验球大小
   EXP_ORB_COLOR: '#AAFFFF', // 经验球颜色
