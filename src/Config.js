@@ -5,6 +5,25 @@
 
 const { windowWidth, windowHeight, pixelRatio } = wx.getSystemInfoSync();
 
+// 微信安全区域适配
+let _safeTop = 0;
+let _safeBottom = 0;
+try {
+  const menuRect = wx.getMenuButtonBoundingClientRect();
+  // 胶囊按钮底部 + 间距 = 安全区顶部
+  _safeTop = menuRect.bottom + 8;
+} catch (e) {
+  _safeTop = 80; // 兜底
+}
+try {
+  const sysInfo = wx.getSystemInfoSync();
+  // iPhone X 系列底部安全区
+  _safeBottom = (sysInfo.screenHeight - sysInfo.safeArea.bottom) + 8;
+  if (_safeBottom < 10) _safeBottom = 10;
+} catch (e) {
+  _safeBottom = 20;
+}
+
 const Config = {
   // 屏幕
   SCREEN_WIDTH: windowWidth,
@@ -12,6 +31,10 @@ const Config = {
   DPR: pixelRatio,
   CANVAS_WIDTH: windowWidth * pixelRatio,
   CANVAS_HEIGHT: windowHeight * pixelRatio,
+
+  // 安全区域
+  SAFE_TOP: _safeTop,       // HUD和砖块不能超过这条线
+  SAFE_BOTTOM: _safeBottom,  // 经验条和挡板不能低于这条线
 
   // 颜色
   BG_COLOR: '#080220',
@@ -26,7 +49,7 @@ const Config = {
   // 挡板
   PADDLE_WIDTH: 90,
   PADDLE_HEIGHT: 14,
-  PADDLE_Y_OFFSET: 100,
+  PADDLE_Y_OFFSET: Math.max(120, _safeBottom + 80), // 距底部，留出经验条空间
   PADDLE_COLOR: '#00FFFF',
 
   // 球
@@ -39,7 +62,7 @@ const Config = {
   // 砖块
   BRICK_COLS: 7,
   BRICK_PADDING: 4,
-  BRICK_TOP_OFFSET: 55,
+  BRICK_TOP_OFFSET: _safeTop + 30, // 砖块起始Y（安全区下方）
   BRICK_HEIGHT: 20,
   BRICK_HP_COLORS: {
     1: null,
@@ -217,7 +240,7 @@ const Config = {
   EXP_ORB_SIZE: 4,          // 经验球大小
   EXP_ORB_COLOR: '#AAFFFF', // 经验球颜色
   EXP_BAR_HEIGHT: 6,        // 经验条高度
-  EXP_BAR_Y_OFFSET: 20,     // 经验条距屏幕底部
+  EXP_BAR_Y_OFFSET: Math.max(34, _safeBottom + 14), // 经验条距屏幕底部
 
   // 经验升级选择状态
   STATE_LEVEL_UP: 'LEVEL_UP',

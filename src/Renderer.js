@@ -170,12 +170,13 @@ class Renderer {
   drawAdvanceBar(timer, interval) {
     const ctx = this.ctx;
     const ratio = timer / interval;
+    const barY = Config.SAFE_TOP - 4;
     ctx.fillStyle = 'rgba(255,255,255,0.05)';
-    ctx.fillRect(0, 0, Config.SCREEN_WIDTH, 3);
+    ctx.fillRect(0, barY, Config.SCREEN_WIDTH, 3);
     const r = Math.floor(255 * ratio);
     const g = Math.floor(100 * (1 - ratio));
     ctx.fillStyle = 'rgb(' + r + ', ' + g + ', 50)';
-    ctx.fillRect(0, 0, Config.SCREEN_WIDTH * ratio, 3);
+    ctx.fillRect(0, barY, Config.SCREEN_WIDTH * ratio, 3);
   }
 
   // ===== 武器视觉渲染 =====
@@ -491,7 +492,7 @@ class Renderer {
     const iconSize = 16;
     const gap = 4;
     const startX = Config.SCREEN_WIDTH - iconSize - 4;
-    const startY = 46;
+    const startY = Config.SAFE_TOP + 36;
 
     for (let i = 0; i < ownedList.length && i < 12; i++) {
       const p = ownedList[i];
@@ -521,30 +522,32 @@ class Renderer {
   // ===== HUD =====
   drawHUD(score, lives, combo, level, soundEnabled) {
     const ctx = this.ctx;
+    const top = Config.SAFE_TOP;
+
     ctx.fillStyle = Config.NEON_CYAN;
     ctx.font = 'bold 14px monospace';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    ctx.fillText('SCORE:' + score, 10, 8);
+    ctx.fillText('SCORE:' + score, 10, top);
     ctx.fillStyle = Config.NEON_GREEN;
     ctx.textAlign = 'center';
-    ctx.fillText('LV ' + level, Config.SCREEN_WIDTH / 2, 8);
+    ctx.fillText('LV ' + level, Config.SCREEN_WIDTH / 2, top);
     ctx.fillStyle = Config.NEON_PINK;
     ctx.textAlign = 'right';
     let livesText = '';
     for (let i = 0; i < Math.min(lives, 10); i++) livesText += '♥';
-    ctx.fillText(livesText, Config.SCREEN_WIDTH - 26, 8);
+    ctx.fillText(livesText, Config.SCREEN_WIDTH - 8, top);
     if (combo > 1) {
       ctx.fillStyle = Config.NEON_YELLOW;
       ctx.font = 'bold 13px monospace';
       ctx.textAlign = 'left';
-      ctx.fillText('COMBO x' + combo, 10, 26);
+      ctx.fillText('COMBO x' + combo, 10, top + 18);
     }
     // 音效开关
     ctx.fillStyle = soundEnabled ? 'rgba(255,255,255,0.5)' : 'rgba(255,50,50,0.5)';
     ctx.font = '14px monospace';
     ctx.textAlign = 'left';
-    ctx.fillText(soundEnabled ? '♪' : '♪̶', 10, Config.SCREEN_HEIGHT - 38);
+    ctx.fillText(soundEnabled ? '♪' : '♪̶', 10, Config.SCREEN_HEIGHT - Config.SAFE_BOTTOM - 48);
   }
 
   drawFloatingTexts(texts) {
