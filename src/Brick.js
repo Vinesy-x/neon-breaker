@@ -53,17 +53,25 @@ function generateBrickRow(gameAreaWidth, y, difficulty) {
 
     const x = padding + c * (brickWidth + padding);
 
-    // HP 随难度递增
+    // HP 随难度递增（整体更硬）
     let hp = 1;
-    if (difficulty >= 8) {
-      hp = Math.random() < 0.3 ? 3 : (Math.random() < 0.5 ? 2 : 1);
-    } else if (difficulty >= 4) {
-      hp = Math.random() < 0.3 ? 2 : 1;
-    } else if (difficulty >= 2) {
-      hp = Math.random() < 0.15 ? 2 : 1;
+    if (difficulty >= 10) {
+      // 高难度：2-5HP混合
+      const roll = Math.random();
+      if (roll < 0.15) hp = 5;
+      else if (roll < 0.4) hp = 4;
+      else if (roll < 0.7) hp = 3;
+      else hp = 2;
+    } else if (difficulty >= 6) {
+      const roll = Math.random();
+      if (roll < 0.15) hp = 4;
+      else if (roll < 0.45) hp = 3;
+      else hp = 2;
+    } else if (difficulty >= 3) {
+      hp = Math.random() < 0.4 ? 3 : 2;
+    } else if (difficulty >= 1) {
+      hp = Math.random() < 0.35 ? 2 : 1;
     }
-    // 高难度有极少4HP砖块
-    if (difficulty >= 12 && Math.random() < 0.1) hp = 4;
 
     let color;
     if (hp === 1) {

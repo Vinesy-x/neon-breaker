@@ -68,10 +68,10 @@ class UpgradeManager {
   }
 
   // ===== 被动数值（射击模式） =====
-  getFireRateBonus() { return (this.buffs.fireRate || 0) * 0.15; }
+  getFireRateBonus() { return (this.buffs.fireRate || 0) * 0.10; }
   getSpreadBonus() { return this.buffs.spread || 0; }
   getBulletDamageBonus() { return this.buffs.bulletDmg || 0; }
-  getCritChance() { return (this.buffs.crit || 0) * 0.2; }
+  getCritChance() { return (this.buffs.crit || 0) * 0.15; }
   getPierceCount() { return this.buffs.pierce || 0; }
   hasMagnet() { return (this.buffs.magnet || 0) > 0; }
 

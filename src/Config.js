@@ -60,7 +60,7 @@ const Config = {
   BULLET_MAX: 60,
   BULLET_TRAIL_LENGTH: 4,
   BULLET_COLOR: '#00FFFF',
-  BULLET_FIRE_INTERVAL: 200, // ms，自动发射间隔
+  BULLET_FIRE_INTERVAL: 350, // ms，自动发射间隔（慢一些）
   BULLET_GLOW_COLOR: 'rgba(0, 255, 255, 0.4)',
 
   // 砖块
@@ -73,16 +73,17 @@ const Config = {
     2: '#FF8800',
     3: '#FF3333',
     4: '#AA00FF',
+    5: '#FFFFFF',
   },
 
   // 砖块持续下移（无限模式）
-  BRICK_SCROLL_SPEED: 0.15,       // 每帧下移像素（很慢）
-  BRICK_SPAWN_INTERVAL: 3000,     // 每3秒生成新一行
-  BRICK_INIT_ROWS: 5,             // 初始行数
-  BRICK_GAP_CHANCE: 0.15,         // 每个位置15%概率空洞
-  BRICK_DANGER_Y: 0.78,           // 危险线位置（屏幕比例）
-  BRICK_SPEED_INCREMENT: 0.02,    // 每次难度提升增加的速度
-  DIFFICULTY_INTERVAL: 30000,     // 每30秒难度+1
+  BRICK_SCROLL_SPEED: 0.12,       // 每帧下移像素
+  BRICK_SPAWN_INTERVAL: 2500,     // 每2.5秒生成新一行
+  BRICK_INIT_ROWS: 5,
+  BRICK_GAP_CHANCE: 0.12,         // 每个位置12%概率空洞
+  BRICK_DANGER_Y: 0.78,
+  BRICK_SPEED_INCREMENT: 0.015,   // 难度增速更缓
+  DIFFICULTY_INTERVAL: 25000,     // 每25秒难度+1
 
   // Boss
   BOSS_TRIGGER_TIME: 60000,  // 每60秒触发Boss
@@ -207,13 +208,13 @@ const Config = {
 
   // ===== 基础强化（非武器） =====
   BUFFS: [
-    { key: 'fireRate', name: '射速', desc: '射速+15%', icon: '»', color: '#FFF050', maxLevel: 5 },
-    { key: 'spread', name: '散射', desc: '子弹+1发', icon: '⋮', color: '#FF14FF', maxLevel: 4 },
-    { key: 'bulletDmg', name: '弹伤', desc: '子弹伤害+1', icon: '↑', color: '#50FFB4', maxLevel: 4 },
+    { key: 'fireRate', name: '射速', desc: '射速+10%', icon: '»', color: '#FFF050', maxLevel: 5 },
+    { key: 'spread', name: '散射', desc: '子弹+1发', icon: '⋮', color: '#FF14FF', maxLevel: 3 },
+    { key: 'bulletDmg', name: '弹伤', desc: '子弹伤害+1', icon: '↑', color: '#50FFB4', maxLevel: 3 },
     { key: 'clearBomb', name: '清屏', desc: '清除底部一行砖块', icon: '💥', color: '#FF14FF', maxLevel: 3 },
     { key: 'magnet', name: '磁力', desc: '道具自动吸附', icon: '⊕', color: '#FFF050', maxLevel: 1 },
-    { key: 'crit', name: '暴击', desc: '子弹20%双倍伤害', icon: '✕', color: '#FF3333', maxLevel: 3 },
-    { key: 'pierce', name: '穿透', desc: '子弹穿透+1层', icon: '↟', color: '#00FFFF', maxLevel: 3 },
+    { key: 'crit', name: '暴击', desc: '子弹15%双倍伤害', icon: '✕', color: '#FF3333', maxLevel: 3 },
+    { key: 'pierce', name: '穿透', desc: '子弹穿透+1层', icon: '↟', color: '#00FFFF', maxLevel: 2 },
   ],
 
   // 进化条件：武器满级 + 特定基础强化满级
@@ -237,10 +238,10 @@ const Config = {
   },
 
   // ===== 经验系统 =====
-  EXP_PER_BRICK: 8,         // 每个砖块基础经验
-  EXP_PER_HP: 3,            // 每点HP额外经验
-  EXP_BASE_TO_LEVEL: 120,   // 1级升级所需经验
-  EXP_GROWTH: 1.4,          // 每级经验增长系数
+  EXP_PER_BRICK: 5,         // 每个砖块基础经验（降低）
+  EXP_PER_HP: 2,            // 每点HP额外经验
+  EXP_BASE_TO_LEVEL: 200,   // 1级升级所需经验（大幅提高）
+  EXP_GROWTH: 1.5,          // 每级经验增长系数（更陡）
   EXP_ORB_SPEED: 6,         // 经验球飞行速度
   EXP_ORB_SIZE: 4,          // 经验球大小
   EXP_ORB_COLOR: '#AAFFFF', // 经验球颜色
