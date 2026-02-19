@@ -56,22 +56,22 @@ function generateBrickRow(gameAreaWidth, y, difficulty) {
     const x = padding + c * (brickWidth + padding);
 
     // HP 随难度递增
-    let hp = 2;
-    if (difficulty >= 8) {
+    let hp = 1;
+    if (difficulty >= 10) {
       const roll = Math.random();
-      if (roll < 0.25) hp = 8;
-      else if (roll < 0.5) hp = 6;
-      else if (roll < 0.8) hp = 5;
-      else hp = 4;
-    } else if (difficulty >= 5) {
+      if (roll < 0.25) hp = 6;
+      else if (roll < 0.55) hp = 5;
+      else if (roll < 0.8) hp = 4;
+      else hp = 3;
+    } else if (difficulty >= 6) {
       const roll = Math.random();
-      if (roll < 0.2) hp = 6;
-      else if (roll < 0.5) hp = 5;
-      else hp = 4;
-    } else if (difficulty >= 2) {
-      hp = Math.random() < 0.5 ? 4 : 3;
+      if (roll < 0.3) hp = 4;
+      else if (roll < 0.65) hp = 3;
+      else hp = 2;
+    } else if (difficulty >= 3) {
+      hp = Math.random() < 0.4 ? 3 : 2;
     } else if (difficulty >= 1) {
-      hp = Math.random() < 0.5 ? 3 : 2;
+      hp = Math.random() < 0.3 ? 2 : 1;
     }
 
     let color;

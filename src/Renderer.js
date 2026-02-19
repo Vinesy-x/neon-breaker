@@ -65,8 +65,6 @@ class Renderer {
       ctx.fill();
     }
     // 弹体
-    ctx.shadowColor = bullet.color;
-    ctx.shadowBlur = 8;
     ctx.beginPath();
     ctx.arc(bullet.x, bullet.y, bullet.radius, 0, Math.PI * 2);
     ctx.fillStyle = bullet.color;
@@ -76,7 +74,6 @@ class Renderer {
     ctx.arc(bullet.x, bullet.y, bullet.radius * 0.5, 0, Math.PI * 2);
     ctx.fillStyle = '#FFFFFF';
     ctx.fill();
-    ctx.shadowBlur = 0;
   }
 
   // ===== 发射器 =====
@@ -87,8 +84,6 @@ class Renderer {
 
     // 主体 - 梯形飞船
     ctx.fillStyle = color;
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 12;
 
     ctx.beginPath();
     ctx.moveTo(cx - width / 2, y + height);
@@ -107,13 +102,10 @@ class Renderer {
     ctx.globalAlpha = 1;
 
     // 炮管顶端
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 6;
     ctx.fillStyle = color;
     ctx.beginPath();
     ctx.arc(cx, y - gunH + 6, gunW / 2 + 1, 0, Math.PI * 2);
     ctx.fill();
-    ctx.shadowBlur = 0;
 
     // 发射口闪光
     if (muzzleFlash > 0) {
@@ -131,14 +123,11 @@ class Renderer {
       ctx.globalAlpha = 1;
     }
 
-    // 底部引擎尾焰（动态闪烁）
-    const flameH = 8 + Math.random() * 6;
+        // 尾焰
+    const flameH = 6 + Math.random() * 5;
     const flameW = width / 3;
-    const grad = ctx.createLinearGradient(cx, y + height, cx, y + height + flameH);
-    grad.addColorStop(0, 'rgba(0, 255, 255, 0.6)');
-    grad.addColorStop(0.5, 'rgba(0, 150, 255, 0.3)');
-    grad.addColorStop(1, 'rgba(0, 50, 255, 0)');
-    ctx.fillStyle = grad;
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = color;
     ctx.beginPath();
     ctx.moveTo(cx - flameW, y + height);
     ctx.lineTo(cx, y + height + flameH);
@@ -146,8 +135,9 @@ class Renderer {
     ctx.closePath();
     ctx.fill();
     // 内焰
-    const innerH = 4 + Math.random() * 4;
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+    const innerH = 3 + Math.random() * 3;
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = '#FFFFFF';
     ctx.beginPath();
     ctx.moveTo(cx - flameW * 0.4, y + height);
     ctx.lineTo(cx, y + height + innerH);
@@ -155,7 +145,6 @@ class Renderer {
     ctx.closePath();
     ctx.fill();
 
-    ctx.shadowBlur = 0;
   }
 
   // ===== 砖块 =====
@@ -187,14 +176,11 @@ class Renderer {
 
     // 高HP砖块发光边框
     if (maxHp >= 4) {
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 6;
       ctx.strokeStyle = color;
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.roundRect(x, y, width, height, 3);
       ctx.stroke();
-      ctx.shadowBlur = 0;
     } else if (maxHp > 1) {
       ctx.strokeStyle = 'rgba(255,255,255,0.4)';
       ctx.lineWidth = 1;
@@ -232,13 +218,10 @@ class Renderer {
     const pulse = 0.8 + Math.sin(time * 0.15) * 0.2;
     const drawSize = size * pulse;
     // 外发光
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 10;
     ctx.fillStyle = color;
     ctx.beginPath();
     ctx.arc(x, y, drawSize / 2, 0, Math.PI * 2);
     ctx.fill();
-    ctx.shadowBlur = 0;
     // 白色高光
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
     ctx.beginPath();
@@ -263,12 +246,9 @@ class Renderer {
     ctx.beginPath();
     ctx.roundRect(x, y, width, height, 6);
     ctx.fill();
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 20;
     ctx.beginPath();
     ctx.roundRect(x, y, width, height, 6);
     ctx.fill();
-    ctx.shadowBlur = 0;
     ctx.globalAlpha = 1;
     const barW = width, barH = 6, barX = x, barY = y - 12;
     ctx.fillStyle = 'rgba(255,255,255,0.2)';
@@ -297,12 +277,9 @@ class Renderer {
     ctx.lineTo(Config.SCREEN_WIDTH, dangerY);
     ctx.stroke();
     ctx.setLineDash([]);
-    // 渐变警告区域
-    const grad = ctx.createLinearGradient(0, dangerY - 30, 0, dangerY);
-    grad.addColorStop(0, 'rgba(255, 0, 0, 0)');
-    grad.addColorStop(1, 'rgba(255, 0, 0, ' + (pulse * 0.3) + ')');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, dangerY - 30, Config.SCREEN_WIDTH, 30);
+    // 简化警告区
+    ctx.fillStyle = 'rgba(255, 0, 0, ' + (pulse * 0.15) + ')';
+    ctx.fillRect(0, dangerY - 20, Config.SCREEN_WIDTH, 20);
   }
 
   // ===== 武器视觉渲染 =====
@@ -353,8 +330,6 @@ class Renderer {
       ctx.save();
       ctx.translate(b.x, b.y);
       ctx.rotate(b.angle);
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 15;
       ctx.fillStyle = color;
       ctx.beginPath();
       ctx.moveTo(0, -12);
@@ -373,7 +348,6 @@ class Renderer {
       ctx.closePath();
       ctx.fill();
       ctx.globalAlpha = 1;
-      ctx.shadowBlur = 0;
       ctx.restore();
     }
   }
@@ -383,14 +357,8 @@ class Renderer {
     for (const w of waves) {
       ctx.globalAlpha = w.alpha * 0.7;
 
-      const outerGrad = ctx.createLinearGradient(w.x - w.width / 2, w.y, w.x + w.width / 2, w.y);
-      outerGrad.addColorStop(0, 'rgba(255, 80, 0, 0)');
-      outerGrad.addColorStop(0.2, 'rgba(255, 100, 0, 0.4)');
-      outerGrad.addColorStop(0.5, color);
-      outerGrad.addColorStop(0.8, 'rgba(255, 100, 0, 0.4)');
-      outerGrad.addColorStop(1, 'rgba(255, 80, 0, 0)');
-      ctx.fillStyle = outerGrad;
-      ctx.fillRect(w.x - w.width / 2, w.y - 10, w.width, 20);
+      ctx.fillStyle = color;
+      ctx.fillRect(w.x - w.width / 2, w.y - 8, w.width, 16);
 
       ctx.fillStyle = 'rgba(255, 255, 150, 0.5)';
       ctx.fillRect(w.x - w.width / 4, w.y - 3, w.width / 2, 6);
@@ -412,8 +380,6 @@ class Renderer {
 
       ctx.strokeStyle = 'rgba(' + this._hexToRgb(color) + ', 0.3)';
       ctx.lineWidth = 6;
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 15;
       ctx.beginPath();
       for (let i = 0; i < bolt.points.length; i++) {
         const p = bolt.points[i];
@@ -435,17 +401,13 @@ class Renderer {
         else ctx.lineTo(p.x + jx, p.y + jy);
       }
       ctx.stroke();
-      ctx.shadowBlur = 0;
 
       for (let i = 1; i < bolt.points.length; i++) {
         const p = bolt.points[i];
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 12;
         ctx.fillStyle = '#FFFFFF';
         ctx.beginPath();
         ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
         ctx.fill();
-        ctx.shadowBlur = 0;
         ctx.strokeStyle = color;
         ctx.lineWidth = 1;
         ctx.beginPath();
@@ -475,13 +437,10 @@ class Renderer {
       }
       ctx.globalAlpha = 1;
 
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 10;
       ctx.fillStyle = color;
       ctx.beginPath();
       ctx.arc(m.x, m.y, 5, 0, Math.PI * 2);
       ctx.fill();
-      ctx.shadowBlur = 0;
       ctx.fillStyle = '#FFFFFF';
       ctx.beginPath();
       ctx.arc(m.x, m.y - 1, 2, 0, Math.PI * 2);
@@ -518,8 +477,6 @@ class Renderer {
       ctx.fillStyle = 'rgba(255, 50, 50, 0.1)';
       ctx.fillRect(b.x - b.width * 3, b.topY, b.width * 6, bh);
 
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 20;
       ctx.fillStyle = 'rgba(255, 80, 80, 0.3)';
       ctx.fillRect(b.x - b.width * 1.5, b.topY, b.width * 3, bh);
 
@@ -529,7 +486,6 @@ class Renderer {
       ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
       ctx.fillRect(b.x - 1, b.topY, 2, bh);
 
-      ctx.shadowBlur = 0;
 
       const scanY = (Date.now() * 0.3) % bh;
       ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
@@ -552,8 +508,6 @@ class Renderer {
       }
       ctx.globalAlpha = 1;
 
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 8;
       ctx.fillStyle = color;
       ctx.beginPath();
       ctx.moveTo(ic.x, ic.y + 10);
@@ -568,7 +522,6 @@ class Renderer {
       ctx.lineTo(ic.x + 2, ic.y - 3);
       ctx.closePath();
       ctx.fill();
-      ctx.shadowBlur = 0;
     }
   }
 
@@ -679,7 +632,7 @@ class Renderer {
     ctx.fillText('点击屏幕开始', cx, cy + 90);
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
     ctx.font = '10px monospace';
-    ctx.fillText('v4.1.0', cx, Config.SCREEN_HEIGHT - 30);
+    ctx.fillText('v4.2.1', cx, Config.SCREEN_HEIGHT - 30);
   }
 
   // ===== 经验球 =====
@@ -689,13 +642,10 @@ class Renderer {
     const size = Config.EXP_ORB_SIZE;
     for (let i = 0; i < orbs.length; i++) {
       const o = orbs[i];
-      ctx.shadowColor = Config.EXP_ORB_COLOR;
-      ctx.shadowBlur = 6;
       ctx.fillStyle = Config.EXP_ORB_COLOR;
       ctx.beginPath();
       ctx.arc(o.x, o.y, size, 0, Math.PI * 2);
       ctx.fill();
-      ctx.shadowBlur = 0;
       ctx.fillStyle = '#FFFFFF';
       ctx.beginPath();
       ctx.arc(o.x - 1, o.y - 1, size * 0.4, 0, Math.PI * 2);
@@ -719,21 +669,15 @@ class Renderer {
     ctx.fill();
 
     if (ratio > 0) {
-      const grad = ctx.createLinearGradient(barX, barY, barX + barW * ratio, barY);
-      grad.addColorStop(0, Config.NEON_CYAN);
-      grad.addColorStop(1, Config.NEON_GREEN);
-      ctx.fillStyle = grad;
+      ctx.fillStyle = Config.NEON_CYAN;
       ctx.beginPath();
       ctx.roundRect(barX, barY, barW * ratio, barH, barH / 2);
       ctx.fill();
 
-      ctx.shadowColor = Config.NEON_CYAN;
-      ctx.shadowBlur = 8;
       ctx.fillStyle = '#FFFFFF';
       ctx.beginPath();
       ctx.arc(barX + barW * ratio, barY + barH / 2, 3, 0, Math.PI * 2);
       ctx.fill();
-      ctx.shadowBlur = 0;
     }
 
     ctx.fillStyle = Config.NEON_CYAN;
@@ -813,14 +757,11 @@ class Renderer {
         ctx.fillText('NEW!', ccx, cardY + 32);
       }
 
-      ctx.shadowColor = c.color;
-      ctx.shadowBlur = 6;
       ctx.fillStyle = c.color;
       ctx.font = '32px monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(c.icon, ccx, cardY + cardH * 0.3);
-      ctx.shadowBlur = 0;
 
       ctx.fillStyle = '#FFFFFF';
       ctx.font = 'bold 12px monospace';
