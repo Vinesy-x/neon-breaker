@@ -699,22 +699,26 @@ class Renderer {
       const cardX = startX + i * (cardW + gap);
       const cardY = startY;
 
-      // 卡片背景
+      // 卡片背景（深色半透明，不要亮色！）
       const isNew = c.isNew && c.type === 'weapon';
-      ctx.fillStyle = isNew ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.05)';
+      ctx.fillStyle = 'rgba(8, 2, 32, 0.92)';
       ctx.beginPath();
       ctx.roundRect(cardX, cardY, cardW, cardH, 10);
       ctx.fill();
 
-      // 边框（选中色发光）
+      // 边框（细线霓虹，不要shadowBlur太大）
       ctx.strokeStyle = c.color;
-      ctx.lineWidth = isNew ? 2 : 1;
-      ctx.shadowColor = c.color;
-      ctx.shadowBlur = isNew ? 10 : 0;
+      ctx.lineWidth = isNew ? 1.5 : 1;
       ctx.beginPath();
       ctx.roundRect(cardX, cardY, cardW, cardH, 10);
       ctx.stroke();
-      ctx.shadowBlur = 0;
+
+      // 顶部色条（窄，只有3px高，提示颜色）
+      const rgb = this._hexToRgb(c.color);
+      ctx.fillStyle = 'rgba(' + rgb + ', 0.3)';
+      ctx.beginPath();
+      ctx.roundRect(cardX + 1, cardY + 1, cardW - 2, 3, [2, 2, 0, 0]);
+      ctx.fill();
 
       const ccx = cardX + cardW / 2; // 卡片中心x
 
@@ -732,9 +736,9 @@ class Renderer {
         ctx.fillText('NEW!', ccx, cardY + 32);
       }
 
-      // 大图标（居中，发光）
+      // 大图标（居中）
       ctx.shadowColor = c.color;
-      ctx.shadowBlur = 12;
+      ctx.shadowBlur = 6;
       ctx.fillStyle = c.color;
       ctx.font = '32px monospace';
       ctx.textAlign = 'center';
@@ -743,15 +747,14 @@ class Renderer {
       ctx.shadowBlur = 0;
 
       // 名称
-      ctx.fillStyle = c.color;
+      ctx.fillStyle = '#FFFFFF';
       ctx.font = 'bold 12px monospace';
       ctx.textBaseline = 'middle';
-      // 自动换行名称（卡片窄）
       this._drawTextWrap(ctx, c.name, ccx, cardY + cardH * 0.52, cardW - 12, 13);
 
       // 描述（多行）
-      ctx.fillStyle = 'rgba(255,255,255,0.65)';
-      ctx.font = '10px monospace';
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.font = '9px monospace';
       this._drawTextWrap(ctx, c.desc, ccx, cardY + cardH * 0.68, cardW - 12, 12);
 
       // 等级条（底部）
