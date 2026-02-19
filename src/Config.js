@@ -202,10 +202,25 @@ const Config = {
     PLAYING: 'PLAYING',
     BOSS: 'BOSS',
     LEVEL_CLEAR: 'LEVEL_CLEAR',
+    LEVEL_UP: 'LEVEL_UP',
     GAME_OVER: 'GAME_OVER',
   },
 
   INITIAL_LIVES: 3,
+
+  // ===== 经验系统 =====
+  EXP_PER_BRICK: 10,        // 每个砖块基础经验
+  EXP_PER_HP: 5,            // 每点HP额外经验
+  EXP_BASE_TO_LEVEL: 50,    // 1级升级所需经验
+  EXP_GROWTH: 1.25,         // 每级经验增长系数
+  EXP_ORB_SPEED: 6,         // 经验球飞行速度
+  EXP_ORB_SIZE: 4,          // 经验球大小
+  EXP_ORB_COLOR: '#AAFFFF', // 经验球颜色
+  EXP_BAR_HEIGHT: 6,        // 经验条高度
+  EXP_BAR_Y_OFFSET: 20,     // 经验条距屏幕底部
+
+  // 经验升级选择状态
+  STATE_LEVEL_UP: 'LEVEL_UP',
 };
 
 module.exports = Config;

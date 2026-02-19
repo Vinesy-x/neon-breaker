@@ -467,8 +467,81 @@ class Renderer {
     ctx.fillText('v3.0.0', cx, Config.SCREEN_HEIGHT - 30);
   }
 
-  // ===== 升级选择 =====
-  drawLevelClear(choices, level, upgrades) {
+  // ===== 经验球 =====
+  drawExpOrbs(orbs) {
+    if (!orbs || orbs.length === 0) return;
+    const ctx = this.ctx;
+    const size = Config.EXP_ORB_SIZE;
+    for (let i = 0; i < orbs.length; i++) {
+      const o = orbs[i];
+      // 发光小球
+      ctx.shadowColor = Config.EXP_ORB_COLOR;
+      ctx.shadowBlur = 6;
+      ctx.fillStyle = Config.EXP_ORB_COLOR;
+      ctx.beginPath();
+      ctx.arc(o.x, o.y, size, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      // 高光
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      ctx.arc(o.x - 1, o.y - 1, size * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // ===== 经验条 =====
+  drawExpBar(exp, expToNext, playerLevel) {
+    const ctx = this.ctx;
+    const barH = Config.EXP_BAR_HEIGHT;
+    const barY = Config.SCREEN_HEIGHT - Config.EXP_BAR_Y_OFFSET;
+    const margin = 40;
+    const barW = Config.SCREEN_WIDTH - margin * 2;
+    const barX = margin;
+    const ratio = Math.min(1, exp / expToNext);
+
+    // 背景
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.beginPath();
+    ctx.roundRect(barX, barY, barW, barH, barH / 2);
+    ctx.fill();
+
+    // 填充
+    if (ratio > 0) {
+      const grad = ctx.createLinearGradient(barX, barY, barX + barW * ratio, barY);
+      grad.addColorStop(0, Config.NEON_CYAN);
+      grad.addColorStop(1, Config.NEON_GREEN);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.roundRect(barX, barY, barW * ratio, barH, barH / 2);
+      ctx.fill();
+
+      // 发光尖端
+      ctx.shadowColor = Config.NEON_CYAN;
+      ctx.shadowBlur = 8;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      ctx.arc(barX + barW * ratio, barY + barH / 2, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    // 等级文字（左侧）
+    ctx.fillStyle = Config.NEON_CYAN;
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Lv.' + playerLevel, barX - 4, barY + barH / 2);
+
+    // 百分比（右侧）
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(Math.floor(ratio * 100) + '%', barX + barW + 4, barY + barH / 2);
+  }
+
+  // ===== 升级选择（经验满触发） =====
+  drawLevelUpChoice(choices, playerLevel, upgrades) {
     const ctx = this.ctx;
     const cx = Config.SCREEN_WIDTH / 2;
     ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
@@ -478,7 +551,7 @@ class Renderer {
     ctx.font = 'bold 22px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('LEVEL ' + level + ' CLEAR!', cx, 90);
+    ctx.fillText('⬆ LEVEL ' + playerLevel + '!', cx, 90);
 
     ctx.fillStyle = Config.NEON_YELLOW;
     ctx.font = '13px monospace';
@@ -544,7 +617,7 @@ class Renderer {
   }
 
   // ===== Game Over =====
-  drawGameOver(score, level, ownedList) {
+  drawGameOver(score, level, playerLevel, ownedList) {
     const ctx = this.ctx;
     const cx = Config.SCREEN_WIDTH / 2;
     const cy = Config.SCREEN_HEIGHT / 2;
@@ -555,13 +628,13 @@ class Renderer {
     ctx.font = 'bold 28px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('GAME OVER', cx, cy - 90);
+    ctx.fillText('GAME OVER', cx, cy - 100);
 
     ctx.fillStyle = Config.NEON_CYAN;
     ctx.font = '16px monospace';
-    ctx.fillText('得分: ' + score, cx, cy - 50);
+    ctx.fillText('得分: ' + score, cx, cy - 60);
     ctx.fillStyle = Config.NEON_GREEN;
-    ctx.fillText('关卡: ' + level, cx, cy - 25);
+    ctx.fillText('关卡: ' + level + '  等级: Lv.' + playerLevel, cx, cy - 35);
 
     // 武器总结
     if (ownedList && ownedList.length > 0) {
