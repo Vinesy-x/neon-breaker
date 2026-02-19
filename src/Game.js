@@ -1,11 +1,11 @@
 /**
- * Game.js - v3.1 经验升级制
- * 砖块碎→掉经验球→飞向经验条→满了升级→三选一
- * 过关直接进下一关，升级才选技能
+ * Game.js - v4.0 打飞机模式
+ * 发射器左右移动，自动往上射子弹打砖块
+ * 保留：武器系统、经验升级、砖块前移、Boss
  */
 const Config = require('./Config');
-const Ball = require('./Ball');
-const Paddle = require('./Paddle');
+const Bullet = require('./Bullet');
+const Launcher = require('./Launcher');
 const { Brick, generateBricks } = require('./Brick');
 const { ParticleManager } = require('./Particle');
 const { PowerUp, maybeDropPowerUp } = require('./PowerUp');
@@ -31,9 +31,9 @@ class Game {
     this.combo = 0;
     this.maxCombo = 0;
 
-    this.balls = [];
+    this.bullets = [];
     this.bricks = [];
-    this.paddle = null;
+    this.launcher = null;
     this.particles = new ParticleManager();
     this.powerUps = [];
     this.upgrades = new UpgradeManager();
@@ -44,8 +44,8 @@ class Game {
     this.playerLevel = 1;
     this.exp = 0;
     this.expToNext = Config.EXP_BASE_TO_LEVEL;
-    this.expOrbs = [];     // {x, y, vx, vy, value} 飞行中的经验球
-    this.pendingLevelUps = 0; // 积攒的升级次数
+    this.expOrbs = [];
+    this.pendingLevelUps = 0;
 
     // 砖块前移
     this.advanceTimer = 0;
@@ -53,13 +53,15 @@ class Game {
     this.advanceWarning = false;
     this.advanceSlowMult = 1;
 
-    this.baseBallSpeed = Config.BALL_SPEED;
+    // 发射计时
+    this.fireTimer = 0;
+
     this.pendingUpgradeChoices = [];
 
     // 进化通知
     this.evolveNotifications = [];
 
-    // 记录升级前的状态，升级选完后恢复
+    // 记录升级前的状态
     this._preUpgradeState = null;
 
     this.lastTime = 0;
@@ -76,15 +78,19 @@ class Game {
   _initLevel() {
     const isBossLevel = (this.level % Config.BOSS_TRIGGER_INTERVAL === 0);
 
-    this.paddle = new Paddle(this.gameWidth, this.gameHeight);
-    this.paddle.applyPermWiden(this.upgrades.getPaddleBonus());
-    this.paddle.reset(this.gameWidth, this.gameHeight);
+    this.launcher = new Launcher(this.gameWidth, this.gameHeight);
+    this.launcher.applyPermWiden(0); // 重置
+    this.launcher.permFireRateBonus = this.upgrades.getFireRateBonus();
+    this.launcher.permSpreadBonus = this.upgrades.getSpreadBonus();
+    this.launcher.bulletDamage = 1 + this.upgrades.getBulletDamageBonus();
+    this.launcher.reset(this.gameWidth, this.gameHeight);
 
-    this.balls = [];
+    this.bullets = [];
     this.powerUps = [];
     this.particles.clear();
     this.floatingTexts = [];
     this.combo = 0;
+    this.fireTimer = 0;
 
     this.advanceTimer = 0;
     this.advanceSlowMult = this.upgrades.getAdvanceSlowMult();
@@ -101,26 +107,39 @@ class Game {
       this.bricks = generateBricks(this.level, this.gameWidth);
       this.boss = null;
     }
-
-    this._spawnInitialBalls();
   }
 
-  _spawnInitialBalls() {
-    const count = this.upgrades.getStartBallCount();
-    for (let i = 0; i < count; i++) this._spawnBall();
-  }
+  // ===== 子弹发射 =====
+  _fireBullets() {
+    const count = this.launcher.getBulletCount();
+    const spread = this.launcher.getSpreadAngle();
+    const cx = this.launcher.getCenterX();
+    const startY = this.launcher.y - 5;
+    const speed = Config.BULLET_SPEED;
+    const damage = this.launcher.bulletDamage;
+    const pierce = this.upgrades.getPierceCount();
 
-  _spawnBall() {
-    if (this.balls.length >= Config.BALL_MAX) return;
-    const speed = this.baseBallSpeed * this.upgrades.getBallSpeedMult();
-    const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.4;
-    const ball = new Ball(
-      this.paddle ? this.paddle.getCenterX() : this.gameWidth / 2,
-      this.paddle ? this.paddle.y - 20 : this.gameHeight - 150,
-      Math.cos(angle) * speed,
-      Math.sin(angle) * speed
-    );
-    this.balls.push(ball);
+    for (let i = 0; i < count; i++) {
+      if (this.bullets.length >= Config.BULLET_MAX) break;
+
+      let angle = -Math.PI / 2; // 正上方
+      if (count > 1) {
+        // 均匀分布在扇形内
+        angle = -Math.PI / 2 - spread / 2 + (spread / (count - 1)) * i;
+      }
+
+      const vx = Math.cos(angle) * speed;
+      const vy = Math.sin(angle) * speed;
+      const bullet = new Bullet(cx, startY, vx, vy, damage);
+      bullet.pierce = pierce;
+      this.bullets.push(bullet);
+    }
+
+    this.launcher.muzzleFlash = 3;
+    // 只在低射速时播放音效（高射速时太吵）
+    if (this.launcher.getFireInterval() > 120) {
+      Sound.bulletShoot();
+    }
   }
 
   _addFloatingText(text, x, y, color, size) {
@@ -136,11 +155,9 @@ class Game {
   }
 
   _spawnExpOrbs(x, y, totalExp) {
-    // 把经验拆成几个小球飞出去
     const orbCount = Math.min(Math.ceil(totalExp / 5), 5);
     const perOrb = totalExp / orbCount;
     for (let i = 0; i < orbCount; i++) {
-      // 先随机弹出，然后会被吸向经验条
       const angle = Math.random() * Math.PI * 2;
       const speed = 1.5 + Math.random() * 2;
       this.expOrbs.push({
@@ -149,7 +166,7 @@ class Game {
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
         value: Math.ceil(perOrb),
-        life: 0, // 弹出阶段计时
+        life: 0,
         collected: false,
       });
     }
@@ -164,23 +181,20 @@ class Game {
       orb.life += dt;
 
       if (orb.life < 8) {
-        // 弹出阶段：随机飘散
         orb.x += orb.vx * dt;
         orb.y += orb.vy * dt;
         orb.vx *= 0.95;
         orb.vy *= 0.95;
       } else {
-        // 吸附阶段：飞向经验条
         const dx = targetX - orb.x;
         const dy = targetY - orb.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        const speed = Config.EXP_ORB_SPEED + orb.life * 0.3; // 越久越快
+        const speed = Config.EXP_ORB_SPEED + orb.life * 0.3;
         if (dist > 5) {
           orb.x += (dx / dist) * speed * dt;
           orb.y += (dy / dist) * speed * dt;
         }
 
-        // 到达经验条
         if (dist < 10) {
           Sound.expCollect();
           this._addExp(orb.value);
@@ -189,7 +203,6 @@ class Game {
         }
       }
 
-      // 安全超时
       if (orb.life > 120) {
         this._addExp(orb.value);
         this.expOrbs.splice(i, 1);
@@ -241,7 +254,6 @@ class Game {
     Sound.brickHit();
     this.particles.emitBossHit(this.boss.getCenterX(), this.boss.getCenterY());
     this.score += damage;
-    // Boss也给经验
     this._spawnExpOrbs(this.boss.getCenterX(), this.boss.getCenterY(), damage * 2);
   }
 
@@ -262,7 +274,7 @@ class Game {
       this.particles.emitCombo(center.x, center.y, this.combo);
     }
 
-    // 掉经验球！
+    // 掉经验球
     const expValue = Config.EXP_PER_BRICK + Config.EXP_PER_HP * brick.maxHp;
     this._spawnExpOrbs(center.x, center.y, expValue);
 
@@ -274,18 +286,18 @@ class Game {
   _applyPowerUp(powerUp) {
     Sound.powerUp();
     switch (powerUp.type) {
-      case 'multiball':
-        for (let i = 0; i < 2; i++) this._spawnBall();
-        this._addFloatingText('+2球!', powerUp.x, powerUp.y, Config.NEON_PINK, 14);
+      case 'firerate':
+        this.launcher.applyTempFireRate();
+        this._addFloatingText('射速UP!', powerUp.x, powerUp.y, Config.NEON_YELLOW, 14);
         break;
-      case 'widen':
-        this.paddle.applyTempWiden();
-        this._addFloatingText('加宽!', powerUp.x, powerUp.y, Config.NEON_GREEN, 14);
+      case 'spread':
+        this.launcher.applyTempSpread();
+        this._addFloatingText('散射!', powerUp.x, powerUp.y, Config.NEON_PINK, 14);
         break;
       case 'score':
         const bonus = 50 * this.level;
         this.score += bonus;
-        this._addFloatingText('+' + bonus, powerUp.x, powerUp.y, Config.NEON_YELLOW, 14);
+        this._addFloatingText('+' + bonus, powerUp.x, powerUp.y, Config.NEON_GREEN, 14);
         break;
     }
   }
@@ -332,7 +344,7 @@ class Game {
 
       case Config.STATE.TITLE:
         if (this.input.consumeTap()) {
-          Sound.init(); // 用户交互后初始化音频
+          Sound.init();
           Sound.gameStart();
           this.level = 1;
           this.score = 0;
@@ -346,7 +358,6 @@ class Game {
           this.pendingLevelUps = 0;
           this.upgrades.reset();
           this.evolveNotifications = [];
-          this.baseBallSpeed = Config.BALL_SPEED;
           this._initLevel();
         }
         break;
@@ -360,8 +371,6 @@ class Game {
         break;
 
       case Config.STATE.LEVEL_UP:
-        // 游戏暂停，只处理升级选择
-        // 但经验球继续飞（视觉美观）
         this._updateExpOrbs(dt);
         this._updateFloatingTexts(dt);
         this.particles.update(dt);
@@ -369,7 +378,6 @@ class Game {
         break;
 
       case Config.STATE.LEVEL_CLEAR:
-        // 过关短暂展示后自动进下一关
         this._updateLevelClear(dt);
         break;
 
@@ -381,7 +389,15 @@ class Game {
 
   _updatePlaying(dt, dtMs) {
     this._handleInput();
-    this.paddle.update(dt);
+    this.launcher.update(dt, dtMs);
+
+    // 自动发射子弹
+    this.fireTimer += dtMs;
+    const fireInterval = this.launcher.getFireInterval();
+    if (this.fireTimer >= fireInterval) {
+      this.fireTimer -= fireInterval;
+      this._fireBullets();
+    }
 
     this._advanceBricks(dtMs);
     if (this.state === Config.STATE.GAME_OVER) return;
@@ -389,7 +405,7 @@ class Game {
     this.advanceSlowMult = 1;
     this.upgrades.updateWeapons(dtMs, this);
 
-    this._updateBalls(dt);
+    this._updateBullets(dt);
     this._updatePowerUps(dt);
     this._updateExpOrbs(dt);
     this.particles.update(dt);
@@ -402,18 +418,25 @@ class Game {
     // 关卡完成
     const allDead = this.bricks.every(b => !b.alive);
     if (allDead && this.bricks.length > 0) this._onLevelClear();
-    if (this.balls.length === 0) this._onAllBallsLost();
   }
 
   _updateBoss(dt, dtMs) {
     this._handleInput();
-    this.paddle.update(dt);
+    this.launcher.update(dt, dtMs);
+
+    // 自动发射子弹
+    this.fireTimer += dtMs;
+    const fireInterval = this.launcher.getFireInterval();
+    if (this.fireTimer >= fireInterval) {
+      this.fireTimer -= fireInterval;
+      this._fireBullets();
+    }
 
     if (this.boss && this.boss.alive) this.boss.update(dtMs);
 
     this.upgrades.updateWeapons(dtMs, this);
 
-    this._updateBalls(dt);
+    this._updateBullets(dt);
     this._updatePowerUps(dt);
     this._updateExpOrbs(dt);
     this.particles.update(dt);
@@ -428,8 +451,6 @@ class Game {
       this._addFloatingText('BOSS DEFEATED!', this.gameWidth / 2, this.gameHeight / 3, Config.NEON_YELLOW, 22);
       this._onLevelClear();
     }
-
-    if (this.balls.length === 0) this._onAllBallsLost();
   }
 
   _updateLevelUp() {
@@ -443,6 +464,9 @@ class Game {
             Sound.selectSkill();
             this.upgrades.applyChoice(ug);
 
+            // 应用新数值到发射器
+            this._syncLauncherStats();
+
             // 检查进化
             const evolves = this.upgrades.checkEvolve();
             for (const ev of evolves) {
@@ -455,7 +479,6 @@ class Game {
 
             if (ug.type === 'buff' && ug.key === 'extraLife') this.lives++;
 
-            // 还有待选升级？继续选
             if (this.pendingLevelUps > 0) {
               this.pendingLevelUps--;
               this.pendingUpgradeChoices = this.upgrades.generateChoices();
@@ -465,7 +488,6 @@ class Game {
                 this._preUpgradeState = null;
               }
             } else {
-              // 回到游戏
               this.state = this._preUpgradeState || Config.STATE.PLAYING;
               this._preUpgradeState = null;
             }
@@ -476,14 +498,21 @@ class Game {
     }
   }
 
+  /** 同步升级后的数值到发射器 */
+  _syncLauncherStats() {
+    if (!this.launcher) return;
+    this.launcher.permFireRateBonus = this.upgrades.getFireRateBonus();
+    this.launcher.permSpreadBonus = this.upgrades.getSpreadBonus();
+    this.launcher.bulletDamage = 1 + this.upgrades.getBulletDamageBonus();
+  }
+
   _updateLevelClear(dt) {
-    // 过关直接进下一关（短暂延迟让玩家看到 CLEAR）
     this._levelClearTimer = (this._levelClearTimer || 0) + dt;
     this._updateExpOrbs(dt);
     this._updateFloatingTexts(dt);
     this.particles.update(dt);
 
-    if (this._levelClearTimer > 40) { // ~0.7秒
+    if (this._levelClearTimer > 40) {
       this._levelClearTimer = 0;
       this.level++;
       this._initLevel();
@@ -493,68 +522,73 @@ class Game {
   _handleInput() {
     const deltaX = this.input.getPaddleDeltaX();
     if (deltaX !== 0) {
-      this.paddle.setX(this.paddle.x + this.paddle.width / 2 + deltaX);
+      this.launcher.setX(this.launcher.getCenterX() + deltaX);
     }
   }
 
-  _updateBalls(dt) {
-    for (let i = this.balls.length - 1; i >= 0; i--) {
-      const ball = this.balls[i];
-      ball.update(dt, 1);
-      ball.wallBounce(this.gameWidth, 0);
-      if (ball.collidePaddle(this.paddle)) {
-        Sound.paddleHit();
+  _updateBullets(dt) {
+    for (let i = this.bullets.length - 1; i >= 0; i--) {
+      const bullet = this.bullets[i];
+      bullet.update(dt);
+
+      // 出界
+      if (bullet.isOutOfBounds(this.gameWidth, this.gameHeight)) {
+        this.bullets.splice(i, 1);
+        continue;
       }
 
-      let pierceLeft = this.upgrades.getPierceCount();
+      let removed = false;
+
+      // 碰撞砖块
       for (let j = 0; j < this.bricks.length; j++) {
         const brick = this.bricks[j];
         if (!brick.alive) continue;
-        if (ball.collideBrick(brick)) {
+        if (bullet.collideBrick(brick)) {
           const critMult = (Math.random() < this.upgrades.getCritChance()) ? 2 : 1;
-          const damage = Math.max(1, Math.floor(1 * critMult));
-          this.damageBrick(brick, damage, 'ball');
+          const damage = Math.max(1, Math.floor(bullet.damage * critMult));
+          this.damageBrick(brick, damage, 'bullet');
           if (critMult > 1) {
             Sound.crit();
             const bc = brick.getCenter();
             this._addFloatingText('暴击!', bc.x, bc.y - 10, Config.NEON_RED, 14);
           }
-          if (pierceLeft > 0) {
-            pierceLeft--;
-            ball.undoLastBounce();
+
+          this.combo++;
+
+          if (bullet.pierce > 0) {
+            bullet.pierce--;
+            // 穿透，继续飞
           } else {
+            this.bullets.splice(i, 1);
+            removed = true;
             break;
           }
         }
       }
 
-      if (this.boss && this.boss.alive) {
-        if (ball.collideBoss(this.boss)) {
-          const critMult = (Math.random() < this.upgrades.getCritChance()) ? 2 : 1;
-          this.damageBoss(Math.floor(5 * critMult));
-          if (critMult > 1) {
-            this._addFloatingText('暴击!', ball.x, this.boss.y + this.boss.height + 10, Config.NEON_RED, 14);
-          }
-        }
-      }
+      if (removed) continue;
 
-      if (ball.isOutOfBounds(this.gameHeight)) {
-        Sound.ballLost();
-        this.balls.splice(i, 1);
-        this.combo = 0;
+      // 碰撞Boss
+      if (this.boss && this.boss.alive && bullet.collideBoss(this.boss)) {
+        const critMult = (Math.random() < this.upgrades.getCritChance()) ? 2 : 1;
+        this.damageBoss(Math.floor(bullet.damage * 3 * critMult));
+        if (critMult > 1) {
+          this._addFloatingText('暴击!', bullet.x, this.boss.y + this.boss.height + 10, Config.NEON_RED, 14);
+        }
+        this.bullets.splice(i, 1);
       }
     }
   }
 
   _updatePowerUps(dt) {
     const magnetTarget = this.upgrades.hasMagnet() ? {
-      x: this.paddle.getCenterX(), y: this.paddle.y,
+      x: this.launcher.getCenterX(), y: this.launcher.y,
     } : null;
 
     for (let i = this.powerUps.length - 1; i >= 0; i--) {
       const pu = this.powerUps[i];
       pu.update(dt, magnetTarget);
-      if (pu.collidePaddle(this.paddle)) {
+      if (pu.collideLauncher(this.launcher)) {
         this._applyPowerUp(pu);
         this.powerUps.splice(i, 1);
         continue;
@@ -578,17 +612,6 @@ class Game {
     this.state = Config.STATE.LEVEL_CLEAR;
     Sound.levelClear();
     this._addFloatingText('CLEAR!', this.gameWidth / 2, this.gameHeight * 0.35, Config.NEON_GREEN, 24);
-  }
-
-  _onAllBallsLost() {
-    this.lives--;
-    if (this.lives <= 0) {
-      Sound.gameOver();
-      this.state = Config.STATE.GAME_OVER;
-    } else {
-      this._spawnInitialBalls();
-      this.combo = 0;
-    }
   }
 
   // ===== 渲染 =====
@@ -637,9 +660,9 @@ class Game {
     // 经验球
     this.renderer.drawExpOrbs(this.expOrbs);
 
-    this.renderer.drawWeapons(this.upgrades.weapons, this.paddle);
-    for (let i = 0; i < this.balls.length; i++) this.renderer.drawBall(this.balls[i]);
-    if (this.paddle) this.renderer.drawPaddle(this.paddle);
+    this.renderer.drawWeapons(this.upgrades.weapons, this.launcher);
+    for (let i = 0; i < this.bullets.length; i++) this.renderer.drawBullet(this.bullets[i]);
+    if (this.launcher) this.renderer.drawLauncher(this.launcher);
 
     this.renderer.drawParticles(this.particles.particles);
     this.renderer.drawFloatingTexts(this.floatingTexts);

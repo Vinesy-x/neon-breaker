@@ -1,6 +1,7 @@
 /**
  * WeaponSystem.js - 武器技能系统（向僵尸开炮式）
  * 每个武器有独立视觉实体，自动攻击砖块
+ * 射击模式：武器围绕发射器运作
  */
 const Config = require('./Config');
 const Sound = require('./SoundManager');
@@ -35,12 +36,11 @@ class Weapon {
   }
 }
 
-// ===== 等离子刃 - 环绕挡板旋转 =====
+// ===== 等离子刃 - 环绕发射器旋转 =====
 class OrbitBlade extends Weapon {
   constructor(level) {
     super('orbitBlade', level);
     this.angle = 0;
-    this.blades = []; // {angle} visual state
   }
 
   update(dtMs, ctx) {
@@ -48,17 +48,15 @@ class OrbitBlade extends Weapon {
     const speed = stats.speed || 0.05;
     this.angle += speed * (dtMs / 16.67);
 
-    // 碰撞检测：每个刀片 vs 所有砖块
-    const paddleCx = ctx.paddle.getCenterX();
-    const paddleCy = ctx.paddle.y;
+    const launcherCx = ctx.launcher.getCenterX();
+    const launcherCy = ctx.launcher.y;
     const count = stats.count || 1;
 
     for (let i = 0; i < count; i++) {
       const a = this.angle + (Math.PI * 2 / count) * i;
-      const bx = paddleCx + Math.cos(a) * stats.radius;
-      const by = paddleCy + Math.sin(a) * stats.radius;
+      const bx = launcherCx + Math.cos(a) * stats.radius;
+      const by = launcherCy + Math.sin(a) * stats.radius;
 
-      // 检测砖块
       for (let j = 0; j < ctx.bricks.length; j++) {
         const brick = ctx.bricks[j];
         if (!brick.alive) continue;
@@ -70,7 +68,6 @@ class OrbitBlade extends Weapon {
         }
       }
 
-      // 检测 Boss
       if (ctx.boss && ctx.boss.alive) {
         const dx = bx - ctx.boss.getCenterX();
         const dy = by - ctx.boss.getCenterY();
@@ -81,15 +78,15 @@ class OrbitBlade extends Weapon {
     }
   }
 
-  getRenderData(paddleCx, paddleCy) {
+  getRenderData(launcherCx, launcherCy) {
     const stats = this.getStats();
     const count = stats.count || 1;
     const blades = [];
     for (let i = 0; i < count; i++) {
       const a = this.angle + (Math.PI * 2 / count) * i;
       blades.push({
-        x: paddleCx + Math.cos(a) * stats.radius,
-        y: paddleCy + Math.sin(a) * stats.radius,
+        x: launcherCx + Math.cos(a) * stats.radius,
+        y: launcherCy + Math.sin(a) * stats.radius,
         angle: a,
       });
     }
@@ -97,40 +94,37 @@ class OrbitBlade extends Weapon {
   }
 }
 
-// ===== 烈焰涌动 - 火焰波从挡板向上扩散 =====
+// ===== 烈焰涌动 - 火焰波从发射器向上扩散 =====
 class FireSurge extends Weapon {
   constructor(level) {
     super('fireSurge', level);
-    this.waves = []; // {y, width, alpha, damage}
+    this.waves = [];
   }
 
   update(dtMs, ctx) {
     const stats = this.getStats();
     this.timer += dtMs;
 
-    // 发射新波
     if (this.timer >= stats.interval) {
       this.timer = 0;
       Sound.fireSurge();
       const w = Config.SCREEN_WIDTH * (stats.width || 0.5);
       this.waves.push({
-        x: ctx.paddle.getCenterX(),
-        y: ctx.paddle.y,
+        x: ctx.launcher.getCenterX(),
+        y: ctx.launcher.y,
         width: w,
         alpha: 1.0,
         damage: stats.damage,
-        hit: {}, // 已击中的砖块id集合
+        hit: {},
       });
     }
 
-    // 更新波
     for (let i = this.waves.length - 1; i >= 0; i--) {
       const wave = this.waves[i];
       wave.y -= 4 * (dtMs / 16.67);
       wave.alpha -= 0.015 * (dtMs / 16.67);
-      wave.width += 1.5 * (dtMs / 16.67); // 扩散
+      wave.width += 1.5 * (dtMs / 16.67);
 
-      // 波碰撞砖块
       for (let j = 0; j < ctx.bricks.length; j++) {
         const brick = ctx.bricks[j];
         if (!brick.alive) continue;
@@ -143,7 +137,6 @@ class FireSurge extends Weapon {
         }
       }
 
-      // Boss
       if (ctx.boss && ctx.boss.alive) {
         const by = ctx.boss.getCenterY();
         if (Math.abs(by - wave.y) < 20 && !wave.hit['boss']) {
@@ -170,7 +163,7 @@ class FireSurge extends Weapon {
 class Lightning extends Weapon {
   constructor(level) {
     super('lightning', level);
-    this.bolts = []; // {points: [{x,y}], alpha}
+    this.bolts = [];
   }
 
   update(dtMs, ctx) {
@@ -182,7 +175,6 @@ class Lightning extends Weapon {
       this._fire(stats, ctx);
     }
 
-    // 淡出
     for (let i = this.bolts.length - 1; i >= 0; i--) {
       this.bolts[i].alpha -= 0.04 * (dtMs / 16.67);
       if (this.bolts[i].alpha <= 0) this.bolts.splice(i, 1);
@@ -190,12 +182,11 @@ class Lightning extends Weapon {
   }
 
   _fire(stats, ctx) {
-    // 找起始目标
     const aliveBricks = ctx.bricks.filter(b => b.alive);
     if (aliveBricks.length === 0 && !(ctx.boss && ctx.boss.alive)) return;
 
-    const startX = ctx.paddle.getCenterX();
-    const startY = ctx.paddle.y - 10;
+    const startX = ctx.launcher.getCenterX();
+    const startY = ctx.launcher.y - 10;
     const points = [{ x: startX, y: startY }];
     const hit = new Set();
     let lastX = startX, lastY = startY;
@@ -211,7 +202,6 @@ class Lightning extends Weapon {
         if (d < nearDist) { nearDist = d; nearest = { idx: i, brick: aliveBricks[i] }; }
       }
       if (!nearest) {
-        // 尝试打Boss
         if (ctx.boss && ctx.boss.alive && !hit.has('boss')) {
           hit.add('boss');
           const bx = ctx.boss.getCenterX(), by = ctx.boss.getCenterY();
@@ -242,8 +232,8 @@ class Lightning extends Weapon {
 class Missile extends Weapon {
   constructor(level) {
     super('missile', level);
-    this.missiles = []; // {x, y, vx, vy, target, damage}
-    this.explosions = []; // {x, y, radius, alpha}
+    this.missiles = [];
+    this.explosions = [];
   }
 
   update(dtMs, ctx) {
@@ -251,7 +241,6 @@ class Missile extends Weapon {
     const dt = dtMs / 16.67;
     this.timer += dtMs;
 
-    // 发射
     if (this.timer >= stats.interval) {
       this.timer = 0;
       Sound.missileLaunch();
@@ -261,12 +250,10 @@ class Missile extends Weapon {
       }
     }
 
-    // 更新导弹
     const speed = stats.speed || 3;
     for (let i = this.missiles.length - 1; i >= 0; i--) {
       const m = this.missiles[i];
 
-      // 追踪
       let tx = m.targetX, ty = m.targetY;
       if (m.targetBrick && m.targetBrick.alive) {
         const bc = m.targetBrick.getCenter();
@@ -285,7 +272,6 @@ class Missile extends Weapon {
       m.trail.push({ x: m.x, y: m.y });
       if (m.trail.length > 6) m.trail.shift();
 
-      // 命中检测
       let hit = false;
       for (let j = 0; j < ctx.bricks.length; j++) {
         const brick = ctx.bricks[j];
@@ -294,7 +280,6 @@ class Missile extends Weapon {
         if (Math.abs(m.x - bc.x) < brick.width / 2 + 5 && Math.abs(m.y - bc.y) < brick.height / 2 + 5) {
           ctx.damageBrick(brick, m.damage, 'missile');
 
-          // 进化爆炸
           const er = this.evolved ? (this.def.evolve.explodeRadius || 0) : 0;
           if (er > 0) {
             this._explodeArea(m.x, m.y, er, m.damage, ctx);
@@ -314,13 +299,11 @@ class Missile extends Weapon {
         }
       }
 
-      // 超出屏幕
       if (hit || m.y < -20 || m.y > Config.SCREEN_HEIGHT + 20) {
         this.missiles.splice(i, 1);
       }
     }
 
-    // 更新爆炸
     for (let i = this.explosions.length - 1; i >= 0; i--) {
       this.explosions[i].alpha -= 0.05 * dt;
       if (this.explosions[i].alpha <= 0) this.explosions.splice(i, 1);
@@ -336,8 +319,8 @@ class Missile extends Weapon {
 
     const offsetX = (index - ((stats.count || 1) - 1) / 2) * 20;
     this.missiles.push({
-      x: ctx.paddle.getCenterX() + offsetX,
-      y: ctx.paddle.y - 10,
+      x: ctx.launcher.getCenterX() + offsetX,
+      y: ctx.launcher.y - 10,
       targetBrick: targetBrick,
       targetX: targetBrick ? targetBrick.getCenter().x : Config.SCREEN_WIDTH / 2,
       targetY: targetBrick ? targetBrick.getCenter().y : 100,
@@ -371,7 +354,7 @@ class Missile extends Weapon {
 class LaserBeam extends Weapon {
   constructor(level) {
     super('laserBeam', level);
-    this.beams = []; // {x, topY, alpha, width, damage, hitSet}
+    this.beams = [];
   }
 
   update(dtMs, ctx) {
@@ -380,7 +363,7 @@ class LaserBeam extends Weapon {
 
     if (this.timer >= stats.interval) {
       this.timer = 0;
-      const x = ctx.paddle.getCenterX();
+      const x = ctx.launcher.getCenterX();
       Sound.laserBeam();
       const beam = {
         x: x, topY: 0, alpha: 1.0,
@@ -390,7 +373,6 @@ class LaserBeam extends Weapon {
         life: stats.duration || 300,
         hitSet: {},
       };
-      // 立即伤害正上方所有砖块
       for (let i = 0; i < ctx.bricks.length; i++) {
         const brick = ctx.bricks[i];
         if (!brick.alive) continue;
@@ -407,7 +389,6 @@ class LaserBeam extends Weapon {
       this.beams.push(beam);
     }
 
-    // 淡出
     for (let i = this.beams.length - 1; i >= 0; i--) {
       this.beams[i].life -= dtMs;
       this.beams[i].alpha = Math.max(0, this.beams[i].life / this.beams[i].duration);
@@ -424,17 +405,15 @@ class LaserBeam extends Weapon {
 class IceField extends Weapon {
   constructor(level) {
     super('iceField', level);
-    this.icicles = []; // {x, y, vy, damage}
+    this.icicles = [];
   }
 
   update(dtMs, ctx) {
     const stats = this.getStats();
     const dt = dtMs / 16.67;
 
-    // 减速效果直接作用于前移间隔
     ctx.advanceSlowMult = stats.slowMult || 1;
 
-    // 发射冰锥
     this.timer += dtMs;
     if (this.timer >= (stats.iceInterval || 3000)) {
       this.timer = 0;
@@ -455,7 +434,6 @@ class IceField extends Weapon {
       }
     }
 
-    // 更新冰锥
     for (let i = this.icicles.length - 1; i >= 0; i--) {
       const ic = this.icicles[i];
       ic.y += ic.vy * dt;

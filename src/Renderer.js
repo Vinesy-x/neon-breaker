@@ -1,5 +1,6 @@
 /**
- * Renderer.js - v3.0 带武器特效渲染
+ * Renderer.js - v4.0 打飞机模式渲染
+ * 发射器 + 子弹 + 武器特效
  */
 const Config = require('./Config');
 
@@ -20,42 +21,92 @@ class Renderer {
     ctx.fillRect(0, 0, Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT);
   }
 
-  // ===== 球 =====
-  drawBall(ball) {
+  // ===== 子弹 =====
+  drawBullet(bullet) {
     const ctx = this.ctx;
-    for (let i = 0; i < ball.trail.length; i++) {
-      const t = ball.trail[i];
-      const alpha = (i + 1) / ball.trail.length * 0.5;
-      const radius = ball.radius * (i + 1) / ball.trail.length;
+    // 拖尾
+    for (let i = 0; i < bullet.trail.length; i++) {
+      const t = bullet.trail[i];
+      const alpha = (i + 1) / bullet.trail.length * 0.4;
+      const radius = bullet.radius * (i + 1) / bullet.trail.length * 0.8;
       ctx.beginPath();
       ctx.arc(t.x, t.y, radius, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(0, 255, 255, ' + alpha + ')';
       ctx.fill();
     }
+    // 弹体
+    ctx.shadowColor = bullet.color;
+    ctx.shadowBlur = 8;
     ctx.beginPath();
-    ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
-    ctx.fillStyle = ball.color;
+    ctx.arc(bullet.x, bullet.y, bullet.radius, 0, Math.PI * 2);
+    ctx.fillStyle = bullet.color;
     ctx.fill();
+    // 白色高光核心
     ctx.beginPath();
-    ctx.arc(ball.x, ball.y, ball.radius + 3, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(0, 255, 255, 0.4)';
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    ctx.arc(bullet.x, bullet.y, bullet.radius * 0.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fill();
+    ctx.shadowBlur = 0;
   }
 
-  // ===== 挡板 =====
-  drawPaddle(paddle) {
+  // ===== 发射器 =====
+  drawLauncher(launcher) {
     const ctx = this.ctx;
-    const { x, y, width, height, color } = paddle;
+    const { x, y, width, height, color, muzzleFlash } = launcher;
+    const cx = x + width / 2;
+
+    // 主体 - 梯形飞船
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 12;
+
+    ctx.beginPath();
+    ctx.moveTo(cx - width / 2, y + height);
+    ctx.lineTo(cx - width / 3, y + 4);
+    ctx.lineTo(cx + width / 3, y + 4);
+    ctx.lineTo(cx + width / 2, y + height);
+    ctx.closePath();
+    ctx.fill();
+
+    // 炮管
+    const gunW = Config.LAUNCHER_GUN_WIDTH;
+    const gunH = Config.LAUNCHER_GUN_HEIGHT;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.globalAlpha = 0.9;
+    ctx.fillRect(cx - gunW / 2, y - gunH + 4, gunW, gunH);
+    ctx.globalAlpha = 1;
+
+    // 炮管顶端
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 6;
     ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.roundRect(x, y, width, height, height / 2);
+    ctx.arc(cx, y - gunH + 6, gunW / 2 + 1, 0, Math.PI * 2);
     ctx.fill();
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 15;
+    ctx.shadowBlur = 0;
+
+    // 发射口闪光
+    if (muzzleFlash > 0) {
+      const flashAlpha = muzzleFlash / 3;
+      ctx.globalAlpha = flashAlpha * 0.8;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      ctx.arc(cx, y - gunH + 2, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = flashAlpha * 0.4;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(cx, y - gunH + 2, 14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // 底部引擎光效
+    ctx.fillStyle = 'rgba(0, 255, 255, 0.15)';
     ctx.beginPath();
-    ctx.roundRect(x, y, width, height, height / 2);
+    ctx.arc(cx, y + height + 2, width / 3, 0, Math.PI);
     ctx.fill();
+
     ctx.shadowBlur = 0;
   }
 
@@ -129,7 +180,6 @@ class Renderer {
     ctx.fill();
     ctx.shadowBlur = 0;
     ctx.globalAlpha = 1;
-    // 血条
     const barW = width, barH = 6, barX = x, barY = y - 12;
     ctx.fillStyle = 'rgba(255,255,255,0.2)';
     ctx.fillRect(barX, barY, barW, barH);
@@ -180,14 +230,14 @@ class Renderer {
   }
 
   // ===== 武器视觉渲染 =====
-  drawWeapons(weapons, paddle) {
+  drawWeapons(weapons, launcher) {
     const ctx = this.ctx;
-    const pcx = paddle.getCenterX();
-    const pcy = paddle.y;
+    const lcx = launcher.getCenterX();
+    const lcy = launcher.y;
 
     for (const key in weapons) {
       const weapon = weapons[key];
-      const data = weapon.getRenderData(pcx, pcy);
+      const data = weapon.getRenderData(lcx, lcy);
 
       switch (key) {
         case 'orbitBlade': this._drawOrbitBlade(data, ctx); break;
@@ -203,24 +253,20 @@ class Renderer {
   _drawOrbitBlade(data, ctx) {
     const { blades, color } = data;
 
-    // 轨迹圈（虚线圆环）
     if (blades.length > 0) {
       const first = blades[0];
-      // 用第一个刀片的位置反推圆心和半径
-      // 这里近似画一个圈
-      const paddleCx = first.x - Math.cos(first.angle) * 70; // 近似
-      const paddleCy = first.y - Math.sin(first.angle) * 70;
+      const lcx = first.x - Math.cos(first.angle) * 70;
+      const lcy = first.y - Math.sin(first.angle) * 70;
       ctx.strokeStyle = 'rgba(' + this._hexToRgb(color) + ', 0.12)';
       ctx.lineWidth = 1;
       ctx.setLineDash([4, 6]);
       ctx.beginPath();
-      ctx.arc(paddleCx, paddleCy, 70, 0, Math.PI * 2);
+      ctx.arc(lcx, lcy, 70, 0, Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
     }
 
     for (const b of blades) {
-      // 刀片拖影
       ctx.globalAlpha = 0.2;
       ctx.fillStyle = color;
       ctx.beginPath();
@@ -228,7 +274,6 @@ class Renderer {
       ctx.fill();
       ctx.globalAlpha = 1;
 
-      // 发光刀片
       ctx.save();
       ctx.translate(b.x, b.y);
       ctx.rotate(b.angle);
@@ -242,7 +287,6 @@ class Renderer {
       ctx.lineTo(-6, 0);
       ctx.closePath();
       ctx.fill();
-      // 白色高光核心
       ctx.fillStyle = '#FFFFFF';
       ctx.globalAlpha = 0.7;
       ctx.beginPath();
@@ -263,8 +307,6 @@ class Renderer {
     for (const w of waves) {
       ctx.globalAlpha = w.alpha * 0.7;
 
-      // 多层火焰（内焰+外焰）
-      // 外焰（宽，暗）
       const outerGrad = ctx.createLinearGradient(w.x - w.width / 2, w.y, w.x + w.width / 2, w.y);
       outerGrad.addColorStop(0, 'rgba(255, 80, 0, 0)');
       outerGrad.addColorStop(0.2, 'rgba(255, 100, 0, 0.4)');
@@ -274,11 +316,9 @@ class Renderer {
       ctx.fillStyle = outerGrad;
       ctx.fillRect(w.x - w.width / 2, w.y - 10, w.width, 20);
 
-      // 内焰（窄，亮）
       ctx.fillStyle = 'rgba(255, 255, 150, 0.5)';
       ctx.fillRect(w.x - w.width / 4, w.y - 3, w.width / 2, 6);
 
-      // 随机火星
       for (let s = 0; s < 3; s++) {
         const sx = w.x + (Math.random() - 0.5) * w.width * 0.8;
         const sy = w.y + (Math.random() - 0.5) * 12;
@@ -294,7 +334,6 @@ class Renderer {
     for (const bolt of bolts) {
       ctx.globalAlpha = bolt.alpha;
 
-      // 外发光（宽，虚）
       ctx.strokeStyle = 'rgba(' + this._hexToRgb(color) + ', 0.3)';
       ctx.lineWidth = 6;
       ctx.shadowColor = color;
@@ -309,7 +348,6 @@ class Renderer {
       }
       ctx.stroke();
 
-      // 内核（细，亮白）
       ctx.strokeStyle = '#FFFFFF';
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -323,7 +361,6 @@ class Renderer {
       ctx.stroke();
       ctx.shadowBlur = 0;
 
-      // 命中光球（大发光圈）
       for (let i = 1; i < bolt.points.length; i++) {
         const p = bolt.points[i];
         ctx.shadowColor = color;
@@ -333,7 +370,6 @@ class Renderer {
         ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
         ctx.fill();
         ctx.shadowBlur = 0;
-        // 外圈
         ctx.strokeStyle = color;
         ctx.lineWidth = 1;
         ctx.beginPath();
@@ -347,18 +383,15 @@ class Renderer {
   _drawMissile(data, ctx) {
     const { missiles, explosions, color } = data;
     for (const m of missiles) {
-      // 推进尾焰（渐变）
       for (let i = 0; i < m.trail.length; i++) {
         const t = m.trail[i];
         const alpha = (i + 1) / m.trail.length * 0.6;
         const size = 2 + (i / m.trail.length) * 3;
         ctx.globalAlpha = alpha;
-        // 外焰橙色
         ctx.fillStyle = Config.NEON_ORANGE;
         ctx.beginPath();
         ctx.arc(t.x, t.y, size, 0, Math.PI * 2);
         ctx.fill();
-        // 内焰白色
         ctx.fillStyle = 'rgba(255,255,200,0.5)';
         ctx.beginPath();
         ctx.arc(t.x, t.y, size * 0.5, 0, Math.PI * 2);
@@ -366,7 +399,6 @@ class Renderer {
       }
       ctx.globalAlpha = 1;
 
-      // 弹体（发光圆+三角箭头）
       ctx.shadowColor = color;
       ctx.shadowBlur = 10;
       ctx.fillStyle = color;
@@ -374,29 +406,24 @@ class Renderer {
       ctx.arc(m.x, m.y, 5, 0, Math.PI * 2);
       ctx.fill();
       ctx.shadowBlur = 0;
-      // 白色高光
       ctx.fillStyle = '#FFFFFF';
       ctx.beginPath();
       ctx.arc(m.x, m.y - 1, 2, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // 爆炸效果（多层扩散环）
     for (const e of explosions) {
-      // 外扩散环
       ctx.globalAlpha = e.alpha * 0.4;
       ctx.strokeStyle = color;
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.arc(e.x, e.y, e.radius * (1.2 - e.alpha * 0.5), 0, Math.PI * 2);
       ctx.stroke();
-      // 内填充
       ctx.globalAlpha = e.alpha * 0.2;
       ctx.fillStyle = color;
       ctx.beginPath();
       ctx.arc(e.x, e.y, e.radius * (1 - e.alpha * 0.3), 0, Math.PI * 2);
       ctx.fill();
-      // 中心闪光
       ctx.globalAlpha = e.alpha * 0.8;
       ctx.fillStyle = '#FFFFFF';
       ctx.beginPath();
@@ -412,27 +439,22 @@ class Renderer {
       ctx.globalAlpha = b.alpha;
       const bh = Config.SCREEN_HEIGHT;
 
-      // 最外层发光（宽虚）
       ctx.fillStyle = 'rgba(255, 50, 50, 0.1)';
       ctx.fillRect(b.x - b.width * 3, b.topY, b.width * 6, bh);
 
-      // 中层发光
       ctx.shadowColor = color;
       ctx.shadowBlur = 20;
       ctx.fillStyle = 'rgba(255, 80, 80, 0.3)';
       ctx.fillRect(b.x - b.width * 1.5, b.topY, b.width * 3, bh);
 
-      // 主射线
       ctx.fillStyle = color;
       ctx.fillRect(b.x - b.width / 2, b.topY, b.width, bh);
 
-      // 核心白线
       ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
       ctx.fillRect(b.x - 1, b.topY, 2, bh);
 
       ctx.shadowBlur = 0;
 
-      // 扫描线动画（横线上移）
       const scanY = (Date.now() * 0.3) % bh;
       ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
       ctx.fillRect(b.x - b.width * 2, scanY, b.width * 4, 2);
@@ -443,7 +465,6 @@ class Renderer {
   _drawIceField(data, ctx) {
     const { icicles, color } = data;
     for (const ic of icicles) {
-      // 冰晶尾迹
       for (let i = 0; i < ic.trail.length; i++) {
         const t = ic.trail[i];
         const alpha = (i + 1) / ic.trail.length * 0.5;
@@ -455,7 +476,6 @@ class Renderer {
       }
       ctx.globalAlpha = 1;
 
-      // 冰锥本体（更大更锋利的三角形）
       ctx.shadowColor = color;
       ctx.shadowBlur = 8;
       ctx.fillStyle = color;
@@ -465,7 +485,6 @@ class Renderer {
       ctx.lineTo(ic.x + 5, ic.y - 6);
       ctx.closePath();
       ctx.fill();
-      // 高光
       ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
       ctx.beginPath();
       ctx.moveTo(ic.x, ic.y + 5);
@@ -477,7 +496,6 @@ class Renderer {
     }
   }
 
-  /** hex颜色转rgb字符串 */
   _hexToRgb(hex) {
     const r = parseInt(hex.slice(1, 3), 16);
     const g = parseInt(hex.slice(3, 5), 16);
@@ -543,7 +561,6 @@ class Renderer {
       ctx.textAlign = 'left';
       ctx.fillText('COMBO x' + combo, 10, top + 18);
     }
-    // 音效开关
     ctx.fillStyle = soundEnabled ? 'rgba(255,255,255,0.5)' : 'rgba(255,50,50,0.5)';
     ctx.font = '14px monospace';
     ctx.textAlign = 'left';
@@ -581,13 +598,13 @@ class Renderer {
     ctx.fillText('霓虹碎核', cx, cy + 20);
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
     ctx.font = '11px monospace';
-    ctx.fillText('武器肉鸽 · 自动清砖 · 满屏特效', cx, cy + 45);
+    ctx.fillText('射击肉鸽 · 弹幕清砖 · 满屏特效', cx, cy + 45);
     ctx.fillStyle = 'rgba(255,255,255,0.6)';
     ctx.font = '16px monospace';
     ctx.fillText('点击屏幕开始', cx, cy + 90);
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
     ctx.font = '10px monospace';
-    ctx.fillText('v3.2.0', cx, Config.SCREEN_HEIGHT - 30);
+    ctx.fillText('v4.0.0', cx, Config.SCREEN_HEIGHT - 30);
   }
 
   // ===== 经验球 =====
@@ -597,7 +614,6 @@ class Renderer {
     const size = Config.EXP_ORB_SIZE;
     for (let i = 0; i < orbs.length; i++) {
       const o = orbs[i];
-      // 发光小球
       ctx.shadowColor = Config.EXP_ORB_COLOR;
       ctx.shadowBlur = 6;
       ctx.fillStyle = Config.EXP_ORB_COLOR;
@@ -605,7 +621,6 @@ class Renderer {
       ctx.arc(o.x, o.y, size, 0, Math.PI * 2);
       ctx.fill();
       ctx.shadowBlur = 0;
-      // 高光
       ctx.fillStyle = '#FFFFFF';
       ctx.beginPath();
       ctx.arc(o.x - 1, o.y - 1, size * 0.4, 0, Math.PI * 2);
@@ -623,13 +638,11 @@ class Renderer {
     const barX = margin;
     const ratio = Math.min(1, exp / expToNext);
 
-    // 背景
     ctx.fillStyle = 'rgba(255,255,255,0.08)';
     ctx.beginPath();
     ctx.roundRect(barX, barY, barW, barH, barH / 2);
     ctx.fill();
 
-    // 填充
     if (ratio > 0) {
       const grad = ctx.createLinearGradient(barX, barY, barX + barW * ratio, barY);
       grad.addColorStop(0, Config.NEON_CYAN);
@@ -639,7 +652,6 @@ class Renderer {
       ctx.roundRect(barX, barY, barW * ratio, barH, barH / 2);
       ctx.fill();
 
-      // 发光尖端
       ctx.shadowColor = Config.NEON_CYAN;
       ctx.shadowBlur = 8;
       ctx.fillStyle = '#FFFFFF';
@@ -649,14 +661,12 @@ class Renderer {
       ctx.shadowBlur = 0;
     }
 
-    // 等级文字（左侧）
     ctx.fillStyle = Config.NEON_CYAN;
     ctx.font = 'bold 10px monospace';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
     ctx.fillText('Lv.' + playerLevel, barX - 4, barY + barH / 2);
 
-    // 百分比（右侧）
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
     ctx.font = '9px monospace';
     ctx.textAlign = 'left';
@@ -670,11 +680,9 @@ class Renderer {
     const sh = Config.SCREEN_HEIGHT;
     const cx = sw / 2;
 
-    // 半透明遮罩
     ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
     ctx.fillRect(0, 0, sw, sh);
 
-    // 标题
     ctx.fillStyle = Config.NEON_GREEN;
     ctx.font = 'bold 20px monospace';
     ctx.textAlign = 'center';
@@ -685,12 +693,11 @@ class Renderer {
     ctx.font = '11px monospace';
     ctx.fillText('选择一项强化', cx, sh * 0.18 + 24);
 
-    // === 3列卡片 ===
     const count = choices.length;
     const gap = 8;
-    const totalW = sw - 20; // 两侧各留10
+    const totalW = sw - 20;
     const cardW = Math.floor((totalW - gap * (count - 1)) / count);
-    const cardH = sh * 0.5; // 高卡片，放更多内容
+    const cardH = sh * 0.5;
     const startX = (sw - (cardW * count + gap * (count - 1))) / 2;
     const startY = sh * 0.26;
 
@@ -699,44 +706,38 @@ class Renderer {
       const cardX = startX + i * (cardW + gap);
       const cardY = startY;
 
-      // 卡片背景（深色半透明，不要亮色！）
       const isNew = c.isNew && c.type === 'weapon';
       ctx.fillStyle = 'rgba(8, 2, 32, 0.92)';
       ctx.beginPath();
       ctx.roundRect(cardX, cardY, cardW, cardH, 10);
       ctx.fill();
 
-      // 边框（细线霓虹，不要shadowBlur太大）
       ctx.strokeStyle = c.color;
       ctx.lineWidth = isNew ? 1.5 : 1;
       ctx.beginPath();
       ctx.roundRect(cardX, cardY, cardW, cardH, 10);
       ctx.stroke();
 
-      // 顶部色条（窄，只有3px高，提示颜色）
       const rgb = this._hexToRgb(c.color);
       ctx.fillStyle = 'rgba(' + rgb + ', 0.3)';
       ctx.beginPath();
       ctx.roundRect(cardX + 1, cardY + 1, cardW - 2, 3, [2, 2, 0, 0]);
       ctx.fill();
 
-      const ccx = cardX + cardW / 2; // 卡片中心x
+      const ccx = cardX + cardW / 2;
 
-      // 类型标签
       const typeLabel = c.type === 'weapon' ? '武器' : '强化';
       ctx.fillStyle = 'rgba(255,255,255,0.3)';
       ctx.font = '9px monospace';
       ctx.textAlign = 'center';
       ctx.fillText(typeLabel, ccx, cardY + 18);
 
-      // NEW 标签
       if (isNew) {
         ctx.fillStyle = Config.NEON_YELLOW;
         ctx.font = 'bold 9px monospace';
         ctx.fillText('NEW!', ccx, cardY + 32);
       }
 
-      // 大图标（居中）
       ctx.shadowColor = c.color;
       ctx.shadowBlur = 6;
       ctx.fillStyle = c.color;
@@ -746,18 +747,15 @@ class Renderer {
       ctx.fillText(c.icon, ccx, cardY + cardH * 0.3);
       ctx.shadowBlur = 0;
 
-      // 名称
       ctx.fillStyle = '#FFFFFF';
       ctx.font = 'bold 12px monospace';
       ctx.textBaseline = 'middle';
       this._drawTextWrap(ctx, c.name, ccx, cardY + cardH * 0.52, cardW - 12, 13);
 
-      // 描述（多行）
       ctx.fillStyle = 'rgba(255,255,255,0.55)';
       ctx.font = '9px monospace';
       this._drawTextWrap(ctx, c.desc, ccx, cardY + cardH * 0.68, cardW - 12, 12);
 
-      // 等级条（底部）
       if (c.type === 'weapon') {
         const def = Config.WEAPONS[c.key];
         const curLv = upgrades ? upgrades.getWeaponLevel(c.key) : 0;
@@ -770,14 +768,11 @@ class Renderer {
         this._drawLevelDots(ctx, ccx, cardY + cardH * 0.85, curLv, maxLv, c.color, cardW);
       }
 
-      // 点击区域
       c._hitArea = { x: cardX, y: cardY, w: cardW, h: cardH };
     }
   }
 
-  /** 简易居中文本换行 */
   _drawTextWrap(ctx, text, cx, y, maxW, lineH) {
-    // 简单按字符估算，monospace 每字约宽度
     const charW = parseInt(ctx.font) * 0.6;
     const maxChars = Math.floor(maxW / charW);
     if (text.length <= maxChars) {
@@ -792,7 +787,6 @@ class Renderer {
     }
   }
 
-  /** 等级圆点（■■■□□ 样式） */
   _drawLevelDots(ctx, cx, y, curLv, maxLv, color, cardW) {
     const dotSize = 5;
     const dotGap = 3;
@@ -804,7 +798,6 @@ class Renderer {
       if (i < curLv) {
         ctx.fillStyle = color;
       } else if (i === curLv) {
-        // 即将升级的那个点闪烁
         ctx.fillStyle = 'rgba(255,255,255,' + (0.4 + Math.sin(Date.now() * 0.008) * 0.4) + ')';
       } else {
         ctx.fillStyle = 'rgba(255,255,255,0.15)';
@@ -833,7 +826,6 @@ class Renderer {
     ctx.fillStyle = Config.NEON_GREEN;
     ctx.fillText('关卡: ' + level + '  等级: Lv.' + playerLevel, cx, cy - 35);
 
-    // 武器总结
     if (ownedList && ownedList.length > 0) {
       ctx.fillStyle = 'rgba(255,255,255,0.5)';
       ctx.font = '11px monospace';

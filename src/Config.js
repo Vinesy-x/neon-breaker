@@ -46,18 +46,22 @@ const Config = {
   NEON_RED: '#FF3333',
   NEON_COLORS: ['#00FFFF', '#FF14FF', '#50FFB4', '#FFF050'],
 
-  // 挡板
-  PADDLE_WIDTH: 90,
-  PADDLE_HEIGHT: 14,
-  PADDLE_Y_OFFSET: Math.max(120, _safeBottom + 80), // 距底部，留出经验条空间
-  PADDLE_COLOR: '#00FFFF',
+  // 发射器（替代挡板）
+  LAUNCHER_WIDTH: 48,
+  LAUNCHER_HEIGHT: 28,
+  LAUNCHER_Y_OFFSET: Math.max(120, _safeBottom + 80), // 距底部，留出经验条空间
+  LAUNCHER_COLOR: '#00FFFF',
+  LAUNCHER_GUN_WIDTH: 6,
+  LAUNCHER_GUN_HEIGHT: 18,
 
-  // 球
-  BALL_RADIUS: 7,
-  BALL_SPEED: 5,
-  BALL_MAX: 30,
-  BALL_TRAIL_LENGTH: 8,
-  BALL_COLOR: '#FFFFFF',
+  // 子弹（替代球）
+  BULLET_RADIUS: 4,
+  BULLET_SPEED: 10,
+  BULLET_MAX: 60,
+  BULLET_TRAIL_LENGTH: 4,
+  BULLET_COLOR: '#00FFFF',
+  BULLET_FIRE_INTERVAL: 200, // ms，自动发射间隔
+  BULLET_GLOW_COLOR: 'rgba(0, 255, 255, 0.4)',
 
   // 砖块
   BRICK_COLS: 7,
@@ -199,22 +203,22 @@ const Config = {
 
   // ===== 基础强化（非武器） =====
   BUFFS: [
-    { key: 'extraBall', name: '+1球', desc: '起始多一个球', icon: '●', color: '#FF14FF', maxLevel: 3 },
-    { key: 'ballSpeed', name: '加速', desc: '球速+15%', icon: '»', color: '#FFF050', maxLevel: 4 },
-    { key: 'widerPaddle', name: '加宽', desc: '挡板+25px', icon: '═', color: '#50FFB4', maxLevel: 4 },
+    { key: 'fireRate', name: '射速', desc: '射速+15%', icon: '»', color: '#FFF050', maxLevel: 5 },
+    { key: 'spread', name: '散射', desc: '子弹+1发', icon: '⋮', color: '#FF14FF', maxLevel: 4 },
+    { key: 'bulletDmg', name: '弹伤', desc: '子弹伤害+1', icon: '↑', color: '#50FFB4', maxLevel: 4 },
     { key: 'extraLife', name: '+命', desc: '额外生命+1', icon: '♥', color: '#FF14FF', maxLevel: 3 },
     { key: 'magnet', name: '磁力', desc: '道具自动吸附', icon: '⊕', color: '#FFF050', maxLevel: 1 },
-    { key: 'crit', name: '暴击', desc: '球20%双倍伤害', icon: '✕', color: '#FF3333', maxLevel: 3 },
-    { key: 'pierce', name: '穿透', desc: '球穿透+1层', icon: '↟', color: '#00FFFF', maxLevel: 3 },
+    { key: 'crit', name: '暴击', desc: '子弹20%双倍伤害', icon: '✕', color: '#FF3333', maxLevel: 3 },
+    { key: 'pierce', name: '穿透', desc: '子弹穿透+1层', icon: '↟', color: '#00FFFF', maxLevel: 3 },
   ],
 
   // 进化条件：武器满级 + 特定基础强化满级
   EVOLVE_RECIPES: {
-    orbitBlade: { weapon: 'orbitBlade', buff: 'ballSpeed' },
+    orbitBlade: { weapon: 'orbitBlade', buff: 'fireRate' },
     fireSurge: { weapon: 'fireSurge', buff: 'crit' },
     lightning: { weapon: 'lightning', buff: 'pierce' },
-    missile: { weapon: 'missile', buff: 'extraBall' },
-    laserBeam: { weapon: 'laserBeam', buff: 'widerPaddle' },
+    missile: { weapon: 'missile', buff: 'spread' },
+    laserBeam: { weapon: 'laserBeam', buff: 'bulletDmg' },
     iceField: { weapon: 'iceField', buff: 'extraLife' },
   },
 

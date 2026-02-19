@@ -84,7 +84,14 @@ class SoundManager {
 
   // ===== 游戏音效 =====
 
-  /** 球碰砖块 */
+  /** 子弹发射 */
+  bulletShoot() {
+    if (!this.ctx || !this.enabled) return;
+    // 极短促的 pew
+    this._osc('square', 1200 + Math.random() * 200, 0.03, undefined, 0.06);
+  }
+
+  /** 子弹碰砖块 */
   brickHit() {
     if (!this.ctx || !this.enabled) return;
     const t = this.ctx.currentTime;

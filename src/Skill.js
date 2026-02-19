@@ -1,5 +1,6 @@
 /**
  * Skill.js - 升级管理器（武器+基础强化+进化）
+ * 射击模式版
  */
 const Config = require('./Config');
 const { createWeapon } = require('./WeaponSystem');
@@ -66,10 +67,10 @@ class UpgradeManager {
     return results;
   }
 
-  // ===== 被动数值 =====
-  getStartBallCount() { return 1 + (this.buffs.extraBall || 0); }
-  getBallSpeedMult() { return 1 + (this.buffs.ballSpeed || 0) * 0.15; }
-  getPaddleBonus() { return (this.buffs.widerPaddle || 0) * 25; }
+  // ===== 被动数值（射击模式） =====
+  getFireRateBonus() { return (this.buffs.fireRate || 0) * 0.15; }
+  getSpreadBonus() { return this.buffs.spread || 0; }
+  getBulletDamageBonus() { return this.buffs.bulletDmg || 0; }
   getCritChance() { return (this.buffs.crit || 0) * 0.2; }
   getPierceCount() { return this.buffs.pierce || 0; }
   hasMagnet() { return (this.buffs.magnet || 0) > 0; }

@@ -1,5 +1,5 @@
 /**
- * PowerUp.js - 掉落道具（被动系统版）
+ * PowerUp.js - 掉落道具（射击模式版）
  */
 const Config = require('./Config');
 
@@ -14,16 +14,16 @@ class PowerUp {
     this.time = 0;
 
     switch (type) {
-      case 'multiball':
-        this.color = Config.NEON_PINK;
-        this.icon = '●';
+      case 'firerate':
+        this.color = Config.NEON_YELLOW;
+        this.icon = '»';
         break;
-      case 'widen':
-        this.color = Config.NEON_GREEN;
-        this.icon = '◆';
+      case 'spread':
+        this.color = Config.NEON_PINK;
+        this.icon = '⋮';
         break;
       case 'score':
-        this.color = Config.NEON_YELLOW;
+        this.color = Config.NEON_GREEN;
         this.icon = '★';
         break;
     }
@@ -46,12 +46,12 @@ class PowerUp {
     }
   }
 
-  collidePaddle(paddle) {
+  collideLauncher(launcher) {
     return (
-      this.y + this.size / 2 >= paddle.y &&
-      this.y - this.size / 2 <= paddle.y + paddle.height &&
-      this.x + this.size / 2 >= paddle.x &&
-      this.x - this.size / 2 <= paddle.x + paddle.width
+      this.y + this.size / 2 >= launcher.y &&
+      this.y - this.size / 2 <= launcher.y + launcher.height &&
+      this.x + this.size / 2 >= launcher.x &&
+      this.x - this.size / 2 <= launcher.x + launcher.width
     );
   }
 
@@ -60,7 +60,7 @@ class PowerUp {
   }
 }
 
-const POWERUP_TYPES = ['multiball', 'widen', 'score'];
+const POWERUP_TYPES = ['firerate', 'spread', 'score'];
 
 function maybeDropPowerUp(x, y) {
   if (Math.random() < Config.POWERUP_DROP_CHANCE) {
