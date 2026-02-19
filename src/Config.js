@@ -84,7 +84,7 @@ const Config = {
   BRICK_DANGER_Y: 0.78,
 
   // 章节相关默认值
-  CHAPTER_DURATION: 600000,       // 10分钟
+  CHAPTER_DURATION: 480000,       // 8分钟（Boss在480秒触发）
   BOSS_WARNING_DURATION: 3000,    // Boss警告3秒
 
   // 砖块类型颜色

@@ -570,11 +570,19 @@ class Game {
   _scrollBricks(dt) {
     if (!this.chapterConfig) return;
     var baseSpeed = this.chapterConfig.scrollSpeed;
+    // v6.0: 阶段内scroll加速，每秒增加scrollAccel
+    var accel = (this.currentPhase && this.currentPhase.scrollAccel) ? this.currentPhase.scrollAccel : 0;
+    var phaseStartTime = this.currentPhase ? this.currentPhase.time : 0;
+    var timeInPhase = (this.elapsedMs - phaseStartTime) / 1000; // 秒
+    var dynamicSpeed = baseSpeed + accel * timeInPhase;
+    // 上限防止失控
+    dynamicSpeed = Math.min(dynamicSpeed, baseSpeed * 3.0);
+
     var slowMult = this.upgrades.getAdvanceSlowMult();
     for (var i = 0; i < this.bricks.length; i++) {
       var brick = this.bricks[i];
       if (!brick.alive) continue;
-      brick.y += baseSpeed * slowMult * brick.speedMult * dt;
+      brick.y += dynamicSpeed * slowMult * brick.speedMult * dt;
     }
     for (var j = this.bricks.length - 1; j >= 0; j--) {
       if (!this.bricks[j].alive || this.bricks[j].y > this.gameHeight + 50) {
@@ -593,7 +601,12 @@ class Game {
 
   _updateBrickSpawn(dtMs) {
     if (!this.chapterConfig || !this.currentPhase || this.currentPhase.spawnMult <= 0) return;
-    var interval = this.chapterConfig.spawnInterval / this.currentPhase.spawnMult;
+    // v6.0: 阶段内spawnMult随时间线性增长10%
+    var phaseStartTime = this.currentPhase.time;
+    var timeInPhase = (this.elapsedMs - phaseStartTime) / 1000;
+    var rampMult = 1.0 + Math.min(timeInPhase / 60, 0.15); // 60秒内涨15%
+    var effectiveSpawnMult = this.currentPhase.spawnMult * rampMult;
+    var interval = this.chapterConfig.spawnInterval / effectiveSpawnMult;
     this.spawnTimer += dtMs;
     if (this.spawnTimer >= interval) {
       this.spawnTimer -= interval;
