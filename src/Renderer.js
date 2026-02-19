@@ -783,14 +783,14 @@ class Renderer {
     ctx.fillRect(0, 0, sw, sh);
 
     ctx.fillStyle = Config.NEON_GREEN;
-    ctx.font = 'bold 20px monospace';
+    ctx.font = 'bold 24px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('⬆ LEVEL ' + playerLevel, cx, sh * 0.18);
 
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.font = '11px monospace';
-    ctx.fillText('选择一项强化', cx, sh * 0.18 + 24);
+    ctx.font = '14px monospace';
+    ctx.fillText('选择一项强化', cx, sh * 0.18 + 28);
 
     const count = choices.length;
     const gap = 8;
@@ -827,30 +827,30 @@ class Renderer {
 
       const typeLabel = c.type === 'weapon' ? '武器' : '强化';
       ctx.fillStyle = 'rgba(255,255,255,0.4)';
-      ctx.font = '11px monospace';
+      ctx.font = 'bold 13px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText(typeLabel, ccx, cardY + 20);
+      ctx.fillText(typeLabel, ccx, cardY + 22);
 
       if (isNew) {
         ctx.fillStyle = Config.NEON_YELLOW;
-        ctx.font = 'bold 11px monospace';
-        ctx.fillText('NEW!', ccx, cardY + 36);
+        ctx.font = 'bold 13px monospace';
+        ctx.fillText('NEW!', ccx, cardY + 40);
       }
 
       ctx.fillStyle = c.color;
-      ctx.font = '38px monospace';
+      ctx.font = '44px monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(c.icon, ccx, cardY + cardH * 0.3);
 
       ctx.fillStyle = '#FFFFFF';
-      ctx.font = 'bold 14px monospace';
+      ctx.font = 'bold 16px monospace';
       ctx.textBaseline = 'middle';
-      this._drawTextWrap(ctx, c.name, ccx, cardY + cardH * 0.52, cardW - 10, 16);
+      this._drawTextWrap(ctx, c.name, ccx, cardY + cardH * 0.52, cardW - 8, 18);
 
-      ctx.fillStyle = 'rgba(255,255,255,0.6)';
-      ctx.font = '11px monospace';
-      this._drawTextWrap(ctx, c.desc, ccx, cardY + cardH * 0.66, cardW - 10, 14);
+      ctx.fillStyle = 'rgba(255,255,255,0.65)';
+      ctx.font = '13px monospace';
+      this._drawTextWrap(ctx, c.desc, ccx, cardY + cardH * 0.66, cardW - 8, 16);
 
       if (c.type === 'weapon') {
         const def = Config.WEAPONS[c.key];
@@ -884,8 +884,8 @@ class Renderer {
   }
 
   _drawLevelDots(ctx, cx, y, curLv, maxLv, color, cardW) {
-    const dotSize = 7;
-    const dotGap = 4;
+    const dotSize = 9;
+    const dotGap = 5;
     const totalW = maxLv * dotSize + (maxLv - 1) * dotGap;
     const startX = cx - totalW / 2;
 
