@@ -3,6 +3,7 @@
  * 每个武器有独立视觉实体，自动攻击砖块
  */
 const Config = require('./Config');
+const Sound = require('./SoundManager');
 
 // ===== 武器基类 =====
 class Weapon {
@@ -110,6 +111,7 @@ class FireSurge extends Weapon {
     // 发射新波
     if (this.timer >= stats.interval) {
       this.timer = 0;
+      Sound.fireSurge();
       const w = Config.SCREEN_WIDTH * (stats.width || 0.5);
       this.waves.push({
         x: ctx.paddle.getCenterX(),
@@ -227,6 +229,7 @@ class Lightning extends Weapon {
 
     if (points.length > 1) {
       this.bolts.push({ points: points, alpha: 1.0 });
+      Sound.lightning();
     }
   }
 
@@ -251,6 +254,7 @@ class Missile extends Weapon {
     // 发射
     if (this.timer >= stats.interval) {
       this.timer = 0;
+      Sound.missileLaunch();
       const count = stats.count || 1;
       for (let i = 0; i < count; i++) {
         this._launch(stats, ctx, i);
@@ -295,6 +299,7 @@ class Missile extends Weapon {
           if (er > 0) {
             this._explodeArea(m.x, m.y, er, m.damage, ctx);
             this.explosions.push({ x: m.x, y: m.y, radius: er, alpha: 1.0 });
+            Sound.missileExplode();
           }
           hit = true;
           break;
@@ -376,6 +381,7 @@ class LaserBeam extends Weapon {
     if (this.timer >= stats.interval) {
       this.timer = 0;
       const x = ctx.paddle.getCenterX();
+      Sound.laserBeam();
       const beam = {
         x: x, topY: 0, alpha: 1.0,
         width: stats.width || 4,
@@ -432,6 +438,7 @@ class IceField extends Weapon {
     this.timer += dtMs;
     if (this.timer >= (stats.iceInterval || 3000)) {
       this.timer = 0;
+      Sound.iceShot();
       const aliveBricks = ctx.bricks.filter(b => b.alive);
       if (aliveBricks.length > 0) {
         const target = aliveBricks[Math.floor(Math.random() * aliveBricks.length)];

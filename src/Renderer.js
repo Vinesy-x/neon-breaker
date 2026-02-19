@@ -519,7 +519,7 @@ class Renderer {
   }
 
   // ===== HUD =====
-  drawHUD(score, lives, combo, level) {
+  drawHUD(score, lives, combo, level, soundEnabled) {
     const ctx = this.ctx;
     ctx.fillStyle = Config.NEON_CYAN;
     ctx.font = 'bold 14px monospace';
@@ -540,6 +540,11 @@ class Renderer {
       ctx.textAlign = 'left';
       ctx.fillText('COMBO x' + combo, 10, 26);
     }
+    // 音效开关
+    ctx.fillStyle = soundEnabled ? 'rgba(255,255,255,0.5)' : 'rgba(255,50,50,0.5)';
+    ctx.font = '14px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(soundEnabled ? '♪' : '♪̶', 10, Config.SCREEN_HEIGHT - 38);
   }
 
   drawFloatingTexts(texts) {

@@ -13,6 +13,7 @@ const UpgradeManager = require('./Skill');
 const Boss = require('./Boss');
 const Renderer = require('./Renderer');
 const InputManager = require('./InputManager');
+const Sound = require('./SoundManager');
 
 class Game {
   constructor(canvas) {
@@ -94,6 +95,7 @@ class Game {
       this.state = Config.STATE.BOSS;
       this.bricks = [];
       this.boss = new Boss(this.level, this.gameWidth);
+      Sound.bossAppear();
     } else {
       this.state = Config.STATE.PLAYING;
       this.bricks = generateBricks(this.level, this.gameWidth);
@@ -180,6 +182,7 @@ class Game {
 
         // 到达经验条
         if (dist < 10) {
+          Sound.expCollect();
           this._addExp(orb.value);
           this.expOrbs.splice(i, 1);
           continue;
@@ -201,6 +204,7 @@ class Game {
       this.playerLevel++;
       this.expToNext = this._calcExpToLevel(this.playerLevel);
       this.pendingLevelUps++;
+      Sound.levelUp();
       this._addFloatingText('LEVEL UP!', this.gameWidth / 2, this.gameHeight * 0.4,
         Config.NEON_GREEN, 20);
     }
@@ -222,8 +226,10 @@ class Game {
     if (!brick.alive) return;
     const destroyed = brick.hit(damage);
     if (destroyed) {
+      Sound.brickBreak();
       this._onBrickDestroyed(brick, source);
     } else {
+      Sound.brickHit();
       const bc = brick.getCenter();
       this.particles.emitHitSpark(bc.x, bc.y, brick.color);
     }
@@ -232,6 +238,7 @@ class Game {
   damageBoss(damage) {
     if (!this.boss || !this.boss.alive) return;
     this.boss.hit(damage);
+    Sound.brickHit();
     this.particles.emitBossHit(this.boss.getCenterX(), this.boss.getCenterY());
     this.score += damage;
     // Boss也给经验
@@ -249,6 +256,7 @@ class Game {
     this.score += points;
 
     if (this.combo > 1 && this.combo % 5 === 0) {
+      Sound.combo(this.combo);
       this._addFloatingText(this.combo + ' COMBO!', center.x, center.y - 10,
         Config.NEON_YELLOW, 14 + Math.min(this.combo, 12));
       this.particles.emitCombo(center.x, center.y, this.combo);
@@ -264,6 +272,7 @@ class Game {
   }
 
   _applyPowerUp(powerUp) {
+    Sound.powerUp();
     switch (powerUp.type) {
       case 'multiball':
         for (let i = 0; i < 2; i++) this._spawnBall();
@@ -298,6 +307,7 @@ class Game {
         }
       }
       this.particles.emitAdvanceWarning(this.gameWidth);
+      Sound.advanceWarning();
     }
   }
 
@@ -322,6 +332,8 @@ class Game {
 
       case Config.STATE.TITLE:
         if (this.input.consumeTap()) {
+          Sound.init(); // 用户交互后初始化音频
+          Sound.gameStart();
           this.level = 1;
           this.score = 0;
           this.lives = Config.INITIAL_LIVES;
@@ -411,6 +423,7 @@ class Game {
     if (this.state === Config.STATE.LEVEL_UP) return;
 
     if (this.boss && !this.boss.alive) {
+      Sound.bossDefeat();
       this.score += 500 * this.level;
       this._addFloatingText('BOSS DEFEATED!', this.gameWidth / 2, this.gameHeight / 3, Config.NEON_YELLOW, 22);
       this._onLevelClear();
@@ -427,11 +440,13 @@ class Game {
         if (ug._hitArea) {
           const { x, y, w, h } = ug._hitArea;
           if (tap.x >= x && tap.x <= x + w && tap.y >= y && tap.y <= y + h) {
+            Sound.selectSkill();
             this.upgrades.applyChoice(ug);
 
             // 检查进化
             const evolves = this.upgrades.checkEvolve();
             for (const ev of evolves) {
+              Sound.evolve();
               this.evolveNotifications.push({
                 name: ev.name, icon: ev.icon, color: ev.color, timer: 120,
               });
@@ -487,7 +502,9 @@ class Game {
       const ball = this.balls[i];
       ball.update(dt, 1);
       ball.wallBounce(this.gameWidth, 0);
-      ball.collidePaddle(this.paddle);
+      if (ball.collidePaddle(this.paddle)) {
+        Sound.paddleHit();
+      }
 
       let pierceLeft = this.upgrades.getPierceCount();
       for (let j = 0; j < this.bricks.length; j++) {
@@ -498,6 +515,7 @@ class Game {
           const damage = Math.max(1, Math.floor(1 * critMult));
           this.damageBrick(brick, damage, 'ball');
           if (critMult > 1) {
+            Sound.crit();
             const bc = brick.getCenter();
             this._addFloatingText('暴击!', bc.x, bc.y - 10, Config.NEON_RED, 14);
           }
@@ -521,6 +539,7 @@ class Game {
       }
 
       if (ball.isOutOfBounds(this.gameHeight)) {
+        Sound.ballLost();
         this.balls.splice(i, 1);
         this.combo = 0;
       }
@@ -557,12 +576,14 @@ class Game {
   _onLevelClear() {
     this._levelClearTimer = 0;
     this.state = Config.STATE.LEVEL_CLEAR;
+    Sound.levelClear();
     this._addFloatingText('CLEAR!', this.gameWidth / 2, this.gameHeight * 0.35, Config.NEON_GREEN, 24);
   }
 
   _onAllBallsLost() {
     this.lives--;
     if (this.lives <= 0) {
+      Sound.gameOver();
       this.state = Config.STATE.GAME_OVER;
     } else {
       this._spawnInitialBalls();
@@ -625,7 +646,7 @@ class Game {
     this.renderer.drawPassiveBar(this.upgrades.getOwnedList());
 
     // HUD + 经验条
-    this.renderer.drawHUD(this.score, this.lives, this.combo, this.level);
+    this.renderer.drawHUD(this.score, this.lives, this.combo, this.level, Sound.enabled);
     this.renderer.drawExpBar(this.exp, this.expToNext, this.playerLevel);
   }
 }
