@@ -1,7 +1,7 @@
 /**
- * SpinBlade.js - 等离子旋刃 v2
- * 定位：后排清扫器 — 发射旋刃弹墙反弹，在敌人后排持续移动切割
- * 天生自带弹墙，升级强化清扫能力
+ * SpinBlade.js - 等离子旋刃 v2.1
+ * 定位：后排清扫器 — 弹墙反弹，在敌人后排持续移动切割
+ * 天生弹墙，蓄势越久伤害越高
  */
 const Weapon = require('./Weapon');
 const Config = require('../Config');
@@ -26,10 +26,10 @@ class SpinBlade extends Weapon {
     const baseAttack = ctx.getBaseAttack ? ctx.getBaseAttack() : 1;
     const damage = this.getDamage(baseAttack);
     const giantLv = this.branches.giant || 0;
-    const sawLv = this.branches.saw || 0;
     const splitLv = this.branches.split || 0;
-    const vortexLv = this.branches.vortex || 0;
     const pierceLv = this.branches.pierce || 0;
+    const rampLv = this.branches.ramp || 0;
+    const bleedLv = this.branches.bleed || 0;
     const size = 12 + giantLv * 10;
     const bounceTop = Config.SAFE_TOP + 10;
     const bounceBottom = Config.SCREEN_HEIGHT * 0.72;
@@ -42,47 +42,23 @@ class SpinBlade extends Weapon {
       b.y += b.vy * dt;
       b.angle += (0.15 + giantLv * 0.03) * dt;
       b.life -= dtMs;
+      b.aliveMs += dtMs;
       b.size = size;
 
       // === 弹墙反弹（默认行为） ===
       if (b.x - size < 0) {
         b.vx = Math.abs(b.vx);
         b.x = size;
-        b.bounces++;
       } else if (b.x + size > Config.SCREEN_WIDTH) {
         b.vx = -Math.abs(b.vx);
         b.x = Config.SCREEN_WIDTH - size;
-        b.bounces++;
       }
       if (b.y - size < bounceTop) {
         b.vy = Math.abs(b.vy);
         b.y = bounceTop + size;
-        b.bounces++;
       } else if (b.y + size > bounceBottom) {
         b.vy = -Math.abs(b.vy);
         b.y = bounceBottom - size;
-        b.bounces++;
-      }
-
-      // === 锯齿：每次弹墙+伤害 ===
-      if (sawLv > 0 && b.bounces > b.lastBounceDmg) {
-        b.lastBounceDmg = b.bounces;
-        b.sawStacks = Math.min((b.sawStacks || 0) + 1, 5 + sawLv * 3);
-      }
-
-      // === 漩涡吸经验 ===
-      if (vortexLv > 0 && ctx.expSystem) {
-        const vortexRange = 50 + vortexLv * 25;
-        const orbs = ctx.expSystem.orbs;
-        for (const o of orbs) {
-          const dx = b.x - o.x, dy = b.y - o.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < vortexRange && dist > 5) {
-            const pull = 0.12 * vortexLv;
-            o.vx += (dx / dist) * pull;
-            o.vy += (dy / dist) * pull;
-          }
-        }
       }
 
       // === tick伤害 ===
@@ -90,11 +66,12 @@ class SpinBlade extends Weapon {
       if (b.tickTimer >= (this.def.tickInterval || 200)) {
         b.tickTimer = 0;
         const hitRadius = size + (giantLv > 0 ? 6 : 0);
-        // 锯齿加伤：每层+15%
-        const sawMult = 1 + (b.sawStacks || 0) * 0.15;
-        const tickDmg = damage * sawMult;
 
-        // 穿透计数（0=无限次，>0=每tick最多打pierce+1个）
+        // 蓄势：存活每秒+10%伤害
+        const rampMult = rampLv > 0 ? 1 + (b.aliveMs / 1000) * 0.10 * rampLv : 1;
+        const tickDmg = damage * rampMult;
+
+        // 贯穿：每tick可命中所有砖块 vs 默认只打1个
         const maxHits = pierceLv > 0 ? 999 : 1;
         let hitCount = 0;
 
@@ -108,9 +85,15 @@ class SpinBlade extends Weapon {
             ctx.damageBrick(brick, tickDmg, 'spinBlade');
             hitCount++;
 
-            // === 分裂：击杀时分裂小刃 ===
+            // 撕裂DOT
+            if (bleedLv > 0 && brick.alive) {
+              const dotDmg = damage * 0.20 * bleedLv;
+              ctx.addDot(brick, dotDmg, 2000, 'bleed');
+            }
+
+            // 分裂：击杀时分裂小刃
             if (splitLv > 0 && !brick.alive && !b.isSplit) {
-              this._spawnSplitBlades(b, splitLv, ctx);
+              this._spawnSplitBlades(b, splitLv);
             }
           }
         }
@@ -135,7 +118,7 @@ class SpinBlade extends Weapon {
     const cx = ctx.launcher.getCenterX(), cy = ctx.launcher.y - 20;
 
     for (let i = 0; i < count; i++) {
-      // 向上发射，带随机左右偏移（散开覆盖后排）
+      // 向上发射，多刃扇形散开
       const spreadAngle = count > 1
         ? -Math.PI / 2 - 0.4 + (0.8 / (count - 1)) * i
         : -Math.PI / 2 + (Math.random() - 0.5) * 0.3;
@@ -151,9 +134,7 @@ class SpinBlade extends Weapon {
         maxLife: durationMs,
         size: 12,
         tickTimer: 0,
-        bounces: 0,
-        lastBounceDmg: 0,
-        sawStacks: 0,
+        aliveMs: 0,
         isSplit: false,
       });
     }
@@ -161,7 +142,7 @@ class SpinBlade extends Weapon {
   }
 
   /** 分裂小刃 */
-  _spawnSplitBlades(parent, splitLv, ctx) {
+  _spawnSplitBlades(parent, splitLv) {
     const splitCount = 2 + splitLv;
     const splitDuration = parent.life * 0.5;
     if (splitDuration < 500) return;
@@ -178,10 +159,8 @@ class SpinBlade extends Weapon {
         maxLife: splitDuration,
         size: parent.size * 0.6,
         tickTimer: 0,
-        bounces: 0,
-        lastBounceDmg: 0,
-        sawStacks: 0,
-        isSplit: true, // 分裂刃不再分裂
+        aliveMs: 0,
+        isSplit: true,
       });
     }
   }
@@ -190,8 +169,8 @@ class SpinBlade extends Weapon {
     return {
       blades: this.blades,
       color: this.def.color,
-      vortexLv: this.branches.vortex || 0,
       giantLv: this.branches.giant || 0,
+      rampLv: this.branches.ramp || 0,
     };
   }
 

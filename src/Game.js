@@ -403,7 +403,7 @@ class Game {
     var c = brick.getCenter();
     this.burnDots.push({
       brickRef: brick, x: c.x, y: c.y,
-      damage: Math.max(1, damage), remaining: duration, tickMs: 500, tickTimer: 0,
+      damage: Math.max(0.1, damage), remaining: duration, tickMs: 500, tickTimer: 0,
       type: type || 'generic',
     });
   }
@@ -448,7 +448,7 @@ class Game {
       if (dot.tickTimer >= dot.tickMs) {
         dot.tickTimer -= dot.tickMs;
         if (dot.brickRef && dot.brickRef.alive) {
-          this.damageBrick(dot.brickRef, dot.damage, 'fire_dot');
+          this.damageBrick(dot.brickRef, dot.damage, dot.type || 'fire_dot');
         }
       }
       if (dot.remaining <= 0 || !dot.brickRef || !dot.brickRef.alive) {

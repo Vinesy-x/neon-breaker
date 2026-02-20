@@ -84,9 +84,9 @@ const WEAPON_TREES = {
       speed:    { name: '弹速', desc: '+30%飞行速度', max: 3, requires: null },
       giant:    { name: '巨型化', desc: '旋刃变大+判定范围↑', max: 2, requires: { damage: 2 } },
       pierce:   { name: '贯穿', desc: '每tick可命中所有砖块', max: 1, requires: { damage: 2 } },
-      saw:      { name: '锯齿', desc: '每次弹墙+15%伤害(可叠加)', max: 2, requires: { speed: 2 } },
+      ramp:     { name: '蓄势', desc: '存活每秒+10%伤害', max: 3, requires: { duration: 2 } },
       split:    { name: '分裂', desc: '击杀砖块时分裂小刃', max: 2, requires: { count: 2 } },
-      vortex:   { name: '漩涡', desc: '吸引周围经验球', max: 2, requires: { giant: 1 } },
+      bleed:    { name: '撕裂', desc: '命中留DOT(20%/秒×2秒)', max: 2, requires: { giant: 1, damage: 3 } },
     },
   },
 };

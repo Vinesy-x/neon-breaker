@@ -373,6 +373,7 @@ class DevPanel {
         'drone_cross': '无人机过载', 'drone_pulse': '无人机脉冲',
         'fire_dot': '燃烧', 'thunder_chain': '雷击', 'shock': '感电',
         'spinBlade': '等离子旋刃', 'kunai_chain': '迫击连锁',
+        'bleed': '撕裂DOT',
       };
       const statH = 20 + entries.length * 16;
       ctx.fillStyle = 'rgba(255,100,100,0.1)';

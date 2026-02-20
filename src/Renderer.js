@@ -890,36 +890,25 @@ class Renderer {
   }
 
   _drawSpinBlade(data, ctx) {
-    const { blades, color, vortexLv, giantLv } = data;
+    const { blades, color, giantLv, rampLv } = data;
 
     for (const b of blades) {
       const size = b.size || 12;
 
-      // === 漩涡效果 ===
-      if (vortexLv > 0) {
-        const vortexR = 60 + vortexLv * 30;
-        ctx.strokeStyle = color;
-        ctx.globalAlpha = 0.15;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, vortexR, 0, Math.PI * 2);
-        ctx.stroke();
-        // 螺旋线
-        ctx.globalAlpha = 0.1;
-        ctx.beginPath();
-        for (let a = 0; a < Math.PI * 4; a += 0.2) {
-          const r = vortexR * (1 - a / (Math.PI * 4));
-          const px = b.x + Math.cos(a + b.angle * 2) * r;
-          const py = b.y + Math.sin(a + b.angle * 2) * r;
-          if (a === 0) ctx.moveTo(px, py);
-          else ctx.lineTo(px, py);
-        }
-        ctx.stroke();
+      // === 蓄势光效：存活越久颜色越亮 ===
+      let bladeColor = color;
+      if (rampLv > 0 && b.aliveMs > 1000) {
+        const rampT = Math.min((b.aliveMs - 1000) / 5000, 1);
+        // 紫→白渐变
+        const r = Math.floor(0xAA + (0xFF - 0xAA) * rampT);
+        const g = Math.floor(0x44 + (0xFF - 0x44) * rampT);
+        const b2 = Math.floor(0xFF);
+        bladeColor = `rgb(${r},${g},${b2})`;
       }
 
       // === 外层光晕 ===
       ctx.globalAlpha = 0.25;
-      ctx.fillStyle = color;
+      ctx.fillStyle = bladeColor;
       ctx.beginPath();
       ctx.arc(b.x, b.y, size + 6, 0, Math.PI * 2);
       ctx.fill();
@@ -931,7 +920,7 @@ class Renderer {
       ctx.rotate(b.angle);
 
       // 4叶旋刃
-      ctx.fillStyle = color;
+      ctx.fillStyle = bladeColor;
       for (let i = 0; i < 4; i++) {
         ctx.save();
         ctx.rotate(i * Math.PI / 2);
@@ -1310,6 +1299,7 @@ class Renderer {
       'thunder_chain': '雷击',
       'shock': '感电',
       'spinBlade': '等离子旋刃',
+      'bleed': '撕裂DOT',
     };
     const entries = Object.entries(stats || {}).sort((a, b) => b[1] - a[1]);
     const totalDmg = entries.reduce((sum, e) => sum + e[1], 0);
