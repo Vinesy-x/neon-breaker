@@ -68,10 +68,10 @@ const WEAPON_TREES = {
       speed:      { name: '机动', desc: '阵型移动+tick频率提升30%', max: 3, requires: null },
       width:      { name: '光束', desc: '激光变粗+判定+40%', max: 2, requires: { damage: 2 } },
       deploy:     { name: '部署', desc: '阵型半径+25,追踪更准', max: 2, requires: { count: 1 } },
-      rotate:     { name: '旋阵', desc: '旋转速度大幅提升', max: 2, requires: { count: 2 } },
+      arc:        { name: '电弧', desc: '激光线释放电弧扩大范围', max: 2, requires: { count: 2 } },
       overcharge: { name: '过载', desc: '阵型中心交叉点伤害×2', max: 1, requires: { count: 2, damage: 3 } },
       focus:      { name: '聚焦', desc: '激光对低HP砖额外伤害+80%', max: 2, requires: { damage: 3, width: 1 } },
-      pulse:      { name: '脉冲', desc: '每4秒阵型范围AOE爆发×4', max: 1, requires: { damage: 4, rotate: 2 } },
+      pulse:      { name: '脉冲', desc: '每4秒阵型范围AOE爆发×4', max: 1, requires: { damage: 4, arc: 2 } },
     },
   },
   spinBlade: {

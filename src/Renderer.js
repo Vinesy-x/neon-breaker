@@ -826,14 +826,37 @@ class Renderer {
       ctx.globalAlpha = 1;
     }
 
-    // === 命中闪光 ===
+    // === 命中闪光 + 电弧 ===
     if (hits.length > 0) {
-      ctx.fillStyle = '#FFFFFF';
       for (const h of hits) {
-        ctx.globalAlpha = Math.min(1, h.alpha) * 0.8;
-        ctx.beginPath();
-        ctx.arc(h.x, h.y, 4, 0, Math.PI * 2);
-        ctx.fill();
+        const a = Math.min(1, h.alpha);
+        if (h.arcFrom) {
+          // 电弧：从激光线弹射到砖块的锯齿线
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 1.5;
+          ctx.globalAlpha = a * 0.7;
+          const sx = h.arcFrom.x, sy = h.arcFrom.y;
+          const mx = (sx + h.x) / 2 + (Math.random() - 0.5) * 15;
+          const my = (sy + h.y) / 2 + (Math.random() - 0.5) * 15;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(mx, my);
+          ctx.lineTo(h.x, h.y);
+          ctx.stroke();
+          // 命中点
+          ctx.fillStyle = '#FFFFFF';
+          ctx.globalAlpha = a * 0.6;
+          ctx.beginPath();
+          ctx.arc(h.x, h.y, 3, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          // 普通命中闪光
+          ctx.fillStyle = '#FFFFFF';
+          ctx.globalAlpha = a * 0.8;
+          ctx.beginPath();
+          ctx.arc(h.x, h.y, 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
       ctx.globalAlpha = 1;
     }
@@ -1280,6 +1303,7 @@ class Renderer {
       'lightning_aoe': '闪电爆炸',
       'meteor': '陨石',
       'drone_laser': '无人机阵',
+      'drone_arc': '无人机电弧',
       'drone_cross': '无人机过载',
       'drone_pulse': '无人机脉冲',
       'fire_dot': '燃烧',

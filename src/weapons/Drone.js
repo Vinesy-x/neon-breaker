@@ -40,7 +40,7 @@ class DroneWeapon extends Weapon {
     this._syncDrones();
 
     const speedLv = this.branches.speed || 0;
-    const rotateLv = this.branches.rotate || 0;
+    const arcLv = this.branches.arc || 0;
     const deployLv = this.branches.deploy || 0;
     const lcx = ctx.launcher.getCenterX();
     const lcy = ctx.launcher.y;
@@ -54,41 +54,25 @@ class DroneWeapon extends Weapon {
 
     // === 无人机移动 ===
     // === 无人机移动（限速） ===
-    const maxSpeed = 1.2 + speedLv * 0.4; // 每帧最大移动像素
-    const orbitSpeed = rotateLv > 0 ? 0.004 + rotateLv * 0.006 : 0;
+    const maxSpeed = 1.2 + speedLv * 0.4;
 
     for (let i = 0; i < this.drones.length; i++) {
       const d = this.drones[i];
 
-      // 检查目标砖块是否还活着
       if (d.targetBrick && !d.targetBrick.alive) {
         d.targetBrick = null;
       }
 
-      // 更新目标位置
       if (d.targetBrick) {
         const bc = d.targetBrick.getCenter();
         d.tx = bc.x;
         d.ty = bc.y;
       }
 
-      // 计算到目标的距离
-      let goalX = d.tx;
-      let goalY = d.ty;
-
-      // 旋阵：到位后绕目标小幅旋转
-      if (orbitSpeed > 0) {
-        const t = Date.now() * orbitSpeed + i * Math.PI * 2 / this.drones.length;
-        const orbitR = 10 + rotateLv * 5;
-        goalX += Math.cos(t) * orbitR;
-        goalY += Math.sin(t) * orbitR;
-      }
-
-      const dx = goalX - d.x;
-      const dy = goalY - d.y;
+      const dx = d.tx - d.x;
+      const dy = d.ty - d.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
 
-      // 到位后停住（3px内不再移动，避免抖动）
       if (dist > 3) {
         const speed = Math.min(maxSpeed * dt, dist);
         d.x += (dx / dist) * speed;
@@ -137,6 +121,42 @@ class DroneWeapon extends Weapon {
           );
           if (dist < laserWidth + ctx.boss.width * 0.3) {
             ctx.damageBoss(damage, 'drone_laser');
+          }
+        }
+      }
+
+      // === 电弧：激光线附近随机弹射 ===
+      if (arcLv > 0) {
+        const arcRange = 30 + arcLv * 20; // 电弧弹射范围
+        const arcDmg = Math.floor(damage * 0.5);
+        const arcsPerLine = arcLv; // 每条线每tick弹出的电弧数
+
+        for (const line of lines) {
+          for (let a = 0; a < arcsPerLine; a++) {
+            // 激光线上随机取一点
+            const t = Math.random();
+            const srcX = line.x1 + (line.x2 - line.x1) * t;
+            const srcY = line.y1 + (line.y2 - line.y1) * t;
+
+            // 找附近但不在激光线上的砖块
+            for (let j = 0; j < ctx.bricks.length; j++) {
+              const brick = ctx.bricks[j];
+              if (!brick.alive) continue;
+              const bc = brick.getCenter();
+              const adx = bc.x - srcX, ady = bc.y - srcY;
+              const adist = Math.sqrt(adx * adx + ady * ady);
+              // 在电弧范围内但不在激光线判定内
+              const lineDist = this._pointToLineDist(bc.x, bc.y, line.x1, line.y1, line.x2, line.y2);
+              if (adist < arcRange && lineDist > laserWidth) {
+                ctx.damageBrick(brick, arcDmg, 'drone_arc');
+                // 电弧视觉
+                this.laserHits.push({
+                  x: bc.x, y: bc.y, alpha: 0.8,
+                  arcFrom: { x: srcX, y: srcY },
+                });
+                break; // 每个电弧只打一个目标
+              }
+            }
           }
         }
       }
