@@ -132,10 +132,10 @@ class DroneWeapon extends Weapon {
         const arcRange = 40 + arcLv * 25;
         const arcDmg = Math.floor(damage * 0.6);
         const arcsPerLine = arcLv;
-        const arcHit = new Set(); // 电弧自己的去重
-        let arcHitBoss = false;
+        const arcHit = new Set(); // 电弧自己的去重（砖块）
 
         for (const line of lines) {
+          let lineHitBoss = false; // 每条线对Boss最多命中1次
           for (let a = 0; a < arcsPerLine; a++) {
             const t = Math.random();
             const srcX = line.x1 + (line.x2 - line.x1) * t;
@@ -153,8 +153,8 @@ class DroneWeapon extends Weapon {
                 best = { brick, x: bc.x, y: bc.y, isBoss: false };
               }
             }
-            // Boss也可以被电弧击中
-            if (ctx.boss && ctx.boss.alive && !arcHitBoss) {
+            // Boss也可以被电弧击中（每条线1次）
+            if (ctx.boss && ctx.boss.alive && !lineHitBoss) {
               const bx = ctx.boss.getCenterX(), by = ctx.boss.getCenterY();
               const bdist = Math.sqrt((bx - srcX) ** 2 + (by - srcY) ** 2);
               if (bdist < arcRange && bdist < bestDist) {
@@ -165,7 +165,7 @@ class DroneWeapon extends Weapon {
             if (best) {
               if (best.isBoss) {
                 ctx.damageBoss(arcDmg, 'drone_arc');
-                arcHitBoss = true;
+                lineHitBoss = true;
               } else {
                 ctx.damageBrick(best.brick, arcDmg, 'drone_arc');
                 arcHit.add(best.brick);
