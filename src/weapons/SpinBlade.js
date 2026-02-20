@@ -12,8 +12,8 @@ class SpinBlade extends Weapon {
     super('spinBlade');
     this.blades = [];
     this.shockwaves = [];
-    this.cooldownTimer = 0; // 冷却计时器
-    this.isOnCooldown = false; // 是否在冷却中
+    this.cooldownTimer = 99999; // 开局直接发射
+    this.isOnCooldown = true;
   }
 
   update(dtMs, ctx) {
@@ -212,16 +212,19 @@ class SpinBlade extends Weapon {
   }
 
   _launch(ctx) {
-    const cx = ctx.launcher.getCenterX(), cy = ctx.launcher.y - 20;
+    const cx = ctx.launcher.getCenterX();
+    // 直接发射到砖块区域中部
+    const spawnY = Config.SAFE_TOP + (Config.SCREEN_HEIGHT * 0.4);
     const durationMs = (10 + (this.branches.duration || 0) * 2) * 1000;
-    // 水平发射为主，轻微向上
+    // 水平发射
     const angle = (Math.random() > 0.5 ? 0 : Math.PI) + (Math.random() - 0.5) * 0.3;
     const spd = 1.5;
 
     this.blades.push({
-      x: cx, y: cy - 50, // 从稍高处发射
+      x: cx,
+      y: spawnY,
       vx: Math.cos(angle) * spd,
-      vy: -0.3, // 轻微向上
+      vy: 0, // 纯水平开始
       angle: Math.random() * Math.PI * 2,
       life: durationMs, maxLife: durationMs, size: 14,
       tickTimer: 0, aliveMs: 0, isSplit: false,
