@@ -56,7 +56,7 @@ class Game {
     };
   }
 
-  getBaseAttack() { return 10 + this.saveManager.getAttackBonus(); }
+  getBaseAttack() { return 1 + this.saveManager.getAttackBonus(); }
 
   _initGame() {
     this.chapterConfig = ChapterConfig.get(this.currentChapter);
