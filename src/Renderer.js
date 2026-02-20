@@ -564,14 +564,6 @@ class Renderer {
       ctx.rotate(Math.atan2(k.vy, k.vx));
       ctx.scale(s, s);
 
-      // 外发光（用半透明大圆替代shadowBlur，性能好很多）
-      ctx.globalAlpha = 0.2;
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(0, 0, 10 * s, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-
       // 1) 弹体主体（圆角矩形）
       ctx.fillStyle = color;
       ctx.beginPath();
