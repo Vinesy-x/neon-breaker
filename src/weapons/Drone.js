@@ -50,7 +50,7 @@ class DroneWeapon extends Weapon {
     const fireRateMult = Math.pow(0.75, this.branches.fireRate || 0) * Math.pow(0.5, swarmLv);
     const fireInterval = this.def.interval * fireRateMult;
 
-    const range = 150 * (1 + (this.branches.range || 0) * 0.2);
+    const range = 400 * (1 + (this.branches.range || 0) * 0.25);
     const burstLv = this.branches.burst || 0;
     const laserLv = this.branches.laser || 0;
     const pierceLv = this.branches.pierce || 0;
@@ -90,11 +90,11 @@ class DroneWeapon extends Weapon {
             for (let s = 0; s < shots; s++) {
               this.droneBullets.push({
                 x: d.x, y: d.y,
-                vx: (dx / dist) * 8 + (Math.random() - 0.5) * s * 0.5,
-                vy: (dy / dist) * 8 + (Math.random() - 0.5) * s * 0.5,
-                damage: damage, life: 60,
-                pierceLeft: pierceLv, // 剩余穿透次数
-                hitBricks: [], // 已命中的砖块
+                vx: (dx / dist) * 12 + (Math.random() - 0.5) * s * 0.5,
+                vy: (dy / dist) * 12 + (Math.random() - 0.5) * s * 0.5,
+                damage: damage, life: 90,
+                pierceLeft: pierceLv,
+                hitBricks: [],
               });
             }
             Sound.bulletShoot();
