@@ -46,6 +46,7 @@ class Game {
     this.burnDots = [];
     this._devInvincible = false;
     this._devPauseFire = false;
+    this._devPauseLevelUp = false;
     this.devPanel = new DevPanel();
     this.state = Config.STATE.LOADING; this.loadTimer = 60;
 
@@ -138,7 +139,7 @@ class Game {
 
   _applyPowerUp(pu) {
     if (pu.type==='coin') { var v=Math.floor(this.saveManager.getCoinMultiplier()); this.coinsEarned+=v; this._addFloatingText('+'+v+'💰',pu.x,pu.y,'#FFD700',12); }
-    else if (pu.type==='skillCrate') { Sound.powerUp(); this._addFloatingText('技能宝箱!',pu.x,pu.y,Config.NEON_PINK,16); this._triggerChoice('crate'); }
+    else if (pu.type==='skillCrate') { Sound.powerUp(); this._addFloatingText('技能宝箱!',pu.x,pu.y,Config.NEON_PINK,16); if(!this._devPauseLevelUp) this._triggerChoice('crate'); }
   }
 
   _triggerChoice(source) {
@@ -150,6 +151,7 @@ class Game {
   }
 
   _tryShowLevelUpChoice() {
+    if (this._devPauseLevelUp) return;
     if (this.expSystem.hasPendingLevelUp() && this.state!==Config.STATE.LEVEL_UP && this.state!==Config.STATE.SKILL_CHOICE) {
       this.expSystem.consumeLevelUp();
       this._addFloatingText('LEVEL UP!', this.gameWidth/2, this.gameHeight*0.4, Config.NEON_GREEN, 20);

@@ -103,9 +103,8 @@ class DevPanel {
         const weapon = game.upgrades.weapons[params.weaponKey];
         if (weapon) {
           const bDef = Config.WEAPON_TREES[params.weaponKey].branches[params.branchKey];
-          while (weapon.getBranch(params.branchKey) < bDef.max) {
-            weapon.upgradeBranch(params.branchKey);
-          }
+          // dev模式：直接设置到满级，绕过前置条件
+          weapon.branches[params.branchKey] = bDef.max;
           game._syncLauncherStats();
         }
         break;
@@ -121,10 +120,12 @@ class DevPanel {
         }
         break;
       case 'maxShip': {
-        while (game.upgrades.canUpgradeShip(params.key)) {
-          game.upgrades.upgradeShip(params.key);
+        const def = Config.SHIP_TREE[params.key];
+        if (def) {
+          // dev模式：直接设到满级
+          game.upgrades.shipTree[params.key] = def.max;
+          game._syncLauncherStats();
         }
-        game._syncLauncherStats();
         break;
       }
       case 'levelUp10':
@@ -141,6 +142,9 @@ class DevPanel {
         break;
       case 'togglePauseFire':
         game._devPauseFire = !game._devPauseFire;
+        break;
+      case 'togglePauseLevelUp':
+        game._devPauseLevelUp = !game._devPauseLevelUp;
         break;
       case 'killBoss':
         if (game.boss && game.boss.alive) {
@@ -162,10 +166,7 @@ class DevPanel {
           if (game.upgrades.hasWeapon(wk)) {
             const weapon = game.upgrades.weapons[wk];
             for (const bk in Config.WEAPON_TREES[wk].branches) {
-              const bDef = Config.WEAPON_TREES[wk].branches[bk];
-              while (weapon.getBranch(bk) < bDef.max) {
-                if (!weapon.upgradeBranch(bk)) break;
-              }
+              weapon.branches[bk] = Config.WEAPON_TREES[wk].branches[bk].max;
             }
           }
         }
@@ -295,6 +296,7 @@ class DevPanel {
       { label: '💣 清屏', action: 'clearBricks', color: Config.NEON_ORANGE },
       { label: game._devInvincible ? '🛡 无敌 ON' : '🛡 无敌 OFF', action: 'toggleInvincible', color: game._devInvincible ? Config.NEON_GREEN : '#666' },
       { label: game._devPauseFire ? '🔫 射击 OFF' : '🔫 射击 ON', action: 'togglePauseFire', color: game._devPauseFire ? '#FF5555' : Config.NEON_CYAN },
+      { label: game._devPauseLevelUp ? '⬆ 升级 OFF' : '⬆ 升级 ON', action: 'togglePauseLevelUp', color: game._devPauseLevelUp ? '#FF5555' : Config.NEON_CYAN },
       { label: '💰 +1000金', action: 'addCoins', params: { amount: 1000 }, color: '#FFD700' },
       { label: '👹 召唤Boss', action: 'spawnBoss', color: Config.NEON_RED },
       { label: '💀 秒杀Boss', action: 'killBoss', color: Config.NEON_PINK },
