@@ -737,6 +737,23 @@ class Renderer {
       }
     }
     ctx.globalAlpha = 1;
+
+    // 超载爆炸
+    const explosions = data.explosions || [];
+    for (const e of explosions) {
+      ctx.globalAlpha = e.alpha * 0.6;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.radius * e.alpha, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = e.alpha * 0.2;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.radius * e.alpha * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
   }
 
   _drawMissile(data, ctx) {

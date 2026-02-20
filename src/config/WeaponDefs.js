@@ -28,7 +28,10 @@ const WEAPON_TREES = {
       freq:     { name: '频率', desc: '-20%冷却', max: 3, requires: null },
       paralyze: { name: '麻痹', desc: '命中减速30%', max: 2, requires: { chains: 2 } },
       storm:    { name: '雷暴', desc: '同时释放2道闪电', max: 2, requires: { freq: 2 } },
-      overload: { name: '超载', desc: '链末端爆炸AOE', max: 1, requires: { chains: 3, damage: 3 } },
+      charge:   { name: '蓄能', desc: '每次链跳+25%伤害', max: 2, requires: { chains: 2 } },
+      shock:    { name: '感电', desc: '命中留DOT(30%/秒×2秒)', max: 2, requires: { damage: 2 } },
+      echo:     { name: '回响', desc: '链末端20%再次释放', max: 2, requires: { chains: 3 } },
+      overload: { name: '超载', desc: '链末端爆炸AOE', max: 1, requires: { chains: 4, damage: 3 } },
     },
   },
   missile: {

@@ -276,8 +276,20 @@ class Game {
     this.burnDots.push({
       brickRef: brick, x: c.x, y: c.y,
       damage: dotDmg, remaining: duration, tickMs: 500, tickTimer: 0,
+      type: 'fire',
     });
     this.particles.emitHitSpark(c.x, c.y, '#FF4400');
+  }
+
+  /** 通用DOT接口（供武器技能使用） */
+  addDot(brick, damage, duration, type) {
+    if (!brick || !brick.alive) return;
+    var c = brick.getCenter();
+    this.burnDots.push({
+      brickRef: brick, x: c.x, y: c.y,
+      damage: Math.max(1, damage), remaining: duration, tickMs: 500, tickTimer: 0,
+      type: type || 'generic',
+    });
   }
 
   _applyIceElement(brick, elementLv) {
