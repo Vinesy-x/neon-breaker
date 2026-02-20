@@ -244,10 +244,27 @@ class DroneWeapon extends Weapon {
     }
   }
 
-  /** 为每台无人机分配目标砖块 */
+  /** 为每台无人机分配目标砖块（或Boss） */
   _assignTargets(ctx, lcx, lcy, deployLv) {
     const bricks = ctx.bricks;
-    if (!bricks || bricks.length === 0) return;
+    const hasBricks = bricks && bricks.filter(b => b.alive).length > 0;
+    const hasBoss = ctx.boss && ctx.boss.alive;
+
+    if (!hasBricks && !hasBoss) return;
+
+    // === 没有砖块但有Boss → 无人机围绕Boss布阵 ===
+    if (!hasBricks && hasBoss) {
+      const bx = ctx.boss.getCenterX();
+      const by = ctx.boss.getCenterY();
+      const spread = 50 + (this.branches.deploy || 0) * 25;
+      for (let i = 0; i < this.drones.length; i++) {
+        const angle = (Math.PI * 2 / this.drones.length) * i + Date.now() * 0.0005;
+        this.drones[i].tx = bx + Math.cos(angle) * spread;
+        this.drones[i].ty = by + Math.sin(angle) * spread;
+        this.drones[i].targetBrick = null;
+      }
+      return;
+    }
 
     // 计算砖块权重：越靠近危险线(y越大) → 权重越高
     const dangerY = Config.SCREEN_HEIGHT * Config.BRICK_DANGER_Y;
