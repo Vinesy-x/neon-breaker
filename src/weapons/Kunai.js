@@ -155,10 +155,10 @@ class Kunai extends Weapon {
     // 视觉爆炸特效
     this.explosions.push({
       x: x, y: y,
-      radius: radius * 0.3, // 从小开始扩散
+      radius: radius * 0.15, // 从更小开始
       maxRadius: radius,
-      expandSpeed: 1.5,
-      life: 300, maxLife: 300,
+      expandSpeed: 2.0,      // 更快扩张
+      life: 400, maxLife: 400, // 更长持续
       color: this.def.color,
       isChain: false,
     });
@@ -200,10 +200,10 @@ class Kunai extends Weapon {
         // 延迟感的连锁爆炸视觉
         this.explosions.push({
           x: kb.x, y: kb.y,
-          radius: chainRadius * 0.2,
+          radius: chainRadius * 0.1,
           maxRadius: chainRadius,
-          expandSpeed: 1.2,
-          life: 250, maxLife: 250,
+          expandSpeed: 1.8,
+          life: 350, maxLife: 350,
           color: '#FF6600', // 橙色连锁
           isChain: true,
         });

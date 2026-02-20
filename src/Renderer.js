@@ -489,90 +489,200 @@ class Renderer {
   _drawKunai(data, ctx) {
     const { knives, explosions, color } = data;
 
-    // 绘制拖尾
+    // ===== 拖尾（渐变光带） =====
     for (const k of knives) {
       if (k.trail && k.trail.length > 1) {
+        const angle = Math.atan2(k.vy, k.vx);
         for (let t = 0; t < k.trail.length; t++) {
           const tr = k.trail[t];
-          ctx.globalAlpha = tr.alpha * 0.4;
+          const a = tr.alpha * 0.5;
+          const sz = 1.5 + (t / k.trail.length) * 2;
+          // 扁平拖尾（垂直于飞行方向）
+          ctx.globalAlpha = a;
           ctx.fillStyle = color;
-          const sz = 2 + t * 0.3;
-          ctx.beginPath();
-          ctx.arc(tr.x, tr.y, sz, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.save();
+          ctx.translate(tr.x, tr.y);
+          ctx.rotate(angle);
+          ctx.fillRect(-sz, -sz * 0.4, sz * 2, sz * 0.8);
+          ctx.restore();
         }
         ctx.globalAlpha = 1;
       }
     }
 
-    // 绘制飞刀本体（更大更清晰的光刀）
+    // ===== 飞刀本体（色块拼刀形） =====
     for (const k of knives) {
       ctx.save();
       ctx.translate(k.x, k.y);
       ctx.rotate(Math.atan2(k.vy, k.vx));
 
-      // 外发光
+      // 外发光层
       ctx.shadowColor = color;
-      ctx.shadowBlur = 10;
+      ctx.shadowBlur = 12;
 
-      // 刀身（更大）
+      // 1) 刀刃主体 - 长菱形
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.moveTo(12, 0);
-      ctx.lineTo(-5, -5);
-      ctx.lineTo(-2, 0);
-      ctx.lineTo(-5, 5);
+      ctx.moveTo(14, 0);     // 刀尖
+      ctx.lineTo(2, -4);     // 上刃
+      ctx.lineTo(-8, -2.5);  // 上后
+      ctx.lineTo(-8, 2.5);   // 下后
+      ctx.lineTo(2, 4);      // 下刃
       ctx.closePath();
       ctx.fill();
 
-      // 内芯高光
       ctx.shadowBlur = 0;
+
+      // 2) 刀锋高光（刀刃中线偏上的亮色带）
       ctx.fillStyle = '#FFFFFF';
-      ctx.globalAlpha = 0.7;
+      ctx.globalAlpha = 0.8;
       ctx.beginPath();
-      ctx.moveTo(8, 0);
-      ctx.lineTo(-1, -2.5);
-      ctx.lineTo(-1, 2.5);
+      ctx.moveTo(12, 0);
+      ctx.lineTo(3, -2.2);
+      ctx.lineTo(-6, -1.2);
+      ctx.lineTo(-6, 0.3);
+      ctx.lineTo(3, -0.3);
       ctx.closePath();
       ctx.fill();
+
+      // 3) 刀柄（深色短矩形）
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = '#006688';
+      ctx.fillRect(-10, -2, 4, 4);
+
+      // 4) 刀柄缠绕纹（更亮的线）
+      ctx.fillStyle = '#00AACC';
+      ctx.fillRect(-9.5, -1.5, 1, 3);
+      ctx.fillRect(-7.5, -1.5, 1, 3);
+
+      // 5) 刀尖闪光点
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      ctx.arc(13, 0, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 6) 刀刃边缘光（上下各一条细线）
+      ctx.strokeStyle = '#AAFFFF';
+      ctx.lineWidth = 0.6;
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(13, 0);
+      ctx.lineTo(2, -3.8);
+      ctx.lineTo(-7, -2.3);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(13, 0);
+      ctx.lineTo(2, 3.8);
+      ctx.lineTo(-7, 2.3);
+      ctx.stroke();
 
       ctx.globalAlpha = 1;
       ctx.restore();
     }
 
-    // 绘制爆炸特效
+    // ===== 爆炸特效 =====
     if (explosions) {
       for (const e of explosions) {
         const progress = 1 - e.life / e.maxLife; // 0→1
         const r = Math.min(e.radius, e.maxRadius);
-        const alpha = (1 - progress) * 0.7;
+        const alpha = (1 - progress * progress) * 0.9; // 平方衰减，开头更亮
 
-        // 外圈冲击波
-        ctx.globalAlpha = alpha * 0.5;
+        // 1) 外圈冲击波（双层环）
+        ctx.globalAlpha = alpha * 0.6;
         ctx.strokeStyle = e.isChain ? '#FF6600' : color;
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 3 - progress * 2;
         ctx.beginPath();
         ctx.arc(e.x, e.y, r, 0, Math.PI * 2);
         ctx.stroke();
-
-        // 填充光晕
+        // 外环（更大更淡）
         ctx.globalAlpha = alpha * 0.25;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, r * 1.3, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // 2) 填充光晕（径向渐变）
+        ctx.globalAlpha = alpha * 0.35;
         const grad = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, r);
-        grad.addColorStop(0, e.isChain ? '#FFAA00' : '#FFFFFF');
-        grad.addColorStop(0.4, e.isChain ? '#FF6600' : color);
+        grad.addColorStop(0, '#FFFFFF');
+        grad.addColorStop(0.2, e.isChain ? '#FFAA00' : color);
+        grad.addColorStop(0.6, e.isChain ? '#FF440066' : 'rgba(0,255,255,0.3)');
         grad.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = grad;
         ctx.beginPath();
         ctx.arc(e.x, e.y, r, 0, Math.PI * 2);
         ctx.fill();
 
-        // 核心闪光（前半段）
-        if (progress < 0.4) {
-          ctx.globalAlpha = (0.4 - progress) * 2;
+        // 3) 十字光芒（爆炸标志性效果）
+        if (progress < 0.6) {
+          const crossAlpha = (0.6 - progress) * 1.5;
+          const crossLen = r * (1.2 + progress * 0.5);
+          const crossW = 2 - progress * 2;
+          ctx.globalAlpha = crossAlpha * 0.7;
+          ctx.strokeStyle = '#FFFFFF';
+          ctx.lineWidth = Math.max(0.5, crossW);
+          // 水平
+          ctx.beginPath();
+          ctx.moveTo(e.x - crossLen, e.y);
+          ctx.lineTo(e.x + crossLen, e.y);
+          ctx.stroke();
+          // 垂直
+          ctx.beginPath();
+          ctx.moveTo(e.x, e.y - crossLen);
+          ctx.lineTo(e.x, e.y + crossLen);
+          ctx.stroke();
+          // 45度斜线（更短更细）
+          ctx.globalAlpha = crossAlpha * 0.4;
+          ctx.lineWidth = Math.max(0.3, crossW * 0.6);
+          const dLen = crossLen * 0.6;
+          ctx.beginPath();
+          ctx.moveTo(e.x - dLen, e.y - dLen);
+          ctx.lineTo(e.x + dLen, e.y + dLen);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(e.x + dLen, e.y - dLen);
+          ctx.lineTo(e.x - dLen, e.y + dLen);
+          ctx.stroke();
+        }
+
+        // 4) 核心白色闪光球（前30%极亮）
+        if (progress < 0.3) {
+          const coreAlpha = (0.3 - progress) * 3;
+          const coreR = r * 0.35 * (1 - progress * 2);
+          ctx.globalAlpha = coreAlpha;
           ctx.fillStyle = '#FFFFFF';
           ctx.beginPath();
-          ctx.arc(e.x, e.y, r * 0.2, 0, Math.PI * 2);
+          ctx.arc(e.x, e.y, Math.max(2, coreR), 0, Math.PI * 2);
           ctx.fill();
+          // 芯外圈光晕
+          ctx.globalAlpha = coreAlpha * 0.5;
+          ctx.fillStyle = e.isChain ? '#FFCC44' : '#88FFFF';
+          ctx.beginPath();
+          ctx.arc(e.x, e.y, Math.max(4, coreR * 1.8), 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // 5) 碎片飞散（小方块，后半段）
+        if (progress > 0.1 && progress < 0.8) {
+          const fragCount = e.isChain ? 4 : 6;
+          const fragAlpha = (0.8 - progress) * 1.2;
+          ctx.globalAlpha = fragAlpha * 0.6;
+          for (let f = 0; f < fragCount; f++) {
+            const angle = (Math.PI * 2 / fragCount) * f + progress * 2;
+            const dist = r * (0.3 + progress * 0.9);
+            const fx = e.x + Math.cos(angle) * dist;
+            const fy = e.y + Math.sin(angle) * dist;
+            const fSize = 2 - progress * 1.5;
+            if (fSize > 0.3) {
+              ctx.fillStyle = e.isChain ? '#FFAA44' : color;
+              ctx.save();
+              ctx.translate(fx, fy);
+              ctx.rotate(angle + progress * 5);
+              ctx.fillRect(-fSize, -fSize, fSize * 2, fSize * 2);
+              ctx.restore();
+            }
+          }
         }
       }
       ctx.globalAlpha = 1;
