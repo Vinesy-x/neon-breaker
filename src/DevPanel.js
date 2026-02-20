@@ -7,13 +7,17 @@ const Config = require('./Config');
 class DevPanel {
   constructor() {
     this.open = false;
-    this.tab = 0;           // 0=快捷 1=武器 2=飞机
+    this.tab = 0;           // 0=快捷 1=武器 2=飞机 3=永久 4=Boss测试
     this.scroll = 0;
     this.maxScroll = 0;
     this._hitAreas = [];
     this._btnArea = null;
     this._closeArea = null;
     this._tabAreas = [];
+
+    // Boss测试参数
+    this.bossTestType = 0;   // 0~4 对应5种Boss
+    this.bossTestChapter = 1; // 测试章节
   }
 
   handleTap(tap, game) {
@@ -188,6 +192,24 @@ class DevPanel {
       case 'resetStats':
         game.damageStats = {};
         break;
+      case 'bossTestTypeNext':
+        this.bossTestType = (this.bossTestType + 1) % 5;
+        break;
+      case 'bossTestTypePrev':
+        this.bossTestType = (this.bossTestType + 4) % 5;
+        break;
+      case 'bossTestChapterUp':
+        this.bossTestChapter = Math.min(100, this.bossTestChapter + (params.amount || 1));
+        break;
+      case 'bossTestChapterDown':
+        this.bossTestChapter = Math.max(1, this.bossTestChapter - (params.amount || 1));
+        break;
+      case 'startBossTest': {
+        const bossTypes = ['charger', 'guardian', 'summoner', 'laser', 'phantom'];
+        game._startBossTest(bossTypes[this.bossTestType], this.bossTestChapter);
+        this.open = false; // 关闭面板开始测试
+        break;
+      }
     }
   }
 
@@ -240,7 +262,7 @@ class DevPanel {
     ctx.fillText('✕', clsX + clsS / 2, clsY + clsS / 2);
 
     // ===== Tab 页签 =====
-    const tabNames = ['⚡ 快捷', '🔪 武器', '✈ 飞机', '💎 永久'];
+    const tabNames = ['⚡ 快捷', '🔪 武器', '✈ 飞机', '💎 永久', '👹 Boss'];
     const tabY = py + 32;
     const tabH = 34;
     const tabGap = 4;
@@ -259,7 +281,7 @@ class DevPanel {
       }
 
       ctx.fillStyle = isActive ? '#FFFFFF' : 'rgba(255,255,255,0.5)';
-      ctx.font = 'bold 13px monospace';
+      ctx.font = 'bold 11px monospace';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(tabNames[i], tx + tabW / 2, tabY + tabH / 2);
 
@@ -281,6 +303,7 @@ class DevPanel {
       case 1: cy = this._drawWeaponTab(ctx, game, cx, cy, cw); break;
       case 2: cy = this._drawShipTab(ctx, game, cx, cy, cw); break;
       case 3: cy = this._drawPermTab(ctx, game, cx, cy, cw); break;
+      case 4: cy = this._drawBossTestTab(ctx, game, cx, cy, cw); break;
     }
 
     this.maxScroll = Math.max(0, (cy + this.scroll) - (ctop + ch));
@@ -580,6 +603,150 @@ class DevPanel {
 
       y += rowH;
     }
+    return y;
+  }
+
+  // ===== Tab 4: Boss 测试 =====
+  _drawBossTestTab(ctx, game, x, y, w) {
+    const bossTypes = ['charger', 'guardian', 'summoner', 'laser', 'phantom'];
+    const bossNames = ['冲锋者', '护盾卫士', '召唤师', '激光炮台', '幽影刺客'];
+    const bossIcons = ['🔴', '🔵', '🟣', '🟡', '⚪'];
+    const bossColors = ['#FF3333', '#4488FF', '#AA44FF', '#FFF050', '#DDDDDD'];
+
+    const btnH = 38, gap = 8;
+
+    // ===== Boss 类型选择 =====
+    ctx.fillStyle = 'rgba(255,100,100,0.15)';
+    ctx.beginPath(); ctx.roundRect(x, y, w, 90, 6); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,100,100,0.3)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.roundRect(x, y, w, 90, 6); ctx.stroke();
+
+    ctx.fillStyle = Config.NEON_RED;
+    ctx.font = 'bold 12px monospace';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText('👹 Boss 类型', x + 8, y + 6);
+
+    // 当前Boss名
+    ctx.fillStyle = bossColors[this.bossTestType];
+    ctx.font = 'bold 18px monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(bossIcons[this.bossTestType] + ' ' + bossNames[this.bossTestType], x + w / 2, y + 40);
+
+    // 英文类型名
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '10px monospace';
+    ctx.fillText(bossTypes[this.bossTestType], x + w / 2, y + 58);
+
+    // 左右切换按钮
+    const arrowW = 50, arrowH = 34;
+    this._drawBigBtn(ctx, '◀', x + 8, y + 50, arrowW, arrowH, bossColors[this.bossTestType],
+      { action: 'bossTestTypePrev', params: {} });
+    this._drawBigBtn(ctx, '▶', x + w - arrowW - 8, y + 50, arrowW, arrowH, bossColors[this.bossTestType],
+      { action: 'bossTestTypeNext', params: {} });
+
+    y += 98;
+
+    // ===== 章节难度选择 =====
+    const curType = bossTypes[this.bossTestType];
+    const cycle = Math.floor((this.bossTestChapter - 1) / 5);
+    const hpMult = (1.0 + (this.bossTestChapter - 1) * 0.12).toFixed(2);
+
+    // Boss参数预览
+    const baseHpMap = { charger: 300, guardian: 350, summoner: 250, laser: 400, phantom: 280 };
+    const baseHp = baseHpMap[curType] || 300;
+    const finalHp = Math.floor(baseHp * parseFloat(hpMult));
+
+    ctx.fillStyle = 'rgba(255,215,0,0.12)';
+    ctx.beginPath(); ctx.roundRect(x, y, w, 112, 6); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,215,0,0.3)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.roundRect(x, y, w, 112, 6); ctx.stroke();
+
+    ctx.fillStyle = '#FFD700';
+    ctx.font = 'bold 12px monospace';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText('📊 难度设置', x + 8, y + 6);
+
+    // 章节数字
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 22px monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('第 ' + this.bossTestChapter + ' 章', x + w / 2, y + 34);
+
+    // 参数信息
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.font = '11px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('HP: ' + finalHp + '  |  周期: ' + cycle + '  |  倍率: ×' + hpMult, x + w / 2, y + 56);
+
+    // 章节+-按钮行
+    const cBtnW = (w - gap * 5) / 4;
+    const cBtnY = y + 70;
+    this._drawBigBtn(ctx, '-10', x + gap, cBtnY, cBtnW, 34, '#FF5555',
+      { action: 'bossTestChapterDown', params: { amount: 10 } });
+    this._drawBigBtn(ctx, '-1', x + gap * 2 + cBtnW, cBtnY, cBtnW, 34, '#FF8888',
+      { action: 'bossTestChapterDown', params: { amount: 1 } });
+    this._drawBigBtn(ctx, '+1', x + gap * 3 + cBtnW * 2, cBtnY, cBtnW, 34, '#88FF88',
+      { action: 'bossTestChapterUp', params: { amount: 1 } });
+    this._drawBigBtn(ctx, '+10', x + gap * 4 + cBtnW * 3, cBtnY, cBtnW, 34, '#50FFB4',
+      { action: 'bossTestChapterUp', params: { amount: 10 } });
+
+    y += 120;
+
+    // ===== Boss特性说明 =====
+    const bossDesc = {
+      charger: ['🔴 冲锋者 Charger', '周期性冲锋↓，冲锋中受-50%伤', '撞停后1秒受2倍伤害（弱点窗口）', 'cycle≥1: 冲锋留火焰地带'],
+      guardian: ['🔵 护盾卫士 Guardian', '旋转护盾挡子弹，护盾有独立HP', '护盾全碎→5秒弱点期(1.5倍伤)', 'cycle≥1: 3个护盾, cycle≥3: 快速再生'],
+      summoner: ['🟣 召唤师 Summoner', '每4-5秒召唤一排砖块', '召唤时2秒无敌（无法受伤）', 'cycle≥2: 混合砖块, cycle≥3: 召唤两排'],
+      laser: ['🟡 激光炮台 Laser', '充能→发射激光柱（消灭子弹）', '充能期间受3倍伤害（最大弱点）', 'cycle≥1: 留灼烧带, cycle≥2: 双炮管'],
+      phantom: ['⚪ 幽影刺客 Phantom', '随机闪现，出现瞬间受2倍伤', '消失中完全无敌，移速×1.5', 'cycle≥1: 留残影, cycle≥2: 分裂砖块'],
+    };
+
+    const desc = bossDesc[curType] || [];
+    const descH = 20 + desc.length * 18;
+    ctx.fillStyle = 'rgba(255,255,255,0.05)';
+    ctx.beginPath(); ctx.roundRect(x, y, w, descH, 6); ctx.fill();
+
+    ctx.fillStyle = bossColors[this.bossTestType];
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    if (desc.length > 0) ctx.fillText(desc[0], x + 8, y + 4);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.font = '10px monospace';
+    for (let i = 1; i < desc.length; i++) {
+      ctx.fillText(desc[i], x + 8, y + 4 + i * 18);
+    }
+    y += descH + gap;
+
+    // ===== 开始测试按钮 =====
+    this._drawBigBtn(ctx, '⚔ 开始 Boss 测试', x, y, w, 48, bossColors[this.bossTestType],
+      { action: 'startBossTest', params: {} });
+    y += 56;
+
+    // 快捷：当前状态提示
+    if (game.boss && game.boss.alive) {
+      ctx.fillStyle = 'rgba(255,50,50,0.15)';
+      ctx.beginPath(); ctx.roundRect(x, y, w, 36, 6); ctx.fill();
+      ctx.fillStyle = Config.NEON_RED;
+      ctx.font = 'bold 11px monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const bossHpPct = ((game.boss.hp / game.boss.maxHp) * 100).toFixed(1);
+      ctx.fillText('⚠ Boss战斗中: ' + game.boss.type + ' HP ' + bossHpPct + '%', x + w / 2, y + 18);
+      y += 44;
+
+      this._drawBigBtn(ctx, '💀 秒杀当前Boss', x, y, w, btnH, '#FF5555',
+        { action: 'killBoss', params: {} });
+      y += btnH + gap;
+    } else if (game.state !== Config.STATE.PLAYING && game.state !== Config.STATE.BOSS) {
+      ctx.fillStyle = 'rgba(255,255,255,0.05)';
+      ctx.beginPath(); ctx.roundRect(x, y, w, 36, 6); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.font = '11px monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('💡 先进入游戏再测试Boss', x + w / 2, y + 18);
+      y += 44;
+    }
+
     return y;
   }
 

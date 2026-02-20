@@ -328,6 +328,43 @@ class Game {
 
   _startBoss() { for(var i=0;i<this.bricks.length;i++){if(this.bricks[i].alive&&this.bricks[i].y<this.gameHeight*0.3) this.bricks[i].alive=false;} this.state=Config.STATE.BOSS; this.boss=createBoss(this.chapterConfig.bossType,this.currentChapter,this.gameWidth); Sound.bossAppear(); }
 
+  /**
+   * Boss测试场景 - 从DevPanel调用
+   * 清空砖块，直接进入指定类型/章节的Boss战
+   */
+  _startBossTest(bossType, chapter) {
+    // 如果不在游戏中，先初始化一局
+    if (this.state !== Config.STATE.PLAYING && this.state !== Config.STATE.BOSS) {
+      this.currentChapter = chapter;
+      this._initGame();
+    }
+
+    // 清空所有砖块
+    for (var i = 0; i < this.bricks.length; i++) this.bricks[i].alive = false;
+    this.bricks = [];
+
+    // 清空旧Boss
+    this.boss = null;
+
+    // 重置伤害统计
+    this.damageStats = {};
+
+    // 设置章节配置（用于Boss HP倍率）
+    this.currentChapter = chapter;
+    this.chapterConfig = ChapterConfig.get(chapter);
+
+    // 创建Boss
+    this.state = Config.STATE.BOSS;
+    this.boss = createBoss(bossType, chapter, this.gameWidth);
+    this.bossTriggered = true;
+    this.bossWarningTimer = 0;
+
+    // 停止砖块生成
+    this.currentPhase = { phase: 'boss', spawnMult: 0, types: [], timeCurve: [0, 0], scrollAccel: 0 };
+
+    Sound.bossAppear();
+  }
+
   _scrollBricks(dt) { if(!this.chapterConfig) return; var bs=this.chapterConfig.scrollSpeed; var ac=(this.currentPhase&&this.currentPhase.scrollAccel)?this.currentPhase.scrollAccel:0; var tip=(this.elapsedMs-(this.currentPhase?this.currentPhase.time:0))/1000; var ds=Math.min(bs+ac*tip,bs*3); for(var i=0;i<this.bricks.length;i++){if(this.bricks[i].alive) this.bricks[i].y+=ds*this.bricks[i].speedMult*dt;} for(var j=this.bricks.length-1;j>=0;j--){if(!this.bricks[j].alive||this.bricks[j].y>this.gameHeight+50) this.bricks.splice(j,1);} }
 
   _checkDangerLine() {
