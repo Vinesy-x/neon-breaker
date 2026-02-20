@@ -45,17 +45,17 @@ class DroneWeapon extends Weapon {
     const lcx = ctx.launcher.getCenterX();
     const lcy = ctx.launcher.y;
 
-    // === 分配目标（每800ms重新分配） ===
+    // === 分配目标（每2秒重新分配，减少抖动） ===
     this._assignTimer += dtMs;
-    if (this._assignTimer > 800) {
+    if (this._assignTimer > 2000) {
       this._assignTimer = 0;
       this._assignTargets(ctx, lcx, lcy, deployLv);
     }
 
     // === 无人机移动 ===
     // === 无人机移动（限速） ===
-    const maxSpeed = 1.5 + speedLv * 0.5; // 每帧最大移动像素
-    const orbitSpeed = rotateLv > 0 ? 0.008 + rotateLv * 0.015 : 0;
+    const maxSpeed = 1.2 + speedLv * 0.4; // 每帧最大移动像素
+    const orbitSpeed = rotateLv > 0 ? 0.004 + rotateLv * 0.006 : 0;
 
     for (let i = 0; i < this.drones.length; i++) {
       const d = this.drones[i];
@@ -72,25 +72,27 @@ class DroneWeapon extends Weapon {
         d.ty = bc.y;
       }
 
-      // 计算移动向量
-      let dx = d.tx - d.x;
-      let dy = d.ty - d.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      // 计算到目标的距离
+      let goalX = d.tx;
+      let goalY = d.ty;
 
-      // 旋阵偏移
-      if (orbitSpeed > 0 && dist < 30) {
+      // 旋阵：到位后绕目标小幅旋转
+      if (orbitSpeed > 0) {
         const t = Date.now() * orbitSpeed + i * Math.PI * 2 / this.drones.length;
-        const orbitR = 15 + rotateLv * 8;
-        dx = d.tx + Math.cos(t) * orbitR - d.x;
-        dy = d.ty + Math.sin(t) * orbitR - d.y;
+        const orbitR = 10 + rotateLv * 5;
+        goalX += Math.cos(t) * orbitR;
+        goalY += Math.sin(t) * orbitR;
       }
 
-      // 限速移动
-      const moveDist = Math.sqrt(dx * dx + dy * dy);
-      if (moveDist > 0) {
-        const speed = Math.min(maxSpeed * dt, moveDist);
-        d.x += (dx / moveDist) * speed;
-        d.y += (dy / moveDist) * speed;
+      const dx = goalX - d.x;
+      const dy = goalY - d.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      // 到位后停住（3px内不再移动，避免抖动）
+      if (dist > 3) {
+        const speed = Math.min(maxSpeed * dt, dist);
+        d.x += (dx / dist) * speed;
+        d.y += (dy / dist) * speed;
       }
     }
 
