@@ -22,7 +22,7 @@ class SpriteCache {
   getOrCreate(key, w, h, ox, oy, drawFn) {
     if (this._cache[key]) return this._cache[key];
 
-    const dpr = 2; // 固定2x清晰度
+    const dpr = 1.5; // 1.5x够清晰，省内存
     const canvas = wx.createCanvas();
     canvas.width = Math.ceil(w * dpr);
     canvas.height = Math.ceil(h * dpr);

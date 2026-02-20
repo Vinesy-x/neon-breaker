@@ -20,7 +20,7 @@ class Renderer {
 
     // 背景星空（预生成）
     this.stars = [];
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 35; i++) {
       this.stars.push({
         x: Math.random() * Config.SCREEN_WIDTH,
         y: Math.random() * Config.SCREEN_HEIGHT,
@@ -31,6 +31,20 @@ class Renderer {
       });
     }
     this._frameCount = 0;
+
+    // 预渲染星空背景到离屏canvas（60 DC → 0 DC per frame）
+    this._starCanvas = wx.createCanvas();
+    this._starCanvas.width = Config.CANVAS_WIDTH;
+    this._starCanvas.height = Config.CANVAS_HEIGHT;
+    const starCtx = this._starCanvas.getContext('2d');
+    starCtx.scale(this.dpr, this.dpr);
+    for (let i = 0; i < this.stars.length; i++) {
+      const s = this.stars[i];
+      starCtx.globalAlpha = s.alpha;
+      starCtx.fillStyle = '#FFFFFF';
+      starCtx.fillRect(s.x, s.y, s.size, s.size);
+    }
+    this._starScrollY = 0;
   }
 
   clear() {
@@ -39,20 +53,17 @@ class Renderer {
     ctx.fillStyle = Config.BG_COLOR;
     ctx.fillRect(0, 0, Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT);
 
-    // 星空背景
-    this._frameCount++;
-    for (let i = 0; i < this.stars.length; i++) {
-      const s = this.stars[i];
-      s.y += s.speed;
-      if (s.y > Config.SCREEN_HEIGHT) {
-        s.y = -2;
-        s.x = Math.random() * Config.SCREEN_WIDTH;
-      }
-      const twinkle = Math.sin(this._frameCount * 0.03 + s.twinkle) * 0.3;
-      ctx.globalAlpha = Math.max(0.05, s.alpha + twinkle);
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(s.x, s.y, s.size, s.size);
-    }
+    // 星空背景（离屏canvas滚动，0 draw call）
+    this._starScrollY = (this._starScrollY + 0.15) % Config.SCREEN_HEIGHT;
+    const sy = this._starScrollY;
+    ctx.globalAlpha = 0.6;
+    // 画两次实现无缝滚动
+    ctx.drawImage(this._starCanvas,
+      0, 0, Config.CANVAS_WIDTH, Config.CANVAS_HEIGHT,
+      0, sy, Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT);
+    ctx.drawImage(this._starCanvas,
+      0, 0, Config.CANVAS_WIDTH, Config.CANVAS_HEIGHT,
+      0, sy - Config.SCREEN_HEIGHT, Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT);
     ctx.globalAlpha = 1;
   }
 
@@ -62,24 +73,22 @@ class Renderer {
     if (!bullets || bullets.length === 0) return;
     const ctx = this.ctx;
     const sprites = this.sprites;
+    const elementColors = { fire: '#FF4400', ice: '#44DDFF', thunder: '#FFF050' };
 
-    // 拖尾（简单半透明圆，还是用fillRect最快）
-    ctx.globalAlpha = 0.2;
+    // 拖尾（fillRect 最快，不用 beginPath）
     for (let k = 0; k < bullets.length; k++) {
       const b = bullets[k];
-      const bulletKey = b.element ? 'bullet_' + b.element : 'bullet';
-      const sprite = sprites._cache[bulletKey];
-      if (!sprite) continue;
+      const c = b.element ? (elementColors[b.element] || '#00FFFF') : '#00FFFF';
+      ctx.fillStyle = c;
       for (let i = 0; i < b.trail.length; i++) {
         const t = b.trail[i];
-        const ts = 0.3 + (i / b.trail.length) * 0.5;
-        ctx.drawImage(sprite.canvas, 
-          t.x - sprite.ox * ts, t.y - sprite.oy * ts,
-          sprite.w * ts, sprite.h * ts);
+        ctx.globalAlpha = (i + 1) / b.trail.length * 0.2;
+        const s = 1 + (i / b.trail.length) * 1.5;
+        ctx.fillRect(t.x - s, t.y - s, s * 2, s * 2);
       }
     }
 
-    // 弹体（1次drawImage替代3次draw call）
+    // 弹体（drawImage）
     ctx.globalAlpha = 1;
     for (let k = 0; k < bullets.length; k++) {
       const b = bullets[k];
@@ -514,25 +523,16 @@ class Renderer {
   _drawKunai(data, ctx) {
     const { knives, explosions, color } = data;
 
-    // ===== 拖尾（烟雾+火焰） =====
+    // ===== 拖尾（fillRect替代arc，更快） =====
     for (const k of knives) {
       if (k.trail && k.trail.length > 1) {
-        const angle = Math.atan2(k.vy, k.vx);
         const s = k.scale || 1;
+        ctx.fillStyle = color;
         for (let t = 0; t < k.trail.length; t++) {
           const tr = k.trail[t];
-          const a = tr.alpha * 0.45;
-          const progress = t / k.trail.length;
-          const sz = (2 + progress * 3) * s;
-          ctx.globalAlpha = a;
-          // 尾部偏橙→前面偏青
-          ctx.fillStyle = progress < 0.4 ? '#FF8844' : color;
-          ctx.save();
-          ctx.translate(tr.x, tr.y);
-          ctx.beginPath();
-          ctx.arc(0, 0, sz, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.restore();
+          ctx.globalAlpha = tr.alpha * 0.35;
+          const sz = (1 + (t / k.trail.length) * 2) * s;
+          ctx.fillRect(tr.x - sz, tr.y - sz, sz * 2, sz * 2);
         }
         ctx.globalAlpha = 1;
       }
@@ -743,16 +743,14 @@ class Renderer {
     const { missiles, explosions, color } = data;
     const sprites = this.sprites;
 
-    // 拖尾
+    // 拖尾（fillRect替代arc）
     ctx.fillStyle = Config.NEON_ORANGE;
     for (const m of missiles) {
       for (let i = 0; i < m.trail.length; i++) {
         const t = m.trail[i];
-        const size = 1.5 + (i / m.trail.length) * 2.5;
-        ctx.globalAlpha = (i + 1) / m.trail.length * 0.5;
-        ctx.beginPath();
-        ctx.arc(t.x, t.y, size, 0, Math.PI * 2);
-        ctx.fill();
+        const size = 1 + (i / m.trail.length) * 2;
+        ctx.globalAlpha = (i + 1) / m.trail.length * 0.4;
+        ctx.fillRect(t.x - size, t.y - size, size * 2, size * 2);
       }
     }
 

@@ -65,10 +65,10 @@ class Kunai extends Weapon {
 
       // 拖尾
       k.trailTimer += dtMs;
-      if (k.trailTimer >= 25) {
+      if (k.trailTimer >= 40) {
         k.trailTimer = 0;
         k.trail.push({ x: k.x, y: k.y, alpha: 1 });
-        if (k.trail.length > 10) k.trail.shift();
+        if (k.trail.length > 6) k.trail.shift();
       }
       for (let t = k.trail.length - 1; t >= 0; t--) {
         k.trail[t].alpha -= 0.06 * dt;
