@@ -907,10 +907,10 @@ class Renderer {
       }
 
       // === 外层光晕 ===
-      ctx.globalAlpha = 0.15;
+      ctx.globalAlpha = 0.25;
       ctx.fillStyle = bladeColor;
       ctx.beginPath();
-      ctx.arc(b.x, b.y, size + 3, 0, Math.PI * 2);
+      ctx.arc(b.x, b.y, size + 6, 0, Math.PI * 2);
       ctx.fill();
 
       // === 旋刃本体 ===
@@ -919,14 +919,15 @@ class Renderer {
       ctx.translate(b.x, b.y);
       ctx.rotate(b.angle);
 
-      // 4叶旋刃（更锋利的形状）
+      // 4叶旋刃
       ctx.fillStyle = bladeColor;
       for (let i = 0; i < 4; i++) {
         ctx.save();
         ctx.rotate(i * Math.PI / 2);
         ctx.beginPath();
         ctx.moveTo(0, -size);
-        ctx.quadraticCurveTo(size * 0.25, -size * 0.3, size * 0.15, 0);
+        ctx.quadraticCurveTo(size * 0.4, -size * 0.5, size * 0.3, 0);
+        ctx.quadraticCurveTo(size * 0.4, size * 0.5, 0, size * 0.3);
         ctx.lineTo(0, 0);
         ctx.closePath();
         ctx.fill();
@@ -936,7 +937,7 @@ class Renderer {
       // 中心白点
       ctx.fillStyle = '#FFFFFF';
       ctx.beginPath();
-      ctx.arc(0, 0, size * 0.15, 0, Math.PI * 2);
+      ctx.arc(0, 0, size * 0.2, 0, Math.PI * 2);
       ctx.fill();
 
       // 巨型化：额外光效

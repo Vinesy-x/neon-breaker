@@ -30,7 +30,7 @@ class SpinBlade extends Weapon {
     const pierceLv = this.branches.pierce || 0;
     const rampLv = this.branches.ramp || 0;
     const bleedLv = this.branches.bleed || 0;
-    const size = 8 + giantLv * 6;
+    const size = 12 + giantLv * 12;
     const bounceTop = Config.SAFE_TOP + 10;
     const bounceBottom = Config.SCREEN_HEIGHT * 0.72;
 
