@@ -1110,6 +1110,22 @@ class Renderer {
   /** 伤害统计面板 - 返回点击区域 */
   drawDamageStats(stats, expanded) {
     const ctx = this.ctx;
+    // 中文名称映射
+    const nameMap = {
+      'bullet': '飞机子弹',
+      'kunai': '迫击炮',
+      'kunai_aoe': '迫击炮AOE',
+      'missile': '追踪导弹',
+      'lightning': '闪电链',
+      'lightning_aoe': '闪电爆炸',
+      'meteor': '陨石',
+      'drone': '无人机',
+      'drone_bullet': '无人机弹',
+      'fire_dot': '燃烧',
+      'thunder_chain': '雷击',
+      'shock': '感电',
+      'spinblade': '旋转刃',
+    };
     const entries = Object.entries(stats || {}).sort((a, b) => b[1] - a[1]);
     const totalDmg = entries.reduce((sum, e) => sum + e[1], 0);
 
@@ -1167,10 +1183,11 @@ class Renderer {
       ctx.fillStyle = 'rgba(255,100,100,0.4)';
       ctx.fillRect(px + 6, ly + 2, barW, 8);
 
-      // 来源名
+      // 来源名（中文）
+      const displayName = nameMap[src] || src;
       ctx.fillStyle = '#FFFFFF';
       ctx.textAlign = 'left';
-      ctx.fillText(src.substring(0, 8), px + 6, ly);
+      ctx.fillText(displayName.substring(0, 6), px + 6, ly);
 
       // 百分比
       ctx.textAlign = 'right';
