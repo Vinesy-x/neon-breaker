@@ -726,101 +726,104 @@ class Renderer {
   }
 
   _drawDrone(data, ctx) {
-    const { drones, bullets, lasers, color, hasShield, swarmLv } = data;
+    const { drones, lines, hits, color, centerX, centerY, overchargeLv } = data;
 
-    // 激光光束
-    if (lasers && lasers.length > 0) {
-      for (const beam of lasers) {
-        // 外层光晕
-        ctx.globalAlpha = beam.alpha * 0.3;
+    if (!drones || drones.length === 0) return;
+
+    // === 激光连线（核心视觉） ===
+    if (lines && lines.length > 0) {
+      // 第1层：宽光晕
+      ctx.strokeStyle = 'rgba(' + this._hexToRgb(color) + ', 0.12)';
+      ctx.lineWidth = 18;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      for (const l of lines) {
+        ctx.moveTo(l.x1, l.y1);
+        ctx.lineTo(l.x2, l.y2);
+      }
+      ctx.stroke();
+
+      // 第2层：主激光
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      for (const l of lines) {
+        ctx.moveTo(l.x1, l.y1);
+        ctx.lineTo(l.x2, l.y2);
+      }
+      ctx.stroke();
+
+      // 第3层：白色内芯
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (const l of lines) {
+        ctx.moveTo(l.x1, l.y1);
+        ctx.lineTo(l.x2, l.y2);
+      }
+      ctx.stroke();
+      ctx.lineCap = 'butt';
+    }
+
+    // === 过载：阵型中心光效 ===
+    if (overchargeLv > 0 && drones.length >= 3) {
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.15 + Math.sin(Date.now() * 0.005) * 0.08;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, 20, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // === 命中闪光 ===
+    for (const h of hits) {
+      if (h.pulse) {
+        // 脉冲AOE视觉
         ctx.strokeStyle = color;
-        ctx.lineWidth = 6;
+        ctx.lineWidth = 3;
+        ctx.globalAlpha = Math.min(1, h.alpha) * 0.6;
         ctx.beginPath();
-        ctx.moveTo(beam.x1, beam.y1);
-        ctx.lineTo(beam.x2, beam.y2);
+        ctx.arc(h.x, h.y, h.radius * (2 - Math.min(2, h.alpha)), 0, Math.PI * 2);
         ctx.stroke();
-        // 内层白芯
-        ctx.globalAlpha = beam.alpha;
-        ctx.strokeStyle = '#FFFFFF';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(beam.x1, beam.y1);
-        ctx.lineTo(beam.x2, beam.y2);
-        ctx.stroke();
-        // 命中点光效
-        ctx.fillStyle = color;
-        ctx.globalAlpha = beam.alpha * 0.5;
-        ctx.beginPath();
-        ctx.arc(beam.x2, beam.y2, 8, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.globalAlpha = 1;
-    }
-
-    // 子弹批量
-    if (bullets && bullets.length > 0) {
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      for (const b of bullets) {
-        ctx.moveTo(b.x + 3, b.y);
-        ctx.arc(b.x, b.y, 3, 0, Math.PI * 2);
-      }
-      ctx.fill();
-      // 白色高光
-      ctx.fillStyle = '#FFFFFF';
-      ctx.beginPath();
-      for (const b of bullets) {
-        ctx.moveTo(b.x + 1, b.y - 1);
-        ctx.arc(b.x - 1, b.y - 1, 1, 0, Math.PI * 2);
-      }
-      ctx.fill();
-    }
-
-    // 无人机本体
-    ctx.globalAlpha = 1;
-    for (const d of drones) {
-      // 蜂群模式：轨迹光效
-      if (swarmLv > 0) {
-        ctx.fillStyle = color;
-        ctx.globalAlpha = 0.15;
-        ctx.beginPath();
-        ctx.arc(d.x, d.y, 12, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // 护盾光环
-      if (hasShield && d.shield) {
-        ctx.strokeStyle = 'rgba(80, 255, 180, 0.5)';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(d.x, d.y, 14, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-      // 护盾破碎闪光
-      if (d.shieldFlash > 0) {
-        ctx.globalAlpha = d.shieldFlash * 0.6;
+      } else {
         ctx.fillStyle = '#FFFFFF';
+        ctx.globalAlpha = Math.min(1, h.alpha) * 0.8;
         ctx.beginPath();
-        ctx.arc(d.x, d.y, 16, 0, Math.PI * 2);
+        ctx.arc(h.x, h.y, 4, 0, Math.PI * 2);
         ctx.fill();
       }
+    }
+    ctx.globalAlpha = 1;
 
-      // 无人机主体
+    // === 无人机本体 ===
+    for (const d of drones) {
+      // 悬浮光环
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.3;
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, 10, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // 机身（菱形）
       ctx.globalAlpha = 1;
       ctx.fillStyle = color;
-      ctx.fillRect(d.x - 7, d.y - 4, 14, 8);
-      // 机翼
-      ctx.fillRect(d.x - 10, d.y - 2, 4, 4);
-      ctx.fillRect(d.x + 6, d.y - 2, 4, 4);
-      // 驾驶舱
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(d.x - 2, d.y - 2, 4, 4);
-      // 引擎光点
-      ctx.fillStyle = swarmLv > 0 ? '#FFFF00' : color;
+      ctx.save();
+      ctx.translate(d.x, d.y);
+      ctx.rotate(d.angle);
       ctx.beginPath();
-      ctx.arc(d.x, d.y + 5, 2, 0, Math.PI * 2);
+      ctx.moveTo(0, -7);
+      ctx.lineTo(5, 0);
+      ctx.lineTo(0, 7);
+      ctx.lineTo(-5, 0);
+      ctx.closePath();
       ctx.fill();
+      // 核心白点
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      ctx.arc(0, 0, 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
     }
   }
 
@@ -1237,9 +1240,9 @@ class Renderer {
       'lightning': '闪电链',
       'lightning_aoe': '闪电爆炸',
       'meteor': '陨石',
-      'drone': '无人机',
-      'drone_bullet': '无人机弹',
-      'drone_laser': '无人机激光',
+      'drone_laser': '无人机阵',
+      'drone_cross': '无人机过载',
+      'drone_pulse': '无人机脉冲',
       'fire_dot': '燃烧',
       'thunder_chain': '雷击',
       'shock': '感电',

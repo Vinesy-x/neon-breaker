@@ -284,18 +284,7 @@ class Game {
     if (this._devInvincible) return false;
     var dy=this.gameHeight*Config.BRICK_DANGER_Y;
     for(var i=0;i<this.bricks.length;i++){
-      if(this.bricks[i].alive&&this.bricks[i].y+this.bricks[i].height>=dy) {
-        // 尝试无人机护盾挡伤害
-        const droneWeapon = this.upgrades.weapons['drone'];
-        if (droneWeapon && droneWeapon.absorbDamage && droneWeapon.absorbDamage()) {
-          // 护盾吸收！消灭触线砖块
-          this.bricks[i].hit(9999);
-          this._onBrickDestroyed(this.bricks[i]);
-          this._addFloatingText('🛡 护盾!', this.bricks[i].x + this.bricks[i].width/2, dy - 20, '#50FFB4', 16);
-          return false;
-        }
-        return true;
-      }
+      if(this.bricks[i].alive&&this.bricks[i].y+this.bricks[i].height>=dy) return true;
     }
     return false;
   }
