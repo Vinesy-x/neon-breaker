@@ -493,11 +493,11 @@ class Renderer {
     for (const k of knives) {
       if (k.trail && k.trail.length > 1) {
         const angle = Math.atan2(k.vy, k.vx);
+        const s = k.scale || 1;
         for (let t = 0; t < k.trail.length; t++) {
           const tr = k.trail[t];
           const a = tr.alpha * 0.5;
-          const sz = 1.5 + (t / k.trail.length) * 2;
-          // 扁平拖尾（垂直于飞行方向）
+          const sz = (1.5 + (t / k.trail.length) * 2) * s;
           ctx.globalAlpha = a;
           ctx.fillStyle = color;
           ctx.save();
@@ -510,30 +510,32 @@ class Renderer {
       }
     }
 
-    // ===== 飞刀本体（色块拼刀形） =====
+    // ===== 飞刀本体（色块拼刀形，scale联动aoe） =====
     for (const k of knives) {
+      const s = k.scale || 1;
       ctx.save();
       ctx.translate(k.x, k.y);
       ctx.rotate(Math.atan2(k.vy, k.vx));
+      ctx.scale(s, s);
 
       // 外发光层
       ctx.shadowColor = color;
-      ctx.shadowBlur = 12;
+      ctx.shadowBlur = 10 + s * 4;
 
-      // 1) 刀刃主体 - 长菱形
+      // 1) 刀刃主体
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.moveTo(14, 0);     // 刀尖
-      ctx.lineTo(2, -4);     // 上刃
-      ctx.lineTo(-8, -2.5);  // 上后
-      ctx.lineTo(-8, 2.5);   // 下后
-      ctx.lineTo(2, 4);      // 下刃
+      ctx.moveTo(14, 0);
+      ctx.lineTo(2, -4);
+      ctx.lineTo(-8, -2.5);
+      ctx.lineTo(-8, 2.5);
+      ctx.lineTo(2, 4);
       ctx.closePath();
       ctx.fill();
 
       ctx.shadowBlur = 0;
 
-      // 2) 刀锋高光（刀刃中线偏上的亮色带）
+      // 2) 刀锋高光
       ctx.fillStyle = '#FFFFFF';
       ctx.globalAlpha = 0.8;
       ctx.beginPath();
@@ -545,12 +547,12 @@ class Renderer {
       ctx.closePath();
       ctx.fill();
 
-      // 3) 刀柄（深色短矩形）
+      // 3) 刀柄
       ctx.globalAlpha = 0.9;
       ctx.fillStyle = '#006688';
       ctx.fillRect(-10, -2, 4, 4);
 
-      // 4) 刀柄缠绕纹（更亮的线）
+      // 4) 刀柄缠绕纹
       ctx.fillStyle = '#00AACC';
       ctx.fillRect(-9.5, -1.5, 1, 3);
       ctx.fillRect(-7.5, -1.5, 1, 3);
@@ -562,19 +564,15 @@ class Renderer {
       ctx.arc(13, 0, 1.5, 0, Math.PI * 2);
       ctx.fill();
 
-      // 6) 刀刃边缘光（上下各一条细线）
+      // 6) 刀刃边缘光
       ctx.strokeStyle = '#AAFFFF';
       ctx.lineWidth = 0.6;
       ctx.globalAlpha = 0.5;
       ctx.beginPath();
-      ctx.moveTo(13, 0);
-      ctx.lineTo(2, -3.8);
-      ctx.lineTo(-7, -2.3);
+      ctx.moveTo(13, 0); ctx.lineTo(2, -3.8); ctx.lineTo(-7, -2.3);
       ctx.stroke();
       ctx.beginPath();
-      ctx.moveTo(13, 0);
-      ctx.lineTo(2, 3.8);
-      ctx.lineTo(-7, 2.3);
+      ctx.moveTo(13, 0); ctx.lineTo(2, 3.8); ctx.lineTo(-7, 2.3);
       ctx.stroke();
 
       ctx.globalAlpha = 1;
