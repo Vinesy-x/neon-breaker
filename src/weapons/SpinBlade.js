@@ -67,25 +67,42 @@ class SpinBlade extends Weapon {
           continue;
         }
       } else {
-        // === 智能移动：追踪高密度区域 ===
-        const steer = this._calcSteer(b, ctx.bricks, size);
-        b.vx += steer.x * dt * 0.03;
-        b.vy += steer.y * dt * 0.015; // 垂直方向转向力更弱
+        // === 阶段1：快速上冲到顶部 ===
+        if (!b.reachedTop) {
+          b.x += b.vx * dt;
+          b.y += b.vy * dt;
+          b.angle += 0.2 * dt;
+          b.life -= dtMs;
+          b.aliveMs += dtMs;
+          b.size = size;
 
-        // 限制垂直速度，鼓励水平移动
-        const maxVy = 0.6;
-        if (Math.abs(b.vy) > maxVy) b.vy = Math.sign(b.vy) * maxVy;
-        // 保持最小水平速度
-        const minVx = 0.8;
-        if (Math.abs(b.vx) < minVx) b.vx = Math.sign(b.vx || 1) * minVx;
+          // 撞到顶部，切换到横向模式
+          if (b.y - size < bounceTop) {
+            b.y = bounceTop + size;
+            b.reachedTop = true;
+            b.vx = (Math.random() > 0.5 ? 1 : -1) * 1.5; // 开始横向
+            b.vy = 0.2; // 轻微向下
+          }
+        } else {
+          // === 阶段2：智能追踪横向清扫 ===
+          const steer = this._calcSteer(b, ctx.bricks, size);
+          b.vx += steer.x * dt * 0.03;
+          b.vy += steer.y * dt * 0.015;
 
-        // 移动
-        b.x += b.vx * dt;
-        b.y += b.vy * dt;
-        b.angle += (0.1 + giantLv * 0.02) * dt;
-        b.life -= dtMs;
-        b.aliveMs += dtMs;
-        b.size = size;
+          // 限制垂直速度
+          const maxVy = 0.6;
+          if (Math.abs(b.vy) > maxVy) b.vy = Math.sign(b.vy) * maxVy;
+          // 保持水平速度
+          const minVx = 0.8;
+          if (Math.abs(b.vx) < minVx) b.vx = Math.sign(b.vx || 1) * minVx;
+
+          b.x += b.vx * dt;
+          b.y += b.vy * dt;
+          b.angle += (0.1 + giantLv * 0.02) * dt;
+          b.life -= dtMs;
+          b.aliveMs += dtMs;
+          b.size = size;
+        }
 
         // === 弹墙反弹 ===
         let bounced = false;
@@ -94,10 +111,12 @@ class SpinBlade extends Weapon {
         } else if (b.x + size > Config.SCREEN_WIDTH) {
           b.vx = -Math.abs(b.vx); b.x = Config.SCREEN_WIDTH - size; bounced = true;
         }
-        if (b.y - size < bounceTop) {
-          b.vy = Math.abs(b.vy) * 0.3; b.y = bounceTop + size; bounced = true;
-        } else if (b.y + size > bounceBottom) {
-          b.vy = -Math.abs(b.vy) * 0.3; b.y = bounceBottom - size; bounced = true;
+        if (b.reachedTop) {
+          if (b.y - size < bounceTop) {
+            b.vy = Math.abs(b.vy) * 0.3; b.y = bounceTop + size; bounced = true;
+          } else if (b.y + size > bounceBottom) {
+            b.vy = -Math.abs(b.vy) * 0.3; b.y = bounceBottom - size; bounced = true;
+          }
         }
 
         // 回旋斩
@@ -213,22 +232,21 @@ class SpinBlade extends Weapon {
 
   _launch(ctx) {
     const cx = ctx.launcher.getCenterX();
-    // 直接发射到砖块区域中部
-    const spawnY = Config.SAFE_TOP + (Config.SCREEN_HEIGHT * 0.4);
+    const cy = ctx.launcher.y - 30; // 从飞机上方发射
     const durationMs = (10 + (this.branches.duration || 0) * 2) * 1000;
-    // 水平发射
-    const angle = (Math.random() > 0.5 ? 0 : Math.PI) + (Math.random() - 0.5) * 0.3;
-    const spd = 1.5;
+    // 水平带点随机
+    const hDir = Math.random() > 0.5 ? 1 : -1;
 
     this.blades.push({
       x: cx,
-      y: spawnY,
-      vx: Math.cos(angle) * spd,
-      vy: 0, // 纯水平开始
+      y: cy,
+      vx: hDir * 0.5, // 轻微水平
+      vy: -3.5, // 快速向上冲
       angle: Math.random() * Math.PI * 2,
       life: durationMs, maxLife: durationMs, size: 14,
       tickTimer: 0, aliveMs: 0, isSplit: false,
       lingering: false, lingerTimer: 0,
+      reachedTop: false, // 标记是否到达顶部
     });
     Sound.bulletShoot();
   }
