@@ -54,7 +54,7 @@ class LightningWeapon extends Weapon {
     const hit = new Set();
     let lastX = startX, lastY = startY;
 
-    const chains = 1 + (this.branches.chains || 0);
+    const chains = 2 + (this.branches.chains || 0); // 基础2跳
     const chargeLv = this.branches.charge || 0;   // 蓄能：每跳+25%伤害
     const shockLv = this.branches.shock || 0;     // 感电：DOT
     const echoLv = this.branches.echo || 0;       // 回响：链末端再次释放

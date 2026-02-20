@@ -127,11 +127,12 @@ class DroneWeapon extends Weapon {
         }
       }
 
-      // === 电弧：打激光线没覆盖到的附近砖块 ===
+      // === 电弧：激光线外随机弹射额外伤害 ===
       if (arcLv > 0) {
         const arcRange = 40 + arcLv * 25;
-        const arcDmg = Math.floor(damage * 0.5);
+        const arcDmg = Math.floor(damage * 0.6);
         const arcsPerLine = arcLv;
+        const arcHit = new Set(); // 电弧自己的去重
 
         for (const line of lines) {
           for (let a = 0; a < arcsPerLine; a++) {
@@ -139,21 +140,25 @@ class DroneWeapon extends Weapon {
             const srcX = line.x1 + (line.x2 - line.x1) * t;
             const srcY = line.y1 + (line.y2 - line.y1) * t;
 
+            // 找范围内最近的未被电弧打过的砖块
+            let best = null, bestDist = Infinity;
             for (let j = 0; j < ctx.bricks.length; j++) {
               const brick = ctx.bricks[j];
-              if (!brick.alive || hitBricks.has(brick)) continue;
+              if (!brick.alive || arcHit.has(brick)) continue;
               const bc = brick.getCenter();
-              const adx = bc.x - srcX, ady = bc.y - srcY;
-              const adist = Math.sqrt(adx * adx + ady * ady);
-              if (adist < arcRange) {
-                ctx.damageBrick(brick, arcDmg, 'drone_arc');
-                hitBricks.add(brick);
-                this.laserHits.push({
-                  x: bc.x, y: bc.y, alpha: 0.8,
-                  arcFrom: { x: srcX, y: srcY },
-                });
-                break;
+              const adist = Math.sqrt((bc.x - srcX) ** 2 + (bc.y - srcY) ** 2);
+              if (adist < arcRange && adist < bestDist) {
+                bestDist = adist;
+                best = { brick, x: bc.x, y: bc.y };
               }
+            }
+            if (best) {
+              ctx.damageBrick(best.brick, arcDmg, 'drone_arc');
+              arcHit.add(best.brick);
+              this.laserHits.push({
+                x: best.x, y: best.y, alpha: 0.8,
+                arcFrom: { x: srcX, y: srcY },
+              });
             }
           }
         }

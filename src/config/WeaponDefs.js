@@ -21,7 +21,7 @@ const WEAPON_TREES = {
   },
   lightning: {
     name: '闪电链', desc: '自动锁定砖块释放闪电',
-    icon: '⚡', color: '#FFF050', basePct: 1.2, interval: 2500,
+    icon: '⚡', color: '#FFF050', basePct: 2.0, interval: 1800,
     branches: {
       damage:   { name: '伤害', desc: '+50%基础伤害', max: 5, requires: null },
       chains:   { name: '链数', desc: '+1跳跃目标', max: 4, requires: null },
