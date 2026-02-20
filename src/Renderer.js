@@ -428,11 +428,18 @@ class Renderer {
       const wy = lcy - 5 + row * 8;
       ctx.globalAlpha = 0.7;
       switch (wing.type) {
-        case 'kunai': // 小光刃
+        case 'kunai': // 迫击炮弹仓
           ctx.fillStyle = wing.color;
+          // 小炮弹形状
           ctx.beginPath();
-          ctx.moveTo(wx, wy - 6); ctx.lineTo(wx + side * 4, wy); ctx.lineTo(wx, wy + 6);
-          ctx.closePath(); ctx.fill(); break;
+          ctx.arc(wx, wy - 3, 3, Math.PI, 0); // 圆头
+          ctx.lineTo(wx + 3, wy + 3);
+          ctx.lineTo(wx - 3, wy + 3);
+          ctx.closePath(); ctx.fill();
+          // 尾翼
+          ctx.fillStyle = '#006688';
+          ctx.fillRect(wx - 4, wy + 3, 8, 2);
+          break;
         case 'lightning': // 电弧球
           ctx.fillStyle = wing.color;
           ctx.beginPath(); ctx.arc(wx, wy, 4, 0, Math.PI * 2); ctx.fill();
@@ -489,28 +496,31 @@ class Renderer {
   _drawKunai(data, ctx) {
     const { knives, explosions, color } = data;
 
-    // ===== 拖尾（渐变光带） =====
+    // ===== 拖尾（烟雾+火焰） =====
     for (const k of knives) {
       if (k.trail && k.trail.length > 1) {
         const angle = Math.atan2(k.vy, k.vx);
         const s = k.scale || 1;
         for (let t = 0; t < k.trail.length; t++) {
           const tr = k.trail[t];
-          const a = tr.alpha * 0.5;
-          const sz = (1.5 + (t / k.trail.length) * 2) * s;
+          const a = tr.alpha * 0.45;
+          const progress = t / k.trail.length;
+          const sz = (2 + progress * 3) * s;
           ctx.globalAlpha = a;
-          ctx.fillStyle = color;
+          // 尾部偏橙→前面偏青
+          ctx.fillStyle = progress < 0.4 ? '#FF8844' : color;
           ctx.save();
           ctx.translate(tr.x, tr.y);
-          ctx.rotate(angle);
-          ctx.fillRect(-sz, -sz * 0.4, sz * 2, sz * 0.8);
+          ctx.beginPath();
+          ctx.arc(0, 0, sz, 0, Math.PI * 2);
+          ctx.fill();
           ctx.restore();
         }
         ctx.globalAlpha = 1;
       }
     }
 
-    // ===== 飞刀本体（色块拼刀形，scale联动aoe） =====
+    // ===== 炮弹本体（色块拼凑：圆头+弹体+尾翼） =====
     for (const k of knives) {
       const s = k.scale || 1;
       ctx.save();
@@ -518,62 +528,86 @@ class Renderer {
       ctx.rotate(Math.atan2(k.vy, k.vx));
       ctx.scale(s, s);
 
-      // 外发光层
+      // 外发光
       ctx.shadowColor = color;
-      ctx.shadowBlur = 10 + s * 4;
+      ctx.shadowBlur = 8 + s * 5;
 
-      // 1) 刀刃主体
+      // 1) 弹体主体（圆角矩形）
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.moveTo(14, 0);
-      ctx.lineTo(2, -4);
-      ctx.lineTo(-8, -2.5);
-      ctx.lineTo(-8, 2.5);
-      ctx.lineTo(2, 4);
+      ctx.moveTo(6, -3.5);
+      ctx.lineTo(-6, -3.5);
+      ctx.lineTo(-6, 3.5);
+      ctx.lineTo(6, 3.5);
       ctx.closePath();
+      ctx.fill();
+
+      // 2) 弹头（半圆）
+      ctx.beginPath();
+      ctx.arc(6, 0, 3.5, -Math.PI / 2, Math.PI / 2);
       ctx.fill();
 
       ctx.shadowBlur = 0;
 
-      // 2) 刀锋高光
+      // 3) 弹头高光
       ctx.fillStyle = '#FFFFFF';
-      ctx.globalAlpha = 0.8;
+      ctx.globalAlpha = 0.7;
       ctx.beginPath();
-      ctx.moveTo(12, 0);
-      ctx.lineTo(3, -2.2);
-      ctx.lineTo(-6, -1.2);
-      ctx.lineTo(-6, 0.3);
-      ctx.lineTo(3, -0.3);
+      ctx.arc(7, -1, 2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 4) 弹体条纹（深色环带）
+      ctx.globalAlpha = 0.4;
+      ctx.fillStyle = '#004466';
+      ctx.fillRect(-1, -3.5, 2, 7);
+      ctx.fillRect(3, -3.5, 1.5, 7);
+
+      // 5) 尾翼（两片三角形）
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = '#006688';
+      // 上翼
+      ctx.beginPath();
+      ctx.moveTo(-6, -3.5);
+      ctx.lineTo(-11, -6);
+      ctx.lineTo(-9, -3.5);
+      ctx.closePath();
+      ctx.fill();
+      // 下翼
+      ctx.beginPath();
+      ctx.moveTo(-6, 3.5);
+      ctx.lineTo(-11, 6);
+      ctx.lineTo(-9, 3.5);
       ctx.closePath();
       ctx.fill();
 
-      // 3) 刀柄
-      ctx.globalAlpha = 0.9;
-      ctx.fillStyle = '#006688';
-      ctx.fillRect(-10, -2, 4, 4);
-
-      // 4) 刀柄缠绕纹
-      ctx.fillStyle = '#00AACC';
-      ctx.fillRect(-9.5, -1.5, 1, 3);
-      ctx.fillRect(-7.5, -1.5, 1, 3);
-
-      // 5) 刀尖闪光点
-      ctx.globalAlpha = 0.9;
-      ctx.fillStyle = '#FFFFFF';
+      // 6) 尾翼内线
+      ctx.strokeStyle = '#00AACC';
+      ctx.lineWidth = 0.5;
+      ctx.globalAlpha = 0.6;
       ctx.beginPath();
-      ctx.arc(13, 0, 1.5, 0, Math.PI * 2);
+      ctx.moveTo(-6, -3); ctx.lineTo(-9.5, -5);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-6, 3); ctx.lineTo(-9.5, 5);
+      ctx.stroke();
+
+      // 7) 尾部推进火焰
+      ctx.globalAlpha = 0.8;
+      ctx.fillStyle = '#FF8844';
+      ctx.beginPath();
+      ctx.moveTo(-6, -2);
+      ctx.lineTo(-10, 0);
+      ctx.lineTo(-6, 2);
+      ctx.closePath();
       ctx.fill();
-
-      // 6) 刀刃边缘光
-      ctx.strokeStyle = '#AAFFFF';
-      ctx.lineWidth = 0.6;
-      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = '#FFDD44';
+      ctx.globalAlpha = 0.6;
       ctx.beginPath();
-      ctx.moveTo(13, 0); ctx.lineTo(2, -3.8); ctx.lineTo(-7, -2.3);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(13, 0); ctx.lineTo(2, 3.8); ctx.lineTo(-7, 2.3);
-      ctx.stroke();
+      ctx.moveTo(-6, -1);
+      ctx.lineTo(-8, 0);
+      ctx.lineTo(-6, 1);
+      ctx.closePath();
+      ctx.fill();
 
       ctx.globalAlpha = 1;
       ctx.restore();
