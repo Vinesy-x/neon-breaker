@@ -1689,12 +1689,48 @@ class Renderer {
       }
     }
 
-    // 底部提示
-    ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.font = '10px monospace';
+    // 底部Tab栏
+    const tabH = 44;
+    const tabY = sh - Config.SAFE_BOTTOM - tabH;
+    const tabW = sw / 2;
+
+    // Tab 背景
+    ctx.fillStyle = 'rgba(10, 10, 30, 0.95)';
+    ctx.fillRect(0, tabY, sw, tabH + Config.SAFE_BOTTOM);
+
+    // 分隔线
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, tabY);
+    ctx.lineTo(sw, tabY);
+    ctx.stroke();
+
+    // 战斗 Tab（选中）
+    ctx.fillStyle = Config.NEON_CYAN;
+    ctx.fillRect(0, tabY, tabW, 2);
+    ctx.fillStyle = Config.NEON_CYAN;
+    ctx.font = 'bold 13px monospace';
     ctx.textAlign = 'center';
-    ctx.textBaseline = 'bottom';
-    ctx.fillText('上下滑动浏览', sw / 2, sh - Config.SAFE_BOTTOM - 4);
+    ctx.textBaseline = 'middle';
+    ctx.fillText('⚔ 战斗', tabW / 2, tabY + tabH / 2);
+
+    // 升级 Tab
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '13px monospace';
+    ctx.fillText('⬆ 升级', tabW + tabW / 2, tabY + tabH / 2);
+
+    // Tab分隔线
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.beginPath();
+    ctx.moveTo(tabW, tabY + 8);
+    ctx.lineTo(tabW, tabY + tabH - 8);
+    ctx.stroke();
+
+    this._chapterTabAreas = {
+      battle: { x: 0, y: tabY, w: tabW, h: tabH },
+      upgrade: { x: tabW, y: tabY, w: tabW, h: tabH },
+    };
   }
 
   // ===== 升级商店 =====
@@ -2270,7 +2306,14 @@ class Renderer {
   // ===== 点击判定方法 =====
 
   getChapterSelectHit(tap) {
-    // 升级按钮
+    // Tab栏
+    if (this._chapterTabAreas) {
+      const u = this._chapterTabAreas.upgrade;
+      if (tap.x >= u.x && tap.x <= u.x + u.w && tap.y >= u.y && tap.y <= u.y + u.h) {
+        return 'upgrade';
+      }
+    }
+    // 升级按钮（顶部）
     if (this._upgradeButtonArea) {
       const a = this._upgradeButtonArea;
       if (tap.x >= a.x && tap.x <= a.x + a.w && tap.y >= a.y && tap.y <= a.y + a.h) {

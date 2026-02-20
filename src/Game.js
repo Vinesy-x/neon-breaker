@@ -53,9 +53,12 @@ class Game {
     this._statsArea = null; // 统计按钮点击区域
     this.state = Config.STATE.LOADING; this.loadTimer = 60;
 
-    // Dev panel 滚动
+    // 统一滑动分发
     this.input.onDragY = (dy) => {
-      if (this.devPanel.open) this.devPanel.handleDrag(dy);
+      if (this.devPanel.open) { this.devPanel.handleDrag(dy); return; }
+      if (this.state === Config.STATE.CHAPTER_SELECT) {
+        this.renderer._chapterScrollY = Math.max(0, (this.renderer._chapterScrollY || 0) - dy);
+      }
     };
   }
 
@@ -219,7 +222,14 @@ class Game {
     }
   }
 
-  _updateChapterSelect() { var t=this.input.consumeTap(); if(!t) return; var r=this.renderer.getChapterSelectHit(t); if(r==='upgrade') this.state=Config.STATE.UPGRADE_SHOP; else if(r==='sound') Sound.toggle(); else if(typeof r==='number'&&r>0&&r<=this.saveManager.getMaxChapter()){this.currentChapter=r;this._initGame();} }
+  _updateChapterSelect() {
+    var t = this.input.consumeTap();
+    if (!t) return;
+    var r = this.renderer.getChapterSelectHit(t);
+    if (r === 'upgrade') this.state = Config.STATE.UPGRADE_SHOP;
+    else if (r === 'sound') Sound.toggle();
+    else if (typeof r === 'number' && r > 0 && r <= this.saveManager.getMaxChapter()) { this.currentChapter = r; this._initGame(); }
+  }
   _updateUpgradeShop() { var t=this.input.consumeTap(); if(!t) return; var r=this.renderer.getUpgradeShopHit(t); if(r==='back') this.state=Config.STATE.CHAPTER_SELECT; else if(r&&typeof r==='string'){if(this.saveManager.upgradeLevel(r)) Sound.selectSkill();} }
   _updateChapterClear() { var t=this.input.consumeTap(); if(!t) return; var r=this.renderer.getChapterClearHit(t); if(r==='next'){this.currentChapter=Math.min(this.currentChapter+1,this.saveManager.getMaxChapter());this._initGame();}else if(r==='back') this.state=Config.STATE.CHAPTER_SELECT; }
   _updateGameOver() { var t=this.input.consumeTap(); if(!t) return; var coins=Math.floor((this.chapterConfig?this.chapterConfig.clearReward:0)*0.3*this.saveManager.getCoinMultiplier())+Math.min(50,Math.floor(this.bricksDestroyed/100)); if(coins>0) this.saveManager.addCoins(coins); this.state=Config.STATE.CHAPTER_SELECT; }
