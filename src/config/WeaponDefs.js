@@ -86,7 +86,7 @@ const WEAPON_TREES = {
       pierce:   { name: '贯穿', desc: '每tick可命中所有砖块', max: 1, requires: { damage: 2 } },
       ramp:     { name: '蓄势', desc: '存活每秒+10%伤害', max: 3, requires: { duration: 2 } },
       split:    { name: '分裂', desc: '击杀砖块时分裂小刃', max: 2, requires: { count: 2 } },
-      bleed:    { name: '撕裂', desc: '命中留DOT(20%/秒×2秒)', max: 2, requires: { giant: 1, damage: 3 } },
+      shockwave:{ name: '回旋斩', desc: '弹墙时释放环形刀气波', max: 2, requires: { speed: 2 } },
     },
   },
 };

@@ -952,6 +952,29 @@ class Renderer {
 
       ctx.restore();
     }
+
+    // === 回旋斩刀气波 ===
+    if (data.shockwaves) {
+      for (const sw of data.shockwaves) {
+        const progress = sw.radius / sw.maxRadius;
+        const alpha = 0.6 * (1 - progress);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2.5 * (1 - progress) + 0.5;
+        ctx.globalAlpha = alpha;
+        ctx.beginPath();
+        ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        // 内圈
+        if (progress < 0.5) {
+          ctx.globalAlpha = alpha * 0.4;
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
     ctx.globalAlpha = 1;
   }
 
@@ -1299,7 +1322,7 @@ class Renderer {
       'thunder_chain': '雷击',
       'shock': '感电',
       'spinBlade': '等离子旋刃',
-      'bleed': '撕裂DOT',
+      'spinBlade_sw': '回旋斩',
     };
     const entries = Object.entries(stats || {}).sort((a, b) => b[1] - a[1]);
     const totalDmg = entries.reduce((sum, e) => sum + e[1], 0);
