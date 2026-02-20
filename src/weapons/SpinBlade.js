@@ -47,7 +47,7 @@ class SpinBlade extends Weapon {
     const superLv = this.branches.superBlade || 0;
     const bleedLv = this.branches.bleed || 0;
 
-    const size = 14 + giantLv * 8;
+    const size = 20 + giantLv * 10;
     const bounceTop = Config.SAFE_TOP + 10;
     const bounceBottom = Config.SCREEN_HEIGHT * 0.88;
     const tickInterval = superLv > 0

@@ -76,7 +76,7 @@ const WEAPON_TREES = {
   },
   spinBlade: {
     name: '等离子旋刃', desc: '弹墙旋刃，后排持续清扫',
-    icon: '🌀', color: '#AA44FF', basePct: 2.5, interval: 6000, tickInterval: 180,
+    icon: '🌀', color: '#AA44FF', basePct: 1.0, interval: 6000, tickInterval: 200,
     branches: {
       damage:    { name: '伤害', desc: '+50%基础伤害', max: 5, requires: null },
       duration:  { name: '续航', desc: '+2秒存在时间', max: 3, requires: null },
