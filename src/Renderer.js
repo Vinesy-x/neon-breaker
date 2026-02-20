@@ -726,61 +726,179 @@ class Renderer {
   }
 
   _drawDrone(data, ctx) {
-    const { drones, bullets, color } = data;
-    // 子弹批量
-    if (bullets.length > 0) {
-      // 先画激光类
-      for (const b of bullets) {
-        if (!b.isLaser) continue;
-        ctx.globalAlpha = b.alpha;
-        ctx.strokeStyle = color; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.moveTo(b.x1, b.y1); ctx.lineTo(b.x2, b.y2); ctx.stroke();
+    const { drones, bullets, lasers, color, hasShield, swarmLv } = data;
+
+    // 激光光束
+    if (lasers && lasers.length > 0) {
+      for (const beam of lasers) {
+        // 外层光晕
+        ctx.globalAlpha = beam.alpha * 0.3;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.moveTo(beam.x1, beam.y1);
+        ctx.lineTo(beam.x2, beam.y2);
+        ctx.stroke();
+        // 内层白芯
+        ctx.globalAlpha = beam.alpha;
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(beam.x1, beam.y1);
+        ctx.lineTo(beam.x2, beam.y2);
+        ctx.stroke();
+        // 命中点光效
+        ctx.fillStyle = color;
+        ctx.globalAlpha = beam.alpha * 0.5;
+        ctx.beginPath();
+        ctx.arc(beam.x2, beam.y2, 8, 0, Math.PI * 2);
+        ctx.fill();
       }
-      // 再批量画子弹
+      ctx.globalAlpha = 1;
+    }
+
+    // 子弹批量
+    if (bullets && bullets.length > 0) {
       ctx.globalAlpha = 1;
       ctx.fillStyle = color;
       ctx.beginPath();
       for (const b of bullets) {
-        if (b.isLaser) continue;
-        ctx.moveTo(b.x + 2, b.y);
-        ctx.arc(b.x, b.y, 2, 0, Math.PI * 2);
+        ctx.moveTo(b.x + 3, b.y);
+        ctx.arc(b.x, b.y, 3, 0, Math.PI * 2);
+      }
+      ctx.fill();
+      // 白色高光
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      for (const b of bullets) {
+        ctx.moveTo(b.x + 1, b.y - 1);
+        ctx.arc(b.x - 1, b.y - 1, 1, 0, Math.PI * 2);
       }
       ctx.fill();
     }
-    ctx.globalAlpha = 1;
+
     // 无人机本体
+    ctx.globalAlpha = 1;
     for (const d of drones) {
+      // 蜂群模式：轨迹光效
+      if (swarmLv > 0) {
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.15;
+        ctx.beginPath();
+        ctx.arc(d.x, d.y, 12, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 护盾光环
+      if (hasShield && d.shield) {
+        ctx.strokeStyle = 'rgba(80, 255, 180, 0.5)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(d.x, d.y, 14, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      // 护盾破碎闪光
+      if (d.shieldFlash > 0) {
+        ctx.globalAlpha = d.shieldFlash * 0.6;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(d.x, d.y, 16, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 无人机主体
+      ctx.globalAlpha = 1;
       ctx.fillStyle = color;
-      ctx.fillRect(d.x - 6, d.y - 3, 12, 6);
+      ctx.fillRect(d.x - 7, d.y - 4, 14, 8);
+      // 机翼
+      ctx.fillRect(d.x - 10, d.y - 2, 4, 4);
+      ctx.fillRect(d.x + 6, d.y - 2, 4, 4);
+      // 驾驶舱
       ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(d.x - 1, d.y - 1, 2, 2);
-      ctx.strokeStyle = color; ctx.lineWidth = 0.5;
-      ctx.beginPath(); ctx.arc(d.x, d.y, 8, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillRect(d.x - 2, d.y - 2, 4, 4);
+      // 引擎光点
+      ctx.fillStyle = swarmLv > 0 ? '#FFFF00' : color;
+      ctx.beginPath();
+      ctx.arc(d.x, d.y + 5, 2, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
 
   _drawSpinBlade(data, ctx) {
-    const { blades, color } = data;
+    const { blades, color, vortexLv, giantLv } = data;
+
     for (const b of blades) {
       const size = b.size || 12;
-      ctx.globalAlpha = 0.2;
+
+      // === 漩涡效果 ===
+      if (vortexLv > 0) {
+        const vortexR = 60 + vortexLv * 30;
+        ctx.strokeStyle = color;
+        ctx.globalAlpha = 0.15;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, vortexR, 0, Math.PI * 2);
+        ctx.stroke();
+        // 螺旋线
+        ctx.globalAlpha = 0.1;
+        ctx.beginPath();
+        for (let a = 0; a < Math.PI * 4; a += 0.2) {
+          const r = vortexR * (1 - a / (Math.PI * 4));
+          const px = b.x + Math.cos(a + b.angle * 2) * r;
+          const py = b.y + Math.sin(a + b.angle * 2) * r;
+          if (a === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      }
+
+      // === 外层光晕 ===
+      ctx.globalAlpha = 0.25;
       ctx.fillStyle = color;
-      ctx.beginPath(); ctx.arc(b.x, b.y, size + 4, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, size + 6, 0, Math.PI * 2);
+      ctx.fill();
+
+      // === 旋刃本体 ===
       ctx.globalAlpha = 1;
       ctx.save();
       ctx.translate(b.x, b.y);
       ctx.rotate(b.angle);
+
+      // 4叶旋刃
       ctx.fillStyle = color;
+      for (let i = 0; i < 4; i++) {
+        ctx.save();
+        ctx.rotate(i * Math.PI / 2);
+        ctx.beginPath();
+        ctx.moveTo(0, -size);
+        ctx.quadraticCurveTo(size * 0.4, -size * 0.5, size * 0.3, 0);
+        ctx.quadraticCurveTo(size * 0.4, size * 0.5, 0, size * 0.3);
+        ctx.lineTo(0, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // 中心白点
+      ctx.fillStyle = '#FFFFFF';
       ctx.beginPath();
-      ctx.moveTo(0, -size); ctx.lineTo(size * 0.5, 0); ctx.lineTo(0, size); ctx.lineTo(-size * 0.5, 0);
-      ctx.closePath(); ctx.fill();
-      ctx.fillStyle = '#FFFFFF'; ctx.globalAlpha = 0.6;
-      ctx.beginPath();
-      ctx.moveTo(0, -size * 0.4); ctx.lineTo(size * 0.2, 0); ctx.lineTo(0, size * 0.4); ctx.lineTo(-size * 0.2, 0);
-      ctx.closePath(); ctx.fill();
-      ctx.globalAlpha = 1;
+      ctx.arc(0, 0, size * 0.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 巨型化：额外光效
+      if (giantLv > 0) {
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 1;
+        ctx.globalAlpha = 0.4;
+        ctx.beginPath();
+        ctx.arc(0, 0, size * 0.6, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
       ctx.restore();
     }
+    ctx.globalAlpha = 1;
   }
 
   _drawLightning(data, ctx) {
@@ -1121,10 +1239,11 @@ class Renderer {
       'meteor': '陨石',
       'drone': '无人机',
       'drone_bullet': '无人机弹',
+      'drone_laser': '无人机激光',
       'fire_dot': '燃烧',
       'thunder_chain': '雷击',
       'shock': '感电',
-      'spinblade': '旋转刃',
+      'spinBlade': '等离子旋刃',
     };
     const entries = Object.entries(stats || {}).sort((a, b) => b[1] - a[1]);
     const totalDmg = entries.reduce((sum, e) => sum + e[1], 0);
