@@ -133,6 +133,7 @@ class DroneWeapon extends Weapon {
         const arcDmg = Math.floor(damage * 0.6);
         const arcsPerLine = arcLv;
         const arcHit = new Set(); // 电弧自己的去重
+        let arcHitBoss = false;
 
         for (const line of lines) {
           for (let a = 0; a < arcsPerLine; a++) {
@@ -140,7 +141,7 @@ class DroneWeapon extends Weapon {
             const srcX = line.x1 + (line.x2 - line.x1) * t;
             const srcY = line.y1 + (line.y2 - line.y1) * t;
 
-            // 找范围内最近的未被电弧打过的砖块
+            // 找范围内最近的未被电弧打过的目标（砖块或Boss）
             let best = null, bestDist = Infinity;
             for (let j = 0; j < ctx.bricks.length; j++) {
               const brick = ctx.bricks[j];
@@ -149,12 +150,26 @@ class DroneWeapon extends Weapon {
               const adist = Math.sqrt((bc.x - srcX) ** 2 + (bc.y - srcY) ** 2);
               if (adist < arcRange && adist < bestDist) {
                 bestDist = adist;
-                best = { brick, x: bc.x, y: bc.y };
+                best = { brick, x: bc.x, y: bc.y, isBoss: false };
+              }
+            }
+            // Boss也可以被电弧击中
+            if (ctx.boss && ctx.boss.alive && !arcHitBoss) {
+              const bx = ctx.boss.getCenterX(), by = ctx.boss.getCenterY();
+              const bdist = Math.sqrt((bx - srcX) ** 2 + (by - srcY) ** 2);
+              if (bdist < arcRange && bdist < bestDist) {
+                bestDist = bdist;
+                best = { x: bx, y: by, isBoss: true };
               }
             }
             if (best) {
-              ctx.damageBrick(best.brick, arcDmg, 'drone_arc');
-              arcHit.add(best.brick);
+              if (best.isBoss) {
+                ctx.damageBoss(arcDmg, 'drone_arc');
+                arcHitBoss = true;
+              } else {
+                ctx.damageBrick(best.brick, arcDmg, 'drone_arc');
+                arcHit.add(best.brick);
+              }
               this.laserHits.push({
                 x: best.x, y: best.y, alpha: 0.8,
                 arcFrom: { x: srcX, y: srcY },
@@ -178,6 +193,12 @@ class DroneWeapon extends Weapon {
             ctx.damageBrick(brick, overDmg, 'drone_cross');
           }
         }
+        // Boss过载判定
+        if (ctx.boss && ctx.boss.alive) {
+          if (Math.abs(ctx.boss.getCenterX() - cx) + Math.abs(ctx.boss.getCenterY() - cy) < overRange) {
+            ctx.damageBoss(overDmg, 'drone_cross');
+          }
+        }
       }
 
       // === 脉冲 ===
@@ -196,6 +217,13 @@ class DroneWeapon extends Weapon {
             const dx = bc.x - cx, dy = bc.y - cy;
             if (Math.sqrt(dx * dx + dy * dy) < pulseRange) {
               ctx.damageBrick(brick, pulseDmg, 'drone_pulse');
+            }
+          }
+          // Boss脉冲判定
+          if (ctx.boss && ctx.boss.alive) {
+            const bdx = ctx.boss.getCenterX() - cx, bdy = ctx.boss.getCenterY() - cy;
+            if (Math.sqrt(bdx * bdx + bdy * bdy) < pulseRange) {
+              ctx.damageBoss(pulseDmg, 'drone_pulse');
             }
           }
           this._pulseWave = { x: cx, y: cy, maxR: pulseRange, progress: 0 };
