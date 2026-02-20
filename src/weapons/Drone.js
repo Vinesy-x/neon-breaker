@@ -64,7 +64,7 @@ class DroneWeapon extends Weapon {
     this._formationAngle += rotateSpeed * dt;
 
     // === 计算各无人机目标位置（阵型） ===
-    const radius = 40 + deployLv * 25 + count * 12;
+    const radius = 60 + deployLv * 35 + count * 15;
     for (let i = 0; i < count; i++) {
       const d = this.drones[i];
       const angle = this._formationAngle + (Math.PI * 2 / count) * i;

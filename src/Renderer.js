@@ -729,28 +729,37 @@ class Renderer {
     const { drones, lines, hits, color, centerX, centerY, overchargeLv, widthLv, pulseWave } = data;
     if (!drones || drones.length === 0) return;
 
-    const beamWidth = 3 + (widthLv || 0) * 3; // 光束粗度跟等级联动
+    const beamWidth = 2; // 主激光保持细线
 
     // === 激光连线 ===
     if (lines && lines.length > 0) {
-      // 第1层：宽光晕
-      ctx.strokeStyle = 'rgba(' + this._hexToRgb(color) + ', 0.12)';
-      ctx.lineWidth = beamWidth * 5;
+      const glowW = 6 + (widthLv || 0) * 4; // 光晕宽度跟等级联动
+
+      // 第1层：宽光晕（低透明度）
+      ctx.strokeStyle = 'rgba(' + this._hexToRgb(color) + ', 0.08)';
+      ctx.lineWidth = glowW * 3;
       ctx.lineCap = 'round';
       ctx.beginPath();
       for (const l of lines) { ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); }
       ctx.stroke();
 
-      // 第2层：主激光
+      // 第2层：中层光晕
+      ctx.strokeStyle = 'rgba(' + this._hexToRgb(color) + ', 0.15)';
+      ctx.lineWidth = glowW;
+      ctx.beginPath();
+      for (const l of lines) { ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); }
+      ctx.stroke();
+
+      // 第3层：主激光（细线）
       ctx.strokeStyle = color;
       ctx.lineWidth = beamWidth;
       ctx.beginPath();
       for (const l of lines) { ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); }
       ctx.stroke();
 
-      // 第3层：白色内芯
-      ctx.strokeStyle = '#FFFFFF';
-      ctx.lineWidth = Math.max(1, beamWidth * 0.4);
+      // 第4层：白色内芯
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+      ctx.lineWidth = 1;
       ctx.beginPath();
       for (const l of lines) { ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); }
       ctx.stroke();
@@ -764,7 +773,7 @@ class Renderer {
         const px = l.x1 + (l.x2 - l.x1) * t;
         const py = l.y1 + (l.y2 - l.y1) * t;
         ctx.beginPath();
-        ctx.arc(px, py, beamWidth * 0.5, 0, Math.PI * 2);
+        ctx.arc(px, py, 2, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.globalAlpha = 1;
