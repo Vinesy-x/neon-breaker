@@ -726,7 +726,7 @@ class Renderer {
   }
 
   _drawDrone(data, ctx) {
-    const { drones, lines, hits, color, centerX, centerY, overchargeLv, widthLv, pulseWave } = data;
+    const { drones, lines, hits, color, overchargeLv, widthLv, pulseWave } = data;
     if (!drones || drones.length === 0) return;
 
     const beamWidth = 2; // 主激光保持细线
@@ -779,18 +779,20 @@ class Renderer {
       ctx.globalAlpha = 1;
     }
 
-    // === 过载：中心光效 ===
+    // === 过载：阵型质心光效 ===
     if (overchargeLv > 0 && drones.length >= 3) {
+      const cx = drones.reduce((s, d) => s + d.x, 0) / drones.length;
+      const cy = drones.reduce((s, d) => s + d.y, 0) / drones.length;
       const pulse = 0.2 + Math.sin(Date.now() * 0.006) * 0.1;
       ctx.fillStyle = color;
       ctx.globalAlpha = pulse;
       ctx.beginPath();
-      ctx.arc(centerX, centerY, 25, 0, Math.PI * 2);
+      ctx.arc(cx, cy, 25, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#FFFFFF';
       ctx.globalAlpha = pulse * 0.8;
       ctx.beginPath();
-      ctx.arc(centerX, centerY, 8, 0, Math.PI * 2);
+      ctx.arc(cx, cy, 8, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 1;
     }

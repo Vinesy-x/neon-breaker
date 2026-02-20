@@ -1,8 +1,9 @@
 /**
  * Drone.js - 战术无人机（激光阵型）
- * 
- * 核心：无人机飞到砖块区域布阵，全连接激光网切割砖块
- * 初始2台（直线），升级后3台（三角3线）→ 4台（菱形6线）→ 5台（五角10线）
+ *
+ * 核心：每台无人机独立追踪高威胁砖块，之间连接激光网
+ * 砖块越靠近飞机 → 权重越高 → 无人机优先前往
+ * 阵型由砖块分布自然决定，不是固定几何形状
  */
 const Weapon = require('./Weapon');
 const Config = require('../Config');
@@ -11,26 +12,22 @@ class DroneWeapon extends Weapon {
   constructor() {
     super('drone');
     this.drones = [];
-    this.laserHits = [];     // 命中闪光
-    this._formationAngle = 0;
-    this._centerX = Config.SCREEN_WIDTH / 2;
-    this._centerY = Config.SCREEN_HEIGHT * 0.35;
-    this._targetCX = this._centerX;
-    this._targetCY = this._centerY;
-    this._retargetTimer = 0;
+    this.laserHits = [];
     this._tickTimer = 0;
     this._pulseTimer = 0;
-    this._pulseWave = null;  // 脉冲波视觉
+    this._pulseWave = null;
+    this._assignTimer = 0;
   }
 
   _syncDrones() {
-    const count = 2 + (this.branches.count || 0); // 初始2台
+    const count = 2 + (this.branches.count || 0);
     while (this.drones.length < count) {
       this.drones.push({
-        x: this._centerX + (Math.random() - 0.5) * 40,
-        y: this._centerY + (Math.random() - 0.5) * 40,
-        tx: 0, ty: 0,
-        angle: Math.random() * Math.PI * 2,
+        x: Config.SCREEN_WIDTH / 2 + (Math.random() - 0.5) * 60,
+        y: Config.SCREEN_HEIGHT * 0.35 + (Math.random() - 0.5) * 60,
+        tx: Config.SCREEN_WIDTH / 2,
+        ty: Config.SCREEN_HEIGHT * 0.3,
+        targetBrick: null,
       });
     }
     while (this.drones.length > count) {
@@ -42,44 +39,53 @@ class DroneWeapon extends Weapon {
     const dt = dtMs / 16.67;
     this._syncDrones();
 
-    const count = this.drones.length;
-    const rotateLv = this.branches.rotate || 0;
     const speedLv = this.branches.speed || 0;
+    const rotateLv = this.branches.rotate || 0;
     const deployLv = this.branches.deploy || 0;
+    const lcx = ctx.launcher.getCenterX();
+    const lcy = ctx.launcher.y;
 
-    // === 阵型中心追踪砖块密度 ===
-    this._retargetTimer += dtMs;
-    if (this._retargetTimer > 1200) {
-      this._retargetTimer = 0;
-      this._updateFormationCenter(ctx, deployLv);
+    // === 分配目标（每800ms重新分配） ===
+    this._assignTimer += dtMs;
+    if (this._assignTimer > 800) {
+      this._assignTimer = 0;
+      this._assignTargets(ctx, lcx, lcy, deployLv);
     }
 
-    // 中心平滑移动
-    const centerSpeed = 0.05 + speedLv * 0.02;
-    this._centerX += (this._targetCX - this._centerX) * centerSpeed * dt;
-    this._centerY += (this._targetCY - this._centerY) * centerSpeed * dt;
+    // === 无人机移动 ===
+    const flySpeed = 0.06 + speedLv * 0.025;
+    // 旋阵：无人机绕目标点做小幅圆周运动
+    const orbitSpeed = rotateLv > 0 ? 0.008 + rotateLv * 0.015 : 0;
 
-    // === 阵型旋转 ===
-    const rotateSpeed = 0.005 + rotateLv * 0.012;
-    this._formationAngle += rotateSpeed * dt;
-
-    // === 计算各无人机目标位置（阵型） ===
-    const radius = 60 + deployLv * 35 + count * 15;
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < this.drones.length; i++) {
       const d = this.drones[i];
-      const angle = this._formationAngle + (Math.PI * 2 / count) * i;
-      d.tx = this._centerX + Math.cos(angle) * radius;
-      d.ty = this._centerY + Math.sin(angle) * radius;
 
-      // 平滑飞向目标
-      const flySpeed = 0.08 + speedLv * 0.03;
-      d.x += (d.tx - d.x) * flySpeed * dt;
-      d.y += (d.ty - d.y) * flySpeed * dt;
-      d.angle += 0.04 * dt;
+      // 检查目标砖块是否还活着
+      if (d.targetBrick && !d.targetBrick.alive) {
+        d.targetBrick = null;
+      }
+
+      // 更新目标位置
+      if (d.targetBrick) {
+        const bc = d.targetBrick.getCenter();
+        d.tx = bc.x;
+        d.ty = bc.y;
+      }
+
+      // 旋阵偏移
+      if (orbitSpeed > 0) {
+        const t = Date.now() * orbitSpeed + i * Math.PI * 2 / this.drones.length;
+        const orbitR = 15 + rotateLv * 8;
+        d.x += (d.tx + Math.cos(t) * orbitR - d.x) * flySpeed * dt;
+        d.y += (d.ty + Math.sin(t) * orbitR - d.y) * flySpeed * dt;
+      } else {
+        d.x += (d.tx - d.x) * flySpeed * dt;
+        d.y += (d.ty - d.y) * flySpeed * dt;
+      }
     }
 
-    // === 激光线伤害（tick） ===
-    const tickSpeedMult = 1 + speedLv * 0.3; // 机动加速tick频率
+    // === 激光线伤害 ===
+    const tickSpeedMult = 1 + speedLv * 0.3;
     this._tickTimer += dtMs * tickSpeedMult;
     const tickInterval = 300;
 
@@ -90,10 +96,10 @@ class DroneWeapon extends Weapon {
       const widthLv = this.branches.width || 0;
       const laserWidth = 10 + widthLv * 8;
       const overchargeLv = this.branches.overcharge || 0;
+      const focusLv = this.branches.focus || 0;
       const pulseLv = this.branches.pulse || 0;
 
       const lines = this._getLaserLines();
-      const focusLv = this.branches.focus || 0;
 
       for (const line of lines) {
         for (let j = 0; j < ctx.bricks.length; j++) {
@@ -102,13 +108,12 @@ class DroneWeapon extends Weapon {
           const bc = brick.getCenter();
           const dist = this._pointToLineDist(bc.x, bc.y, line.x1, line.y1, line.x2, line.y2);
           if (dist < laserWidth + brick.width * 0.3) {
-            // 聚焦：低HP砖块额外伤害
             let dmg = damage;
             if (focusLv > 0 && brick.hp <= 3) {
               dmg = Math.floor(dmg * (1 + focusLv * 0.8));
             }
             ctx.damageBrick(brick, dmg, 'drone_laser');
-            if (Math.random() < 0.3) {
+            if (Math.random() < 0.25) {
               this.laserHits.push({ x: bc.x, y: bc.y, alpha: 1.0 });
             }
           }
@@ -124,39 +129,41 @@ class DroneWeapon extends Weapon {
         }
       }
 
-      // === 过载：交叉点额外伤害 ===
-      if (overchargeLv > 0 && count >= 3) {
+      // === 过载：所有线交叉区域 ===
+      if (overchargeLv > 0 && this.drones.length >= 3) {
+        const cx = this.drones.reduce((s, d) => s + d.x, 0) / this.drones.length;
+        const cy = this.drones.reduce((s, d) => s + d.y, 0) / this.drones.length;
         const overDmg = damage * 2;
         const overRange = laserWidth * 3;
         for (let j = 0; j < ctx.bricks.length; j++) {
           const brick = ctx.bricks[j];
           if (!brick.alive) continue;
           const bc = brick.getCenter();
-          const dx = bc.x - this._centerX, dy = bc.y - this._centerY;
-          if (Math.sqrt(dx * dx + dy * dy) < overRange) {
+          if (Math.abs(bc.x - cx) + Math.abs(bc.y - cy) < overRange) {
             ctx.damageBrick(brick, overDmg, 'drone_cross');
           }
         }
       }
 
-      // === 脉冲AOE ===
+      // === 脉冲 ===
       if (pulseLv > 0) {
         this._pulseTimer += tickInterval;
         if (this._pulseTimer >= 4000) {
           this._pulseTimer = 0;
-          const pulseRange = radius * 1.8;
+          const cx = this.drones.reduce((s, d) => s + d.x, 0) / this.drones.length;
+          const cy = this.drones.reduce((s, d) => s + d.y, 0) / this.drones.length;
+          const pulseRange = 120 + this.drones.length * 20;
           const pulseDmg = damage * 4;
           for (let j = 0; j < ctx.bricks.length; j++) {
             const brick = ctx.bricks[j];
             if (!brick.alive) continue;
             const bc = brick.getCenter();
-            const dx = bc.x - this._centerX, dy = bc.y - this._centerY;
+            const dx = bc.x - cx, dy = bc.y - cy;
             if (Math.sqrt(dx * dx + dy * dy) < pulseRange) {
               ctx.damageBrick(brick, pulseDmg, 'drone_pulse');
             }
           }
-          // 脉冲波视觉
-          this._pulseWave = { x: this._centerX, y: this._centerY, maxR: pulseRange, progress: 0 };
+          this._pulseWave = { x: cx, y: cy, maxR: pulseRange, progress: 0 };
         }
       }
     }
@@ -167,43 +174,85 @@ class DroneWeapon extends Weapon {
       if (this._pulseWave.progress >= 1) this._pulseWave = null;
     }
 
-    // 更新命中闪光
+    // 命中闪光衰减
     for (let i = this.laserHits.length - 1; i >= 0; i--) {
       this.laserHits[i].alpha -= 0.06 * dt;
       if (this.laserHits[i].alpha <= 0) this.laserHits.splice(i, 1);
     }
   }
 
-  _updateFormationCenter(ctx, deployLv) {
-    if (!ctx.bricks || ctx.bricks.length === 0) return;
+  /** 为每台无人机分配目标砖块 */
+  _assignTargets(ctx, lcx, lcy, deployLv) {
+    const bricks = ctx.bricks;
+    if (!bricks || bricks.length === 0) return;
 
-    // 用加权平均找密度中心（HP越高权重越大）
-    let sumX = 0, sumY = 0, totalW = 0;
-    for (const brick of ctx.bricks) {
+    // 计算砖块权重：越靠近飞机 → 权重越高
+    const dangerY = Config.SCREEN_HEIGHT * Config.BRICK_DANGER_Y;
+    const scored = [];
+    for (const brick of bricks) {
       if (!brick.alive) continue;
       const bc = brick.getCenter();
-      const w = Math.min(brick.hp, 10); // 高HP砖块权重更大
-      sumX += bc.x * w;
-      sumY += bc.y * w;
-      totalW += w;
+      // 距离飞机越近，威胁越大
+      const distToShip = Math.abs(bc.y - lcy);
+      const maxDist = lcy - Config.SAFE_TOP;
+      const proximityScore = Math.max(0, 1 - distToShip / maxDist); // 0~1, 越近越高
+      // HP权重
+      const hpScore = Math.min(brick.hp / 10, 1);
+      // 接近危险线额外加权
+      const dangerBonus = bc.y > dangerY * 0.7 ? 2 : 1;
+      const weight = (proximityScore * 3 + hpScore) * dangerBonus;
+      scored.push({ brick, weight, x: bc.x, y: bc.y });
     }
-    if (totalW === 0) return;
 
-    const margin = 50 + deployLv * 25;
-    this._targetCX = Math.max(margin, Math.min(Config.SCREEN_WIDTH - margin, sumX / totalW));
-    this._targetCY = Math.max(Config.SAFE_TOP + 50, Math.min(Config.SCREEN_HEIGHT * 0.65, sumY / totalW));
+    // 按权重排序
+    scored.sort((a, b) => b.weight - a.weight);
+
+    // 为每台无人机分配不同目标
+    const used = new Set();
+    const spread = 40 + deployLv * 20; // 最小间距
+
+    for (const d of this.drones) {
+      let best = null;
+      for (const s of scored) {
+        if (used.has(s.brick)) continue;
+        // 检查和已分配的无人机距离
+        let tooClose = false;
+        for (const other of this.drones) {
+          if (other === d || !other.targetBrick || !other.targetBrick.alive) continue;
+          const obc = other.targetBrick.getCenter();
+          if (Math.abs(s.x - obc.x) + Math.abs(s.y - obc.y) < spread) {
+            tooClose = true;
+            break;
+          }
+        }
+        if (!tooClose) {
+          best = s;
+          break;
+        }
+      }
+
+      // 如果没找到不扎堆的，就取权重最高的
+      if (!best && scored.length > 0) {
+        for (const s of scored) {
+          if (!used.has(s.brick)) { best = s; break; }
+        }
+      }
+
+      if (best) {
+        d.targetBrick = best.brick;
+        used.add(best.brick);
+      }
+    }
   }
 
-  /** 全连接图：每对无人机之间都有激光线 */
+  /** 全连接激光线 */
   _getLaserLines() {
     const lines = [];
     const n = this.drones.length;
     if (n < 2) return lines;
-
     for (let i = 0; i < n; i++) {
       for (let j = i + 1; j < n; j++) {
-        const a = this.drones[i], b = this.drones[j];
-        lines.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y });
+        lines.push({ x1: this.drones[i].x, y1: this.drones[i].y, x2: this.drones[j].x, y2: this.drones[j].y });
       }
     }
     return lines;
@@ -225,8 +274,6 @@ class DroneWeapon extends Weapon {
       lines: this._getLaserLines(),
       hits: this.laserHits,
       color: this.def.color,
-      centerX: this._centerX,
-      centerY: this._centerY,
       overchargeLv: this.branches.overcharge || 0,
       widthLv: this.branches.width || 0,
       pulseWave: this._pulseWave,
