@@ -326,6 +326,95 @@ class Renderer {
     }
   }
 
+  /** 批量渲染砖块 - 大幅减少 Draw Call */
+  drawBricksBatch(bricks) {
+    if (!bricks || bricks.length === 0) return;
+    const ctx = this.ctx;
+    const dangerY = Config.SCREEN_HEIGHT * Config.BRICK_DANGER_Y;
+    const now = Date.now();
+
+    // 按颜色分组
+    const groups = {};
+    const flashBricks = [];
+    const shieldBricks = [];
+    const hpTextBricks = [];
+
+    for (let i = 0; i < bricks.length; i++) {
+      const b = bricks[i];
+      if (!b.alive) continue;
+
+      // 处理 flashTimer
+      if (b.flashTimer > 0) {
+        b.flashTimer--;
+        flashBricks.push(b);
+        continue;
+      }
+
+      // 危险区变红
+      const dangerDist = dangerY - (b.y + b.height);
+      if (dangerDist < 40) {
+        flashBricks.push(b); // 用flashBricks数组处理危险区砖块
+        continue;
+      }
+
+      // 按颜色分组
+      const c = b.color;
+      if (!groups[c]) groups[c] = [];
+      groups[c].push(b);
+
+      // 收集需要边框的
+      if (b.type === 'shield' && b.shieldHp > 0) shieldBricks.push(b);
+      if (b.hp > 1) hpTextBricks.push(b);
+    }
+
+    // Pass 1: 批量画同色砖块主体
+    for (const color in groups) {
+      const arr = groups[color];
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      for (let i = 0; i < arr.length; i++) {
+        const b = arr[i];
+        ctx.rect(b.x, b.y, b.width, b.height);
+      }
+      ctx.fill();
+    }
+
+    // Pass 2: 画闪白/危险砖块
+    if (flashBricks.length > 0) {
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      for (let i = 0; i < flashBricks.length; i++) {
+        const b = flashBricks[i];
+        ctx.rect(b.x, b.y, b.width, b.height);
+      }
+      ctx.fill();
+    }
+
+    // Pass 3: 画护盾边框
+    if (shieldBricks.length > 0) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i < shieldBricks.length; i++) {
+        const b = shieldBricks[i];
+        ctx.rect(b.x - 2, b.y - 2, b.width + 4, b.height + 4);
+      }
+      ctx.stroke();
+    }
+
+    // Pass 4: HP数字
+    if (hpTextBricks.length > 0) {
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 10px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      for (let i = 0; i < hpTextBricks.length; i++) {
+        const b = hpTextBricks[i];
+        ctx.fillText(b.hp.toString(), b.x + b.width / 2, b.y + b.height / 2);
+      }
+    }
+  }
+
   // ===== 粒子 =====
   drawParticles(particles) {
     if (!particles || particles.length === 0) return;

@@ -400,7 +400,7 @@ class Game {
     var shaking = this.screenShake > 0.5;
     if(shaking){this.renderer.ctx.save();this.renderer.ctx.translate((Math.random()-0.5)*this.screenShake*this.renderer.dpr,(Math.random()-0.5)*this.screenShake*this.renderer.dpr);this.screenShake*=0.85;if(this.screenShake<0.5)this.screenShake=0;}
     this.renderer.drawDangerLine(this.gameHeight*Config.BRICK_DANGER_Y);
-    for(var i=0;i<this.bricks.length;i++) this.renderer.drawBrick(this.bricks[i]);
+    this.renderer.drawBricksBatch(this.bricks);
     if(this.boss&&this.boss.alive) this.renderer.drawBoss(this.boss);
     for(var j=0;j<this.powerUps.length;j++) this.renderer.drawPowerUp(this.powerUps[j]);
     this.renderer.drawExpOrbs(this.expSystem.orbs);
