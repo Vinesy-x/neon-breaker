@@ -66,13 +66,18 @@ class LightningWeapon extends Weapon {
       const chainMult = 1 + c * chargeLv * 0.25;
       const damage = Math.floor(baseDamage * chainMult);
 
-      let nearest = null, nearDist = Infinity;
+      let nearest = null, bestScore = -Infinity;
+      const dangerY = Config.SCREEN_HEIGHT * Config.BRICK_DANGER_Y;
       for (let i = 0; i < aliveBricks.length; i++) {
         if (hit.has(i)) continue;
         const bc = aliveBricks[i].getCenter();
         const dx = bc.x - lastX, dy = bc.y - lastY;
-        const d = dx * dx + dy * dy;
-        if (d < nearDist) { nearDist = d; nearest = { idx: i, brick: aliveBricks[i] }; }
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        // 越靠前(y越大)分数越高，距离远的扣分
+        const frontScore = bc.y / dangerY; // 0~1，越靠前越高
+        const distPenalty = dist / 300; // 距离惩罚
+        const score = frontScore * 3 - distPenalty;
+        if (score > bestScore) { bestScore = score; nearest = { idx: i, brick: aliveBricks[i] }; }
       }
 
       if (!nearest) {
