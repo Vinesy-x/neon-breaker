@@ -71,7 +71,6 @@ class Game {
     this.spawnTimer = 0; this.boss = null; this.score = 0;
     this.upgrades.reset(); this.expSystem.reset();
     this.burnDots = [];
-    this.launcher.bulletDamage = 1 + this.saveManager.getAttackBonus();
     this.launcher.permFireRateBonus = this.saveManager.getFireRateBonus();
     this._syncLauncherStats();
     for (var r = 0; r < Config.BRICK_INIT_ROWS; r++) {
@@ -86,7 +85,9 @@ class Game {
     var count = 1 + sp;
     var spread = count > 1 ? (count - 1) * 0.12 : 0;
     var cx = this.launcher.getCenterX(), sy = this.launcher.y - 5;
-    var dmg = Math.max(1, Math.floor(this.launcher.bulletDamage * this.upgrades.getAttackMult()));
+    // 子弹伤害 = baseAttack × 子弹系数(1.0) × (1 + 飞机树子弹伤害加成)
+    var bulletCoef = 1.0;
+    var dmg = Math.max(1, Math.floor(this.getBaseAttack() * bulletCoef * this.upgrades.getAttackMult()));
     var pierce = this.upgrades.getPierceCount();
     var element = this.upgrades.getElementType();
     var elementLv = this.upgrades.getElementLevel();
@@ -163,7 +164,6 @@ class Game {
     if (!this.launcher) return;
     var fireRateMult = this.upgrades.getFireRateMult();
     this.launcher.permFireRateBonus = 1 - 1 / fireRateMult + this.saveManager.getFireRateBonus();
-    this.launcher.bulletDamage = 1 + this.saveManager.getAttackBonus();
   }
 
   update(timestamp) {
