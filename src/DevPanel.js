@@ -286,6 +286,37 @@ class DevPanel {
 
   // ===== Tab 0: 快捷操作 =====
   _drawQuickTab(ctx, game, x, y, w) {
+    // ===== 基础属性面板 =====
+    const baseAttack = game.getBaseAttack();
+    const critBonus = game.saveManager ? game.saveManager.getCritBonus() : 0;
+    const fireRateMult = game.upgrades ? game.upgrades.getFireRateMult() : 1;
+    const fireRateBonus = game.saveManager ? game.saveManager.getFireRateBonus() : 0;
+    const coinMult = game.saveManager ? game.saveManager.getCoinMultiplier() : 1;
+    const expMult = game.saveManager ? game.saveManager.getExpMultiplier() : 1;
+
+    ctx.fillStyle = 'rgba(0,255,255,0.1)';
+    ctx.beginPath(); ctx.roundRect(x, y, w, 72, 6); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,255,255,0.3)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.roundRect(x, y, w, 72, 6); ctx.stroke();
+
+    ctx.fillStyle = Config.NEON_CYAN;
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText('📊 基础属性', x + 8, y + 6);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = '11px monospace';
+    const col1 = x + 8, col2 = x + w / 2 + 4;
+    const row1 = y + 22, row2 = y + 38, row3 = y + 54;
+
+    ctx.fillText(`⚔ 攻击: ${baseAttack}`, col1, row1);
+    ctx.fillText(`🎯 暴击: +${(critBonus * 100).toFixed(0)}%`, col2, row1);
+    ctx.fillText(`🔫 射速: ×${(fireRateMult * (1 + fireRateBonus)).toFixed(2)}`, col1, row2);
+    ctx.fillText(`💰 金币: ×${coinMult.toFixed(2)}`, col2, row2);
+    ctx.fillText(`⭐ 经验: ×${expMult.toFixed(2)}`, col1, row3);
+
+    y += 80;
+
     const btnH = 38;
     const gap = 8;
     const cols = 2;
