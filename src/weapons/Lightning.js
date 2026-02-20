@@ -30,7 +30,7 @@ class LightningWeapon extends Weapon {
 
     // 闪电淡出
     for (let i = this.bolts.length - 1; i >= 0; i--) {
-      this.bolts[i].alpha -= 0.04 * dt;
+      this.bolts[i].alpha -= 0.025 * dt;
       if (this.bolts[i].alpha <= 0) this.bolts.splice(i, 1);
     }
 

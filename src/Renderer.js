@@ -785,47 +785,110 @@ class Renderer {
 
   _drawLightning(data, ctx) {
     const { bolts, color } = data;
+
     for (const bolt of bolts) {
+      const pts = bolt.points;
+      if (pts.length < 2) continue;
       ctx.globalAlpha = bolt.alpha;
 
-      ctx.strokeStyle = 'rgba(' + this._hexToRgb(color) + ', 0.3)';
-      ctx.lineWidth = 6;
+      // === 第1层：外层大光晕（紫色/黄色渐变） ===
+      ctx.strokeStyle = 'rgba(' + this._hexToRgb(color) + ', 0.15)';
+      ctx.lineWidth = 16;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
       ctx.beginPath();
-      for (let i = 0; i < bolt.points.length; i++) {
-        const p = bolt.points[i];
-        const jx = (i > 0 && i < bolt.points.length - 1) ? (Math.random() - 0.5) * 15 : 0;
-        const jy = (i > 0 && i < bolt.points.length - 1) ? (Math.random() - 0.5) * 10 : 0;
-        if (i === 0) ctx.moveTo(p.x, p.y);
-        else ctx.lineTo(p.x + jx, p.y + jy);
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) {
+        ctx.lineTo(pts[i].x, pts[i].y);
       }
       ctx.stroke();
 
+      // === 第2层：主闪电体（抖动效果） ===
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) {
+        // 中间点加抖动
+        const jx = (Math.random() - 0.5) * 12;
+        const jy = (Math.random() - 0.5) * 8;
+        ctx.lineTo(pts[i].x + jx, pts[i].y + jy);
+      }
+      ctx.stroke();
+
+      // === 第3层：白色内芯 ===
       ctx.strokeStyle = '#FFFFFF';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      for (let i = 0; i < bolt.points.length; i++) {
-        const p = bolt.points[i];
-        const jx = (i > 0 && i < bolt.points.length - 1) ? (Math.random() - 0.5) * 8 : 0;
-        const jy = (i > 0 && i < bolt.points.length - 1) ? (Math.random() - 0.5) * 5 : 0;
-        if (i === 0) ctx.moveTo(p.x, p.y);
-        else ctx.lineTo(p.x + jx, p.y + jy);
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) {
+        const jx = (Math.random() - 0.5) * 6;
+        const jy = (Math.random() - 0.5) * 4;
+        ctx.lineTo(pts[i].x + jx, pts[i].y + jy);
       }
       ctx.stroke();
 
-      for (let i = 1; i < bolt.points.length; i++) {
-        const p = bolt.points[i];
+      // === 分支闪电（从每个节点随机分出小分支） ===
+      ctx.strokeStyle = 'rgba(' + this._hexToRgb(color) + ', 0.5)';
+      ctx.lineWidth = 1.5;
+      for (let i = 1; i < pts.length - 1; i++) {
+        if (Math.random() > 0.6) continue; // 60%概率出分支
+        const p = pts[i];
+        const angle = Math.random() * Math.PI * 2;
+        const len = 15 + Math.random() * 20;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        const midX = p.x + Math.cos(angle) * len * 0.5 + (Math.random() - 0.5) * 8;
+        const midY = p.y + Math.sin(angle) * len * 0.5 + (Math.random() - 0.5) * 8;
+        const endX = p.x + Math.cos(angle) * len;
+        const endY = p.y + Math.sin(angle) * len;
+        ctx.lineTo(midX, midY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+      }
+
+      // === 命中点光效 ===
+      for (let i = 1; i < pts.length; i++) {
+        const p = pts[i];
+        // 外层光晕
+        ctx.globalAlpha = bolt.alpha * 0.3;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 12, 0, Math.PI * 2);
+        ctx.fill();
+        // 中层
+        ctx.globalAlpha = bolt.alpha * 0.6;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+        // 白色核心
+        ctx.globalAlpha = bolt.alpha;
         ctx.fillStyle = '#FFFFFF';
         ctx.beginPath();
-        ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = color;
+      }
+
+      // === 链间电弧（在相邻命中点之间画额外小闪电） ===
+      if (pts.length > 2) {
+        ctx.strokeStyle = 'rgba(' + this._hexToRgb(color) + ', 0.3)';
         ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
-        ctx.stroke();
+        for (let i = 1; i < pts.length - 1; i++) {
+          const p1 = pts[i], p2 = pts[i + 1];
+          const midX = (p1.x + p2.x) / 2 + (Math.random() - 0.5) * 20;
+          const midY = (p1.y + p2.y) / 2 + (Math.random() - 0.5) * 15;
+          ctx.beginPath();
+          ctx.moveTo(p1.x + (Math.random() - 0.5) * 10, p1.y + (Math.random() - 0.5) * 10);
+          ctx.lineTo(midX, midY);
+          ctx.lineTo(p2.x + (Math.random() - 0.5) * 10, p2.y + (Math.random() - 0.5) * 10);
+          ctx.stroke();
+        }
       }
     }
     ctx.globalAlpha = 1;
+    ctx.lineCap = 'butt';
+    ctx.lineJoin = 'miter';
 
     // 超载爆炸
     const explosions = data.explosions || [];
