@@ -3,6 +3,7 @@
  * 发射器 + 子弹 + 武器特效
  */
 const Config = require('./Config');
+const SpriteCache = require('./SpriteCache');
 
 class Renderer {
   constructor(canvas) {
@@ -12,6 +13,10 @@ class Renderer {
     canvas.width = Config.CANVAS_WIDTH;
     canvas.height = Config.CANVAS_HEIGHT;
     this.ctx.scale(this.dpr, this.dpr);
+
+    // 精灵缓存
+    this.sprites = new SpriteCache();
+    this.sprites.warmup();
 
     // 背景星空（预生成）
     this.stars = [];
@@ -52,63 +57,40 @@ class Renderer {
   }
 
   // ===== 子弹 =====
-  // ===== 子弹（批量绘制优化） =====
+  // ===== 子弹（精灵缓存优化） =====
   drawBullets(bullets) {
     if (!bullets || bullets.length === 0) return;
     const ctx = this.ctx;
-    const elementColors = { fire: '#FF4400', ice: '#44DDFF', thunder: '#FFF050' };
+    const sprites = this.sprites;
 
-    // 先画所有拖尾（低alpha，一起画）
-    ctx.globalAlpha = 0.25;
+    // 拖尾（简单半透明圆，还是用fillRect最快）
+    ctx.globalAlpha = 0.2;
     for (let k = 0; k < bullets.length; k++) {
       const b = bullets[k];
-      const bulletColor = b.element ? (elementColors[b.element] || b.color) : b.color;
-      ctx.fillStyle = bulletColor;
+      const bulletKey = b.element ? 'bullet_' + b.element : 'bullet';
+      const sprite = sprites._cache[bulletKey];
+      if (!sprite) continue;
       for (let i = 0; i < b.trail.length; i++) {
         const t = b.trail[i];
-        const radius = b.radius * (i + 1) / b.trail.length * 0.6;
-        ctx.beginPath();
-        ctx.arc(t.x, t.y, radius, 0, Math.PI * 2);
-        ctx.fill();
+        const ts = 0.3 + (i / b.trail.length) * 0.5;
+        ctx.drawImage(sprite.canvas, 
+          t.x - sprite.ox * ts, t.y - sprite.oy * ts,
+          sprite.w * ts, sprite.h * ts);
       }
     }
 
-    // 再画所有弹体
+    // 弹体（1次drawImage替代3次draw call）
     ctx.globalAlpha = 1;
     for (let k = 0; k < bullets.length; k++) {
       const b = bullets[k];
-      const bulletColor = b.element ? (elementColors[b.element] || b.color) : b.color;
-      ctx.fillStyle = bulletColor;
-      ctx.beginPath();
-      ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
-      ctx.fill();
+      const bulletKey = b.element ? 'bullet_' + b.element : 'bullet';
+      sprites.draw(ctx, bulletKey, b.x, b.y, 0, 1);
     }
-
-    // 最后画所有高光核心（白色批量）
-    ctx.fillStyle = '#FFFFFF';
-    ctx.beginPath();
-    for (let k = 0; k < bullets.length; k++) {
-      const b = bullets[k];
-      ctx.moveTo(b.x + b.radius * 0.5, b.y);
-      ctx.arc(b.x, b.y, b.radius * 0.4, 0, Math.PI * 2);
-    }
-    ctx.fill();
   }
 
   drawBullet(bullet) {
-    // 保留单个接口兼容，但推荐用drawBullets批量
-    const ctx = this.ctx;
-    const elementColors = { fire: '#FF4400', ice: '#44DDFF', thunder: '#FFF050' };
-    const bulletColor = bullet.element ? (elementColors[bullet.element] || bullet.color) : bullet.color;
-    for (let i = 0; i < bullet.trail.length; i++) {
-      const t = bullet.trail[i];
-      ctx.globalAlpha = (i + 1) / bullet.trail.length * 0.3;
-      ctx.fillStyle = bulletColor;
-      ctx.beginPath(); ctx.arc(t.x, t.y, bullet.radius * 0.6, 0, Math.PI * 2); ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = bulletColor;
-    ctx.beginPath(); ctx.arc(bullet.x, bullet.y, bullet.radius, 0, Math.PI * 2); ctx.fill();
+    const bulletKey = bullet.element ? 'bullet_' + bullet.element : 'bullet';
+    this.sprites.draw(this.ctx, bulletKey, bullet.x, bullet.y, 0, 1);
   }
 
   // ===== 发射器 =====
@@ -556,91 +538,11 @@ class Renderer {
       }
     }
 
-    // ===== 炮弹本体（色块拼凑：圆头+弹体+尾翼） =====
+    // ===== 炮弹本体（精灵缓存，1次drawImage替代15+次draw） =====
     for (const k of knives) {
       const s = k.scale || 1;
-      ctx.save();
-      ctx.translate(k.x, k.y);
-      ctx.rotate(Math.atan2(k.vy, k.vx));
-      ctx.scale(s, s);
-
-      // 1) 弹体主体（圆角矩形）
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.moveTo(6, -3.5);
-      ctx.lineTo(-6, -3.5);
-      ctx.lineTo(-6, 3.5);
-      ctx.lineTo(6, 3.5);
-      ctx.closePath();
-      ctx.fill();
-
-      // 2) 弹头（半圆）
-      ctx.beginPath();
-      ctx.arc(6, 0, 3.5, -Math.PI / 2, Math.PI / 2);
-      ctx.fill();
-
-      // 3) 弹头高光
-      ctx.fillStyle = '#FFFFFF';
-      ctx.globalAlpha = 0.7;
-      ctx.beginPath();
-      ctx.arc(7, -1, 2, 0, Math.PI * 2);
-      ctx.fill();
-
-      // 4) 弹体条纹（深色环带）
-      ctx.globalAlpha = 0.4;
-      ctx.fillStyle = '#004466';
-      ctx.fillRect(-1, -3.5, 2, 7);
-      ctx.fillRect(3, -3.5, 1.5, 7);
-
-      // 5) 尾翼（两片三角形）
-      ctx.globalAlpha = 0.9;
-      ctx.fillStyle = '#006688';
-      // 上翼
-      ctx.beginPath();
-      ctx.moveTo(-6, -3.5);
-      ctx.lineTo(-11, -6);
-      ctx.lineTo(-9, -3.5);
-      ctx.closePath();
-      ctx.fill();
-      // 下翼
-      ctx.beginPath();
-      ctx.moveTo(-6, 3.5);
-      ctx.lineTo(-11, 6);
-      ctx.lineTo(-9, 3.5);
-      ctx.closePath();
-      ctx.fill();
-
-      // 6) 尾翼内线
-      ctx.strokeStyle = '#00AACC';
-      ctx.lineWidth = 0.5;
-      ctx.globalAlpha = 0.6;
-      ctx.beginPath();
-      ctx.moveTo(-6, -3); ctx.lineTo(-9.5, -5);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(-6, 3); ctx.lineTo(-9.5, 5);
-      ctx.stroke();
-
-      // 7) 尾部推进火焰
-      ctx.globalAlpha = 0.8;
-      ctx.fillStyle = '#FF8844';
-      ctx.beginPath();
-      ctx.moveTo(-6, -2);
-      ctx.lineTo(-10, 0);
-      ctx.lineTo(-6, 2);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = '#FFDD44';
-      ctx.globalAlpha = 0.6;
-      ctx.beginPath();
-      ctx.moveTo(-6, -1);
-      ctx.lineTo(-8, 0);
-      ctx.lineTo(-6, 1);
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.globalAlpha = 1;
-      ctx.restore();
+      const angle = Math.atan2(k.vy, k.vx);
+      this.sprites.draw(ctx, 'mortar_shell', k.x, k.y, angle, s);
     }
 
     // ===== 爆炸特效（性能优化版） =====
@@ -839,8 +741,9 @@ class Renderer {
 
   _drawMissile(data, ctx) {
     const { missiles, explosions, color } = data;
+    const sprites = this.sprites;
 
-    // 拖尾批量（单层，单色）
+    // 拖尾
     ctx.fillStyle = Config.NEON_ORANGE;
     for (const m of missiles) {
       for (let i = 0; i < m.trail.length; i++) {
@@ -853,24 +756,11 @@ class Renderer {
       }
     }
 
-    // 弹体批量
+    // 弹体（精灵缓存，1次drawImage替代4次draw）
     ctx.globalAlpha = 1;
-    ctx.fillStyle = color;
-    ctx.beginPath();
     for (const m of missiles) {
-      ctx.moveTo(m.x + 5, m.y);
-      ctx.arc(m.x, m.y, 5, 0, Math.PI * 2);
+      sprites.draw(ctx, 'missile', m.x, m.y, 0, 1);
     }
-    ctx.fill();
-
-    // 弹体高光批量
-    ctx.fillStyle = '#FFFFFF';
-    ctx.beginPath();
-    for (const m of missiles) {
-      ctx.moveTo(m.x + 2, m.y - 1);
-      ctx.arc(m.x, m.y - 1, 2, 0, Math.PI * 2);
-    }
-    ctx.fill();
 
     // 爆炸（精简：冲击环+核心闪光）
     for (const e of explosions) {
@@ -1005,16 +895,10 @@ class Renderer {
   drawExpOrbs(orbs) {
     if (!orbs || orbs.length === 0) return;
     const ctx = this.ctx;
-    const size = Config.EXP_ORB_SIZE;
-    // 批量画所有经验球（单色）
-    ctx.fillStyle = Config.EXP_ORB_COLOR;
-    ctx.beginPath();
     for (let i = 0; i < orbs.length; i++) {
       const o = orbs[i];
-      ctx.moveTo(o.x + size, o.y);
-      ctx.arc(o.x, o.y, size, 0, Math.PI * 2);
+      this.sprites.draw(ctx, 'exp_orb', o.x, o.y, 0, 1);
     }
-    ctx.fill();
   }
 
   // ===== 经验条 =====
