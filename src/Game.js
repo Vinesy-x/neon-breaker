@@ -293,6 +293,8 @@ class Game {
     if(!this._devPauseFire){this.fireTimer+=dtMs; if(this.fireTimer>=this.launcher.getFireInterval()){this.fireTimer-=this.launcher.getFireInterval();this._fireBullets();}}
     if(this.boss&&this.boss.alive){this.boss.update(dtMs);var s=this.boss.collectSpawnedBricks();if(s.length>0) this.bricks=this.bricks.concat(s);}
     this._scrollBricks(dt); BrickFactory.updateSpecialBricks(this.bricks,dtMs);
+    // Boss越过危险线 → Game Over
+    if(this.boss&&this.boss.alive&&this.boss.isPastDangerLine()){Sound.gameOver();this.state=Config.STATE.GAME_OVER;return;}
     if(this._checkDangerLine()){Sound.gameOver();this.state=Config.STATE.GAME_OVER;return;}
     this.upgrades.updateWeapons(dtMs,this); this._updateBullets(dt,dtMs); this._updateBurnDots(dtMs); this._updatePowerUps(dt);
     this.expSystem.update(dt); this.particles.update(dt); this._updateFloatingTexts(dt);

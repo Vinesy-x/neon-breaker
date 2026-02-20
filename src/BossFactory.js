@@ -40,6 +40,9 @@ class BossBase {
     this._spawnedBricks = [];   // Boss召唤的砖块（给Game.js收集）
     this._fireTrails = [];      // 火焰地带等特殊区域
     this._laserData = null;     // 激光数据
+
+    // 持续下压
+    this.descendSpeed = 0.015 + cycle * 0.003; // 基础下移速度，cycle越高越快
   }
 
   hit(damage) {
@@ -79,6 +82,17 @@ class BossBase {
     }
   }
 
+  /** 持续下压，所有Boss通用 */
+  _descend(dt) {
+    this.y += this.descendSpeed * dt;
+  }
+
+  /** Boss是否越过危险线 */
+  isPastDangerLine() {
+    var dangerY = Config.SCREEN_HEIGHT * Config.BRICK_DANGER_Y;
+    return this.y + this.height >= dangerY;
+  }
+
   update(dtMs) {
     // 子类覆盖
     var dt = dtMs / 16.67;
@@ -116,9 +130,13 @@ class ChargerBoss extends BossBase {
     var dt = dtMs / 16.67;
     if (this.flashTimer > 0) this.flashTimer -= dtMs;
 
+    // 持续下压（作用在基准线上）
+    this.originalY += this.descendSpeed * dt;
+
     switch (this.state) {
       case 'idle':
         this.damageMult = 1.0;
+        this.y = this.originalY; // 跟随基准线
         this._moveLeftRight(dt, 1);
         this.actionTimer += dtMs;
         if (this.actionTimer >= this.chargeInterval) {
@@ -131,6 +149,7 @@ class ChargerBoss extends BossBase {
       case 'charging':
         // 闪烁警告阶段
         this.damageMult = 1.0;
+        this.y = this.originalY;
         this.stateTimer += dtMs;
         if (this.stateTimer >= this.chargeTime) {
           this.state = 'rushing';
@@ -141,11 +160,10 @@ class ChargerBoss extends BossBase {
 
       case 'rushing':
         // 加速下冲
-        this.damageMult = 0.5; // 冲锋时不易打
+        this.damageMult = 0.5;
         this.y += 6 * dt;
         this.stateTimer += dtMs;
         if (this.y >= this.chargeTargetY || this.stateTimer > 1500) {
-          // cycle>=1: 留火焰地带
           if (this.cycle >= 1) {
             this._fireTrails.push({
               x: this.x, y: this.y, width: this.width,
@@ -159,7 +177,6 @@ class ChargerBoss extends BossBase {
         break;
 
       case 'stunned':
-        // 停顿1秒，受双倍伤害
         this.damageMult = 2.0;
         this.stateTimer += dtMs;
         if (this.stateTimer >= this.stunTimer) {
@@ -275,6 +292,7 @@ class GuardianBoss extends BossBase {
     var dt = dtMs / 16.67;
     if (this.flashTimer > 0) this.flashTimer -= dtMs;
 
+    this._descend(dt);
     this._moveLeftRight(dt, 0.8);
     this.shieldAngle += this.shieldSpeed * dt;
 
@@ -321,6 +339,8 @@ class SummonerBoss extends BossBase {
     var dt = dtMs / 16.67;
     if (this.flashTimer > 0) this.flashTimer -= dtMs;
 
+    this._descend(dt);
+
     switch (this.state) {
       case 'idle':
         this.damageMult = 1.0;
@@ -331,13 +351,13 @@ class SummonerBoss extends BossBase {
           this.state = 'summoning';
           this.stateTimer = 0;
           this.invulnTimer = this.summonInvulnTime;
-          this.damageMult = 0; // 无敌
+          this.damageMult = 0;
           this._summonBricks();
         }
         break;
 
       case 'summoning':
-        this.damageMult = 0; // 无敌
+        this.damageMult = 0;
         this.stateTimer += dtMs;
         this.invulnTimer -= dtMs;
         if (this.invulnTimer <= 0) {
@@ -403,6 +423,8 @@ class LaserTurretBoss extends BossBase {
     var dt = dtMs / 16.67;
     if (this.flashTimer > 0) this.flashTimer -= dtMs;
 
+    this._descend(dt);
+
     switch (this.state) {
       case 'idle':
         this.damageMult = 1.0;
@@ -416,7 +438,6 @@ class LaserTurretBoss extends BossBase {
         break;
 
       case 'charging':
-        // 充能期间停止移动，头顶受3倍伤害
         this.damageMult = 3.0;
         this.stateTimer += dtMs;
         this._laserData = {
@@ -509,11 +530,12 @@ class PhantomBoss extends BossBase {
     var dt = dtMs / 16.67;
     if (this.flashTimer > 0) this.flashTimer -= dtMs;
 
+    this._descend(dt);
+
     switch (this.state) {
       case 'idle':
         this._moveLeftRight(dt, 1.2);
         this.appearTimer += dtMs;
-        // 出现后1秒双倍伤害
         if (this.appearTimer < this.appearWindowTime) {
           this.damageMult = 2.0;
         } else {
@@ -524,8 +546,7 @@ class PhantomBoss extends BossBase {
           this.actionTimer = 0;
           this.state = 'blinking';
           this.stateTimer = 0;
-          this.invisTimer = 500; // 消失0.5秒
-          // cycle>=1: 留残影
+          this.invisTimer = 500;
           if (this.cycle >= 1) {
             this._afterImages.push({
               x: this.x, y: this.y, timer: 2000,
@@ -536,17 +557,15 @@ class PhantomBoss extends BossBase {
         break;
 
       case 'blinking':
-        // 消失中，完全无敌
         this.damageMult = 0;
         this.stateTimer += dtMs;
         if (this.stateTimer >= this.invisTimer) {
-          // 随机位置出现
+          // 随机x，y保持当前下压高度附近浮动
           this.x = Math.random() * (this.gameAreaWidth - this.width);
-          this.y = Config.SAFE_TOP + 10 + Math.random() * 40;
+          this.y = this.y + (Math.random() - 0.5) * 30;
           this.state = 'idle';
           this.appearTimer = 0;
           this.damageMult = 2.0;
-          // 出现瞬间释放一排快速砖块
           this._spawnAppearBricks();
         }
         break;
