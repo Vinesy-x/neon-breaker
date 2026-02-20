@@ -213,7 +213,7 @@ class SpinBlade extends Weapon {
 
   _launch(ctx) {
     const cx = ctx.launcher.getCenterX(), cy = ctx.launcher.y - 20;
-    const durationMs = (5 + (this.branches.duration || 0) * 1.5) * 1000;
+    const durationMs = (10 + (this.branches.duration || 0) * 2) * 1000;
     // 水平发射为主，轻微向上
     const angle = (Math.random() > 0.5 ? 0 : Math.PI) + (Math.random() - 0.5) * 0.3;
     const spd = 1.2;
