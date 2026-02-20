@@ -96,11 +96,12 @@ class DroneWeapon extends Weapon {
       const pulseLv = this.branches.pulse || 0;
 
       const lines = this._getLaserLines();
+      const hitBricks = new Set(); // 每tick每砖块只受一次激光伤害
 
       for (const line of lines) {
         for (let j = 0; j < ctx.bricks.length; j++) {
           const brick = ctx.bricks[j];
-          if (!brick.alive) continue;
+          if (!brick.alive || hitBricks.has(brick)) continue;
           const bc = brick.getCenter();
           const dist = this._pointToLineDist(bc.x, bc.y, line.x1, line.y1, line.x2, line.y2);
           if (dist < laserWidth + brick.width * 0.3) {
@@ -109,6 +110,7 @@ class DroneWeapon extends Weapon {
               dmg = Math.floor(dmg * (1 + focusLv * 0.8));
             }
             ctx.damageBrick(brick, dmg, 'drone_laser');
+            hitBricks.add(brick);
             if (Math.random() < 0.25) {
               this.laserHits.push({ x: bc.x, y: bc.y, alpha: 1.0 });
             }
@@ -125,36 +127,32 @@ class DroneWeapon extends Weapon {
         }
       }
 
-      // === 电弧：激光线附近随机弹射 ===
+      // === 电弧：打激光线没覆盖到的附近砖块 ===
       if (arcLv > 0) {
-        const arcRange = 30 + arcLv * 20; // 电弧弹射范围
+        const arcRange = 40 + arcLv * 25;
         const arcDmg = Math.floor(damage * 0.5);
-        const arcsPerLine = arcLv; // 每条线每tick弹出的电弧数
+        const arcsPerLine = arcLv;
 
         for (const line of lines) {
           for (let a = 0; a < arcsPerLine; a++) {
-            // 激光线上随机取一点
             const t = Math.random();
             const srcX = line.x1 + (line.x2 - line.x1) * t;
             const srcY = line.y1 + (line.y2 - line.y1) * t;
 
-            // 找附近但不在激光线上的砖块
             for (let j = 0; j < ctx.bricks.length; j++) {
               const brick = ctx.bricks[j];
-              if (!brick.alive) continue;
+              if (!brick.alive || hitBricks.has(brick)) continue;
               const bc = brick.getCenter();
               const adx = bc.x - srcX, ady = bc.y - srcY;
               const adist = Math.sqrt(adx * adx + ady * ady);
-              // 在电弧范围内但不在激光线判定内
-              const lineDist = this._pointToLineDist(bc.x, bc.y, line.x1, line.y1, line.x2, line.y2);
-              if (adist < arcRange && lineDist > laserWidth) {
+              if (adist < arcRange) {
                 ctx.damageBrick(brick, arcDmg, 'drone_arc');
-                // 电弧视觉
+                hitBricks.add(brick);
                 this.laserHits.push({
                   x: bc.x, y: bc.y, alpha: 0.8,
                   arcFrom: { x: srcX, y: srcY },
                 });
-                break; // 每个电弧只打一个目标
+                break;
               }
             }
           }

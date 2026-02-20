@@ -336,6 +336,14 @@ class DevPanel {
     const totalDmg = entries.reduce((sum, e) => sum + e[1], 0);
 
     if (totalDmg > 0) {
+      const nameMap = {
+        'bullet': '飞机子弹', 'kunai': '迫击炮', 'kunai_aoe': '迫击炮AOE',
+        'missile': '追踪导弹', 'lightning': '闪电链', 'lightning_aoe': '闪电爆炸',
+        'meteor': '陨石', 'drone_laser': '无人机阵', 'drone_arc': '无人机电弧',
+        'drone_cross': '无人机过载', 'drone_pulse': '无人机脉冲',
+        'fire_dot': '燃烧', 'thunder_chain': '雷击', 'shock': '感电',
+        'spinBlade': '等离子旋刃', 'kunai_chain': '迫击连锁',
+      };
       const statH = 20 + entries.length * 16;
       ctx.fillStyle = 'rgba(255,100,100,0.1)';
       ctx.beginPath(); ctx.roundRect(x, y, w, statH, 6); ctx.fill();
@@ -358,7 +366,7 @@ class DevPanel {
         // 文字
         ctx.fillStyle = '#FFFFFF';
         ctx.textAlign = 'left';
-        ctx.fillText(src, x + 8, statY);
+        ctx.fillText(nameMap[src] || src, x + 8, statY);
         ctx.textAlign = 'right';
         ctx.fillText(`${this._formatNum(dmg)} (${pct}%)`, x + w - 8, statY);
         statY += 16;
