@@ -168,6 +168,13 @@ class SaveManager {
     return true;
   }
 
+  /** Dev用：直接设置升级等级 */
+  setUpgrade(key, level) {
+    if (this._data.upgrades[key] === undefined) return;
+    this._data.upgrades[key] = Math.max(0, level);
+    this.save();
+  }
+
   // ===== 升级效果计算 =====
 
   /** 基础攻击加成（子弹伤害+1/级） */

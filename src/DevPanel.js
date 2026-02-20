@@ -176,6 +176,15 @@ class DevPanel {
         game.upgrades.reset();
         game._syncLauncherStats();
         break;
+      case 'permUp':
+        game.saveManager.setUpgrade(params.key, game.saveManager.getUpgrade(params.key) + 1);
+        break;
+      case 'permUp10':
+        game.saveManager.setUpgrade(params.key, game.saveManager.getUpgrade(params.key) + 10);
+        break;
+      case 'permDown':
+        game.saveManager.setUpgrade(params.key, game.saveManager.getUpgrade(params.key) - 1);
+        break;
     }
   }
 
@@ -228,7 +237,7 @@ class DevPanel {
     ctx.fillText('✕', clsX + clsS / 2, clsY + clsS / 2);
 
     // ===== Tab 页签 =====
-    const tabNames = ['⚡ 快捷', '🔪 武器', '✈ 飞机'];
+    const tabNames = ['⚡ 快捷', '🔪 武器', '✈ 飞机', '💎 永久'];
     const tabY = py + 32;
     const tabH = 34;
     const tabGap = 4;
@@ -268,6 +277,7 @@ class DevPanel {
       case 0: cy = this._drawQuickTab(ctx, game, cx, cy, cw); break;
       case 1: cy = this._drawWeaponTab(ctx, game, cx, cy, cw); break;
       case 2: cy = this._drawShipTab(ctx, game, cx, cy, cw); break;
+      case 3: cy = this._drawPermTab(ctx, game, cx, cy, cw); break;
     }
 
     this.maxScroll = Math.max(0, (cy + this.scroll) - (ctop + ch));
@@ -470,6 +480,59 @@ class DevPanel {
       cy += rowH;
     }
     return cy;
+  }
+
+  // ===== Tab 3: 永久升级 =====
+  _drawPermTab(ctx, game, x, y, w) {
+    const rowH = 36;
+    const permUpgrades = [
+      { key: 'attack', name: '⚔ 攻击', desc: 'baseAttack +1' },
+      { key: 'fireRate', name: '🔫 射速', desc: '+2%射速' },
+      { key: 'crit', name: '🎯 暴击', desc: '+1%暴击率' },
+      { key: 'startLevel', name: '⬆ 初始等级', desc: '起始等级+1' },
+      { key: 'coinBonus', name: '💰 金币', desc: '+5%金币' },
+      { key: 'expBonus', name: '⭐ 经验', desc: '+3%经验' },
+    ];
+
+    ctx.fillStyle = 'rgba(255,215,0,0.15)';
+    ctx.beginPath(); ctx.roundRect(x, y, w, 36, 6); ctx.fill();
+    ctx.fillStyle = '#FFD700';
+    ctx.font = 'bold 12px monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('💎 永久升级 (存档)', x + w / 2, y + 18);
+    y += 44;
+
+    for (const u of permUpgrades) {
+      const curLv = game.saveManager.getUpgrade(u.key);
+
+      // 名称
+      ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      ctx.font = '12px monospace';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText(u.name, x + 4, y + rowH / 2);
+
+      // 等级
+      ctx.fillStyle = curLv > 0 ? '#FFD700' : 'rgba(255,255,255,0.3)';
+      ctx.font = 'bold 14px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('Lv.' + curLv, x + 100, y + rowH / 2);
+
+      // 按钮
+      const btnW2 = 34, btnH2 = rowH - 8, gap2 = 4;
+      const startX = x + w - btnW2 * 3 - gap2 * 2;
+
+      if (curLv > 0) {
+        this._drawBigBtn(ctx, '-1', startX, y + 4, btnW2, btnH2, '#FF5555',
+          { action: 'permDown', params: { key: u.key } });
+      }
+      this._drawBigBtn(ctx, '+1', startX + btnW2 + gap2, y + 4, btnW2, btnH2, '#FFD700',
+        { action: 'permUp', params: { key: u.key } });
+      this._drawBigBtn(ctx, '+10', startX + (btnW2 + gap2) * 2, y + 4, btnW2, btnH2, '#FFA500',
+        { action: 'permUp10', params: { key: u.key } });
+
+      y += rowH;
+    }
+    return y;
   }
 
   // ===== 大按钮 =====
