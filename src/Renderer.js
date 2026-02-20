@@ -834,7 +834,7 @@ class Renderer {
   }
 
   // ===== 升级选择（居中并列3列卡片） =====
-  drawSkillChoice(choices, upgrades) {
+  drawSkillChoice(choices, upgrades, title) {
     const ctx = this.ctx;
     const sw = Config.SCREEN_WIDTH;
     const sh = Config.SCREEN_HEIGHT;
@@ -843,11 +843,12 @@ class Renderer {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
     ctx.fillRect(0, 0, sw, sh);
 
-    ctx.fillStyle = Config.NEON_PINK;
+    const isLevelUp = (title || '').indexOf('LEVEL') >= 0;
+    ctx.fillStyle = isLevelUp ? Config.NEON_GREEN : Config.NEON_PINK;
     ctx.font = 'bold 22px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('📦 技能宝箱', cx, sh * 0.16);
+    ctx.fillText(title || '选择强化', cx, sh * 0.16);
 
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
     ctx.font = '13px monospace';
