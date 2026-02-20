@@ -17,6 +17,8 @@ class InputManager {
     this.onTitleTap = null; // 标题页回调
     this.onGameOverTap = null; // Game over 回调
 
+    this.onDragY = null; // 拖动回调（dev panel滚动用）
+
     this._bindEvents();
   }
 
@@ -26,6 +28,7 @@ class InputManager {
       const t = e.touches[0];
       this.touchStartX = t.clientX;
       this.touchCurrentX = t.clientX;
+      this._lastTouchY = t.clientY;
       this.isTouching = true;
       this.tapX = t.clientX;
       this.tapY = t.clientY;
@@ -35,12 +38,18 @@ class InputManager {
     wx.onTouchMove((e) => {
       if (e.touches.length === 0) return;
       const t = e.touches[0];
+      const prevY = this._lastTouchY || t.clientY;
+      this._lastTouchY = t.clientY;
       this.touchCurrentX = t.clientX;
       // 如果移动了太多距离，取消 tap
       const dx = Math.abs(t.clientX - this.touchStartX);
       const dy = Math.abs(t.clientY - this.tapY);
       if (dx > 10 || dy > 10) {
         this.hasTap = false;
+      }
+      // 拖动回调
+      if (this.onDragY) {
+        this.onDragY(t.clientY - prevY);
       }
     });
 
@@ -61,6 +70,16 @@ class InputManager {
     const delta = this.touchCurrentX - this.touchStartX;
     this.touchStartX = this.touchCurrentX;
     return delta;
+  }
+
+  /**
+   * 查看 tap 但不消费
+   */
+  peekTap() {
+    if (this.hasTap) {
+      return { x: this.tapX, y: this.tapY };
+    }
+    return null;
   }
 
   /**

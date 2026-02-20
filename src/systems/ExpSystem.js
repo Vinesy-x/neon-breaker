@@ -102,6 +102,11 @@ class ExpSystem {
     }
   }
 
+  /** 公共接口：直接加经验（dev用） */
+  addExp(amount) {
+    this._addExp(amount);
+  }
+
   /** 消费一个待处理的升级 */
   consumeLevelUp() {
     if (this.pendingLevelUps > 0) {

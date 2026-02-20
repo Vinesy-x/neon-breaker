@@ -17,6 +17,7 @@ const ExpSystem = require('./systems/ExpSystem');
 const Renderer = require('./Renderer');
 const InputManager = require('./input/InputManager');
 const Sound = require('./systems/SoundManager');
+const DevPanel = require('./DevPanel');
 
 class Game {
   constructor(canvas) {
@@ -43,7 +44,14 @@ class Game {
     this.spawnTimer = 0; this.bossWarningTimer = 0; this.bossTriggered = false;
     this.lastTime = 0; this.loadTimer = 0;
     this.burnDots = [];
+    this._devInvincible = false;
+    this.devPanel = new DevPanel();
     this.state = Config.STATE.LOADING; this.loadTimer = 60;
+
+    // Dev panel 滚动
+    this.input.onDragY = (dy) => {
+      if (this.devPanel.open) this.devPanel.handleDrag(dy);
+    };
   }
 
   getBaseAttack() { return this.upgrades.getBaseAttack() + this.saveManager.getAttackBonus(); }
@@ -158,6 +166,22 @@ class Game {
   update(timestamp) {
     if (this.lastTime===0) this.lastTime=timestamp;
     var dtMs=Math.min(timestamp-this.lastTime,50); this.lastTime=timestamp; var dt=dtMs/16.67;
+
+    // Dev panel 优先处理点击
+    var devTap = this.input.peekTap();
+    if (devTap) {
+      var devResult = this.devPanel.handleTap(devTap, this);
+      if (devResult && devResult.consumed) {
+        this.input.consumeTap(); // 消费掉，不传递给游戏
+        return; // 这一帧不处理游戏逻辑
+      }
+    }
+
+    // Dev panel 打开时拦截飞机移动，用于面板滚动
+    if (this.devPanel.open && this.input.isTouching) {
+      // 不处理游戏输入
+    }
+
     switch(this.state) {
       case Config.STATE.LOADING: this.loadTimer-=dt; if(this.loadTimer<=0) this.state=Config.STATE.TITLE; break;
       case Config.STATE.TITLE: if(this.input.consumeTap()){Sound.init();Sound.gameStart();this.state=Config.STATE.CHAPTER_SELECT;} break;
@@ -233,11 +257,11 @@ class Game {
 
   _scrollBricks(dt) { if(!this.chapterConfig) return; var bs=this.chapterConfig.scrollSpeed; var ac=(this.currentPhase&&this.currentPhase.scrollAccel)?this.currentPhase.scrollAccel:0; var tip=(this.elapsedMs-(this.currentPhase?this.currentPhase.time:0))/1000; var ds=Math.min(bs+ac*tip,bs*3); for(var i=0;i<this.bricks.length;i++){if(this.bricks[i].alive) this.bricks[i].y+=ds*this.bricks[i].speedMult*dt;} for(var j=this.bricks.length-1;j>=0;j--){if(!this.bricks[j].alive||this.bricks[j].y>this.gameHeight+50) this.bricks.splice(j,1);} }
 
-  _checkDangerLine() { var dy=this.gameHeight*Config.BRICK_DANGER_Y; for(var i=0;i<this.bricks.length;i++){if(this.bricks[i].alive&&this.bricks[i].y+this.bricks[i].height>=dy) return true;} return false; }
+  _checkDangerLine() { if (this._devInvincible) return false; var dy=this.gameHeight*Config.BRICK_DANGER_Y; for(var i=0;i<this.bricks.length;i++){if(this.bricks[i].alive&&this.bricks[i].y+this.bricks[i].height>=dy) return true;} return false; }
 
   _updateBrickSpawn(dtMs) { if(!this.chapterConfig||!this.currentPhase||this.currentPhase.spawnMult<=0) return; var tip=(this.elapsedMs-this.currentPhase.time)/1000; var iv=this.chapterConfig.spawnInterval/(this.currentPhase.spawnMult*(1+Math.min(tip/60,0.15))); this.spawnTimer+=dtMs; if(this.spawnTimer>=iv){this.spawnTimer-=iv;this._spawnNewRow();} }
 
-  _handleInput(dt) { var dx=this.input.getPaddleDeltaX(); if(dx!==0) this.launcher.setX(this.launcher.getCenterX()+dx); }
+  _handleInput(dt) { if (this.devPanel.open) return; var dx=this.input.getPaddleDeltaX(); if(dx!==0) this.launcher.setX(this.launcher.getCenterX()+dx); }
 
   // ===== 元素弹效果 =====
 
@@ -353,6 +377,8 @@ class Game {
       case Config.STATE.CHAPTER_CLEAR: this.renderer.drawChapterClear(this.currentChapter,this.score,this.expSystem.playerLevel,this.maxCombo,this.upgrades.getOwnedWeapons(),this.coinsEarned,false); break;
       case Config.STATE.GAME_OVER: this._renderGame(); this.renderer.drawGameOver(this.score,this.expSystem.playerLevel,this.upgrades.getOwnedWeapons()); break;
     }
+    // Dev panel 最后绘制（在最上层）
+    this.devPanel.draw(this.renderer.ctx, this);
   }
 
   _renderGame() {
