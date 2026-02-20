@@ -177,9 +177,9 @@ class Game {
       }
     }
 
-    // Dev panel 打开时拦截飞机移动，用于面板滚动
-    if (this.devPanel.open && this.input.isTouching) {
-      // 不处理游戏输入
+    // Dev panel 打开时暂停游戏逻辑（只处理渲染）
+    if (this.devPanel.open) {
+      return;
     }
 
     switch(this.state) {
