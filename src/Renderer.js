@@ -890,24 +890,46 @@ class Renderer {
   }
 
   _drawSpinBlade(data, ctx) {
-    const { blades, color, giantLv, rampLv } = data;
+    const { blades, color, giantLv, rampLv, superLv } = data;
+    const isSuper = superLv > 0;
 
     for (const b of blades) {
-      const size = b.size || 12;
+      const size = b.size || 14;
 
-      // === 蓄势光效：存活越久颜色越亮 ===
+      // === 蓄势光效 ===
       let bladeColor = color;
       if (rampLv > 0 && b.aliveMs > 1000) {
         const rampT = Math.min((b.aliveMs - 1000) / 5000, 1);
-        // 紫→白渐变
         const r = Math.floor(0xAA + (0xFF - 0xAA) * rampT);
         const g = Math.floor(0x44 + (0xFF - 0x44) * rampT);
-        const b2 = Math.floor(0xFF);
-        bladeColor = `rgb(${r},${g},${b2})`;
+        bladeColor = `rgb(${r},${g},255)`;
+      }
+
+      // === 超级旋刃：外圈旋转光环 + 粒子 ===
+      if (isSuper) {
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 1.5;
+        ctx.globalAlpha = 0.3;
+        const outerR = size + 10;
+        for (let a = 0; a < 6; a++) {
+          const startA = b.angle * -2 + a * Math.PI / 3;
+          ctx.beginPath();
+          ctx.arc(b.x, b.y, outerR, startA, startA + Math.PI / 6);
+          ctx.stroke();
+        }
+        ctx.fillStyle = bladeColor;
+        ctx.globalAlpha = 0.5;
+        for (let p = 0; p < 4; p++) {
+          const pa = b.angle * 3 + p * Math.PI / 2;
+          const pr = size + 6 + Math.sin(b.aliveMs * 0.003 + p) * 3;
+          ctx.beginPath();
+          ctx.arc(b.x + Math.cos(pa) * pr, b.y + Math.sin(pa) * pr, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
 
       // === 外层光晕 ===
-      ctx.globalAlpha = 0.25;
+      ctx.globalAlpha = b.lingering ? 0.15 + Math.sin((b.lingerTimer || 0) * 0.008) * 0.1 : 0.25;
       ctx.fillStyle = bladeColor;
       ctx.beginPath();
       ctx.arc(b.x, b.y, size + 6, 0, Math.PI * 2);
@@ -919,11 +941,11 @@ class Renderer {
       ctx.translate(b.x, b.y);
       ctx.rotate(b.angle);
 
-      // 4叶旋刃
+      const leaves = isSuper ? 6 : 4;
       ctx.fillStyle = bladeColor;
-      for (let i = 0; i < 4; i++) {
+      for (let i = 0; i < leaves; i++) {
         ctx.save();
-        ctx.rotate(i * Math.PI / 2);
+        ctx.rotate(i * Math.PI * 2 / leaves);
         ctx.beginPath();
         ctx.moveTo(0, -size);
         ctx.quadraticCurveTo(size * 0.4, -size * 0.5, size * 0.3, 0);
@@ -934,13 +956,19 @@ class Renderer {
         ctx.restore();
       }
 
-      // 中心白点
-      ctx.fillStyle = '#FFFFFF';
+      // 中心
+      ctx.fillStyle = isSuper ? bladeColor : '#FFFFFF';
       ctx.beginPath();
-      ctx.arc(0, 0, size * 0.2, 0, Math.PI * 2);
+      ctx.arc(0, 0, isSuper ? size * 0.25 : size * 0.2, 0, Math.PI * 2);
       ctx.fill();
+      if (isSuper) {
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(0, 0, size * 0.1, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
-      // 巨型化：额外光效
+      // 巨型化光环
       if (giantLv > 0) {
         ctx.strokeStyle = '#FFFFFF';
         ctx.lineWidth = 1;
