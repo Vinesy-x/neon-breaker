@@ -82,6 +82,15 @@ class DevPanel {
         game._syncLauncherStats();
         break;
 
+      case 'downgradeWeaponBranch': {
+        const weapon = game.upgrades.weapons[params.weaponKey];
+        if (weapon && weapon.getBranch(params.branchKey) > 0) {
+          weapon.branches[params.branchKey]--;
+          game._syncLauncherStats();
+        }
+        break;
+      }
+
       case 'maxWeaponBranch': {
         const weapon = game.upgrades.weapons[params.weaponKey];
         if (weapon) {
@@ -98,6 +107,14 @@ class DevPanel {
         game.upgrades.upgradeShip(params.key);
         game._syncLauncherStats();
         break;
+
+      case 'downgradeShip': {
+        if ((game.upgrades.shipTree[params.key] || 0) > 0) {
+          game.upgrades.shipTree[params.key]--;
+          game._syncLauncherStats();
+        }
+        break;
+      }
 
       case 'maxShip': {
         const def = Config.SHIP_TREE[params.key];
@@ -308,6 +325,14 @@ class DevPanel {
             ctx.fill();
           }
 
+          // -1 按钮
+          if (curLv > 0) {
+            const dnBtnW = 22;
+            const dnBtnX = contentX + contentW - dnBtnW * 4 - 16;
+            this._drawBtn(ctx, '-1', dnBtnX, cy + 1, dnBtnW, smallRowH - 4, '#FF5555',
+              { action: 'downgradeWeaponBranch', params: { weaponKey: wk, branchKey: bk } });
+          }
+
           // +1 按钮
           if (curLv < maxLv) {
             const upBtnW = 26;
@@ -347,6 +372,13 @@ class DevPanel {
         ctx.beginPath();
         ctx.arc(dotStartX + d * 12, cy + smallRowH / 2, 3, 0, Math.PI * 2);
         ctx.fill();
+      }
+
+      if (curLv > 0) {
+        const dnBtnW = 22;
+        const dnBtnX = contentX + contentW - dnBtnW * 4 - 16;
+        this._drawBtn(ctx, '-1', dnBtnX, cy + 1, dnBtnW, smallRowH - 4, '#FF5555',
+          { action: 'downgradeShip', params: { key: sk } });
       }
 
       if (curLv < maxLv) {
