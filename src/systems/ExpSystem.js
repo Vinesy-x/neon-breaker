@@ -72,11 +72,11 @@ class ExpSystem {
         const dx = targetX - orb.x, dy = targetY - orb.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
         const speed = Config.EXP_ORB_SPEED + orb.life * 0.3;
-        if (dist > 5) {
+        if (dist > 3) {
           orb.x += (dx / dist) * speed * dt;
           orb.y += (dy / dist) * speed * dt;
         }
-        if (dist < 10) {
+        if (dist < 20) {
           Sound.expCollect();
           this._addExp(orb.value);
           this.orbs.splice(i, 1);
@@ -84,7 +84,7 @@ class ExpSystem {
         }
       }
 
-      if (orb.life > 120) {
+      if (orb.life > 80) {
         this._addExp(orb.value);
         this.orbs.splice(i, 1);
       }
