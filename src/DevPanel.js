@@ -157,7 +157,14 @@ class DevPanel {
         }
         break;
       case 'spawnBoss':
-        if (!game.boss || !game.boss.alive) game._startBoss();
+        if (!game.boss || !game.boss.alive) {
+          if (game.chapterConfig) {
+            game._startBoss();
+          } else {
+            // 没在游戏中，用Boss测试入口
+            game._startBossTest('charger', game.currentChapter || 1);
+          }
+        }
         break;
       case 'addCoins':
         game.saveManager.addCoins(params.amount);
