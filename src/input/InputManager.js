@@ -30,9 +30,8 @@ class InputManager {
       this.touchCurrentX = t.clientX;
       this._lastTouchY = t.clientY;
       this.isTouching = true;
-      this.tapX = t.clientX;
-      this.tapY = t.clientY;
-      this.hasTap = true;
+      this._tapCandidate = { x: t.clientX, y: t.clientY };
+      this._tapCancelled = false;
     });
 
     wx.onTouchMove((e) => {
@@ -42,10 +41,12 @@ class InputManager {
       this._lastTouchY = t.clientY;
       this.touchCurrentX = t.clientX;
       // 如果移动了太多距离，取消 tap
-      const dx = Math.abs(t.clientX - this.touchStartX);
-      const dy = Math.abs(t.clientY - this.tapY);
-      if (dx > 10 || dy > 10) {
-        this.hasTap = false;
+      if (this._tapCandidate) {
+        const dx = Math.abs(t.clientX - this._tapCandidate.x);
+        const dy = Math.abs(t.clientY - this._tapCandidate.y);
+        if (dx > 10 || dy > 10) {
+          this._tapCancelled = true;
+        }
       }
       // 拖动回调
       if (this.onDragY) {
@@ -55,10 +56,18 @@ class InputManager {
 
     wx.onTouchEnd(() => {
       this.isTouching = false;
+      // 只有没被取消的才算 tap
+      if (this._tapCandidate && !this._tapCancelled) {
+        this.tapX = this._tapCandidate.x;
+        this.tapY = this._tapCandidate.y;
+        this.hasTap = true;
+      }
+      this._tapCandidate = null;
     });
 
     wx.onTouchCancel(() => {
       this.isTouching = false;
+      this._tapCandidate = null;
     });
   }
 
