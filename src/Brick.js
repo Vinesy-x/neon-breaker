@@ -46,7 +46,7 @@ class Brick {
     }
     // 更新颜色
     if (this.type === 'normal' || this.type === 'formation') {
-      this.color = Config.BRICK_HP_COLORS[this.hp] || this.color;
+      this.color = Config.BRICK_HP_COLORS[Math.ceil(this.hp)] || this.color;
     }
     return false;
   }

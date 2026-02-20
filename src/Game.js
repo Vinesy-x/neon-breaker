@@ -104,7 +104,7 @@ class Game {
     var cx = this.launcher.getCenterX(), sy = this.launcher.y - 5;
     // 子弹伤害 = baseAttack × 子弹系数(1.0) × (1 + 飞机树子弹伤害加成)
     var bulletCoef = 1.0;
-    var dmg = Math.max(1, Math.floor(this.getBaseAttack() * bulletCoef * this.upgrades.getAttackMult()));
+    var dmg = Math.max(0.1, this.getBaseAttack() * bulletCoef * this.upgrades.getAttackMult());
     var pierce = this.upgrades.getPierceCount();
     var element = this.upgrades.getElementType();
     var elementLv = this.upgrades.getElementLevel();
@@ -141,7 +141,7 @@ class Game {
     this.damageStats[key] = (this.damageStats[key] || 0) + damage;
     this.boss.hit(damage); Sound.brickHit();
     this.particles.emitBossHit(this.boss.getCenterX(), this.boss.getCenterY());
-    this.score += damage;
+    this.score += Math.ceil(damage);
     this.expSystem.spawnOrbs(this.boss.getCenterX(), this.boss.getCenterY(), damage*2, this.saveManager.getExpMultiplier());
   }
 
@@ -387,7 +387,7 @@ class Game {
   _applyFireElement(brick, elementLv) {
     if (!brick.alive) return;
     var c = brick.getCenter();
-    var dotDmg = Math.max(1, Math.floor(this.getBaseAttack() * 0.3 * elementLv));
+    var dotDmg = Math.max(0.1, this.getBaseAttack() * 0.3 * elementLv);
     var duration = 1000 + elementLv * 500;
     this.burnDots.push({
       brickRef: brick, x: c.x, y: c.y,
@@ -418,7 +418,7 @@ class Game {
     if (!brick.alive) return;
     var c = brick.getCenter();
     var chainCount = elementLv;
-    var chainDmg = Math.max(1, Math.floor(bulletDmg * 0.5));
+    var chainDmg = Math.max(0.1, bulletDmg * 0.5);
     var hit = new Set();
     var lastX = c.x, lastY = c.y;
     for (var ch = 0; ch < chainCount; ch++) {
@@ -469,7 +469,7 @@ class Game {
         var bk=this.bricks[j]; if(!bk.alive||(bk.type==='stealth'&&!bk.visible)) continue;
         if(b.collideBrick(bk)) {
           var cm=(Math.random()<critChance)?critMult:1;
-          var finalDmg = Math.max(1, Math.floor(b.damage * cm));
+          var finalDmg = Math.max(0.1, b.damage * cm);
           this.damageBrick(bk, finalDmg, 'bullet');
           if(cm>1){Sound.crit();this._addFloatingText('暴击!',bk.getCenter().x,bk.getCenter().y-10,Config.NEON_RED,14);}
           if (b.element && bk.alive) {
@@ -485,7 +485,7 @@ class Game {
       if(rm) continue;
       if(this.boss&&this.boss.alive) {
         if(this.boss.type==='guardian'&&this.boss.hitShield&&this.boss.hitShield(b.x,b.y,b.radius)){this.bullets.splice(i,1);Sound.brickHit();continue;}
-        if(b.collideBoss(this.boss)){var bc2=(Math.random()<critChance)?critMult:1;this.damageBoss(Math.floor(b.damage*3*bc2), "bullet");if(bc2>1)this._addFloatingText('暴击!',b.x,this.boss.y+this.boss.height+10,Config.NEON_RED,14);this.bullets.splice(i,1);}
+        if(b.collideBoss(this.boss)){var bc2=(Math.random()<critChance)?critMult:1;this.damageBoss(b.damage*3*bc2, "bullet");if(bc2>1)this._addFloatingText('暴击!',b.x,this.boss.y+this.boss.height+10,Config.NEON_RED,14);this.bullets.splice(i,1);}
       }
     }
   }

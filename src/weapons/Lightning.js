@@ -14,7 +14,7 @@ class LightningWeapon extends Weapon {
 
   /** 闪电伤害 = baseAttack × basePct × (1 + damageLv × 0.5) */
   getDamage(baseAttack) {
-    return Math.max(1, Math.floor(baseAttack * this.def.basePct * (1 + (this.branches.damage || 0) * 0.5)));
+    return Math.max(0.1, baseAttack * this.def.basePct * (1 + (this.branches.damage || 0) * 0.5));
   }
 
   update(dtMs, ctx) {
@@ -112,7 +112,7 @@ class LightningWeapon extends Weapon {
       if (c === chains - 1) {
         // 超载：爆炸AOE
         if (overloadLv > 0) {
-          this._explodeAt(bc.x, bc.y, 45, Math.floor(damage * 0.6), ctx);
+          this._explodeAt(bc.x, bc.y, 45, damage * 0.6, ctx);
         }
         // 回响：概率再次释放
         if (echoLv > 0 && Math.random() < echoLv * 0.2) {

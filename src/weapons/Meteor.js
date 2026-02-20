@@ -39,7 +39,7 @@ class MeteorWeapon extends Weapon {
           this.burnZones.push({
             x: m.targetX, y: m.targetY, radius: baseRadius * 0.8,
             life: 3000 + (this.branches.burn - 1) * 1500,
-            tickTimer: 0, damage: Math.floor(damage * 0.3),
+            tickTimer: 0, damage: damage * 0.3,
           });
         }
         this.meteors.splice(i, 1);

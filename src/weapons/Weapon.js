@@ -40,7 +40,7 @@ class Weapon {
 
   /** 武器伤害 = baseAttack * (basePct + damageLv * 0.5) */
   getDamage(baseAttack) {
-    return Math.max(1, Math.floor(baseAttack * (this.def.basePct + (this.branches.damage || 0) * 0.5)));
+    return Math.max(0.1, baseAttack * (this.def.basePct + (this.branches.damage || 0) * 0.5));
   }
 
   getTotalLevel() {

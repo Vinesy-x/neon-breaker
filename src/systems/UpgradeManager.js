@@ -94,7 +94,7 @@ class UpgradeManager {
   getPierceCount() { return this.shipTree.pierce || 0; }
 
   /** 基础攻击力 = floor(10 * attackMult) */
-  getBaseAttack() { return Math.max(1, Math.floor(10 * this.getAttackMult())); }
+  getBaseAttack() { return Math.max(1, 10 * this.getAttackMult()); }
 
   // ===== 元素弹 =====
 

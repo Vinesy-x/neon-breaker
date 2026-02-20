@@ -364,7 +364,7 @@ class Renderer {
 
       // 收集需要边框的
       if (b.type === 'shield' && b.shieldHp > 0) shieldBricks.push(b);
-      if (b.hp > 1) hpTextBricks.push(b);
+      if (Math.ceil(b.hp) > 1) hpTextBricks.push(b);
     }
 
     // Pass 1: 批量画同色砖块主体
@@ -410,7 +410,7 @@ class Renderer {
       ctx.textBaseline = 'middle';
       for (let i = 0; i < hpTextBricks.length; i++) {
         const b = hpTextBricks[i];
-        ctx.fillText(b.hp.toString(), b.x + b.width / 2, b.y + b.height / 2);
+        ctx.fillText(Math.ceil(b.hp).toString(), b.x + b.width / 2, b.y + b.height / 2);
       }
     }
   }
@@ -1387,6 +1387,7 @@ class Renderer {
   }
 
   _formatNum(n) {
+    n = Math.ceil(n);
     if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
     if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
     return n.toString();

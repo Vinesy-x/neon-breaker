@@ -107,7 +107,7 @@ class DroneWeapon extends Weapon {
           if (dist < laserWidth + brick.width * 0.3) {
             let dmg = damage;
             if (focusLv > 0 && brick.hp <= 3) {
-              dmg = Math.floor(dmg * (1 + focusLv * 0.8));
+              dmg = dmg * (1 + focusLv * 0.8);
             }
             ctx.damageBrick(brick, dmg, 'drone_laser');
             hitBricks.add(brick);
@@ -130,7 +130,7 @@ class DroneWeapon extends Weapon {
       // === 电弧：激光线外随机弹射额外伤害 ===
       if (arcLv > 0) {
         const arcRange = 40 + arcLv * 25;
-        const arcDmg = Math.max(1, Math.floor(damage * 0.6));
+        const arcDmg = damage * 0.6;
         const arcsPerLine = arcLv;
         const arcHit = new Set(); // 电弧自己的去重（砖块）
 

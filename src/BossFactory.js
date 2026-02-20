@@ -46,7 +46,7 @@ class BossBase {
   }
 
   hit(damage) {
-    var actual = Math.floor(damage * this.damageMult);
+    var actual = damage * this.damageMult;
     this.hp -= actual;
     this.flashTimer = 100;
     if (this.hp <= 0) {

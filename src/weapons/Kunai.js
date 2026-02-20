@@ -220,7 +220,7 @@ class Kunai extends Weapon {
       isChain: false,
     });
 
-    const splashDmg = Math.max(1, Math.floor(damage * 0.6));
+    const splashDmg = Math.max(0.1, damage * 0.6);
     const killedBricks = [];
 
     for (let j = 0; j < ctx.bricks.length; j++) {
@@ -247,7 +247,7 @@ class Kunai extends Weapon {
     // 连锁爆炸
     if (chainLv > 0 && killedBricks.length > 0) {
       const chainRadius = radius * (0.5 + chainLv * 0.15);
-      const chainDmg = Math.max(1, Math.floor(damage * 0.3 * chainLv));
+      const chainDmg = Math.max(0.1, damage * 0.3 * chainLv);
       for (const kb of killedBricks) {
         this.explosions.push({
           x: kb.x, y: kb.y,
