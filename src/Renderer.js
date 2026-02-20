@@ -1351,6 +1351,7 @@ class Renderer {
       'shock': '感电',
       'spinBlade': '等离子旋刃',
       'spinBlade_sw': '回旋斩',
+      'bleed': '撕裂DOT',
     };
     const entries = Object.entries(stats || {}).sort((a, b) => b[1] - a[1]);
     const totalDmg = entries.reduce((sum, e) => sum + e[1], 0);
