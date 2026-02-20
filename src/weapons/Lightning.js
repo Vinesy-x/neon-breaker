@@ -80,7 +80,7 @@ class LightningWeapon extends Weapon {
         if (ctx.boss && ctx.boss.alive && !hit.has('boss')) {
           hit.add('boss');
           points.push({ x: ctx.boss.getCenterX(), y: ctx.boss.getCenterY() });
-          ctx.damageBoss(damage);
+          ctx.damageBoss(damage, "lightning");
         }
         break;
       }

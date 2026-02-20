@@ -193,7 +193,7 @@ class Kunai extends Weapon {
       const bx = ctx.boss.getCenterX(), by = ctx.boss.getCenterY();
       if (Math.abs(knife.x - bx) < ctx.boss.width / 2 + hitSize &&
           Math.abs(knife.y - by) < ctx.boss.height / 2 + hitSize) {
-        ctx.damageBoss(damage);
+        ctx.damageBoss(damage, "kunai");
         if (knife.pierce > 0) {
           knife.pierce--;
           if (pierceBlast) {
@@ -241,7 +241,7 @@ class Kunai extends Weapon {
     if (ctx.boss && ctx.boss.alive) {
       const bx = ctx.boss.getCenterX(), by = ctx.boss.getCenterY();
       const dist = Math.sqrt((bx - x) ** 2 + (by - y) ** 2);
-      if (dist <= radius) ctx.damageBoss(splashDmg);
+      if (dist <= radius) ctx.damageBoss(splashDmg, "kunai_aoe");
     }
 
     // 连锁爆炸

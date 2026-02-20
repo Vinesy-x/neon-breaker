@@ -71,7 +71,7 @@ class MissileWeapon extends Weapon {
       if (!hit && ctx.boss && ctx.boss.alive) {
         if (Math.abs(m.x - ctx.boss.getCenterX()) < ctx.boss.width / 2 + 5 &&
             Math.abs(m.y - ctx.boss.getCenterY()) < ctx.boss.height / 2 + 5) {
-          ctx.damageBoss(directDmg); hit = true;
+          ctx.damageBoss(directDmg, "missile"); hit = true;
         }
       }
       if (hit || m.y < -20 || m.y > Config.SCREEN_HEIGHT + 20 ||

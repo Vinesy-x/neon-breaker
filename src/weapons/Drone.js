@@ -45,7 +45,7 @@ class DroneWeapon extends Weapon {
         if (target) {
           if (laserLv > 0) {
             if (target.brick) ctx.damageBrick(target.brick, damage, 'drone_laser');
-            else if (ctx.boss && ctx.boss.alive) ctx.damageBoss(damage);
+            else if (ctx.boss && ctx.boss.alive) ctx.damageBoss(damage, "drone");
             this.droneBullets.push({ x1: d.x, y1: d.y, x2: target.x, y2: target.y, alpha: 1.0, isLaser: true });
           } else {
             const shots = burstLv > 0 ? 3 : 1;
@@ -85,7 +85,7 @@ class DroneWeapon extends Weapon {
         if (!hit && ctx.boss && ctx.boss.alive) {
           if (Math.abs(b.x - ctx.boss.getCenterX()) < ctx.boss.width / 2 + 4 &&
               Math.abs(b.y - ctx.boss.getCenterY()) < ctx.boss.height / 2 + 4) {
-            ctx.damageBoss(b.damage); hit = true;
+            ctx.damageBoss(b.damage, "drone_bullet"); hit = true;
           }
         }
         if (hit) this.droneBullets.splice(i, 1);

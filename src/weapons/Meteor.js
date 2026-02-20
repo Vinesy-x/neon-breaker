@@ -90,7 +90,7 @@ class MeteorWeapon extends Weapon {
     }
     if (ctx.boss && ctx.boss.alive) {
       if (Math.sqrt((ctx.boss.getCenterX() - cx) ** 2 + (ctx.boss.getCenterY() - cy) ** 2) <= radius) {
-        ctx.damageBoss(damage);
+        ctx.damageBoss(damage, "meteor");
       }
     }
   }

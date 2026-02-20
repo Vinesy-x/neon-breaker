@@ -48,6 +48,7 @@ class Game {
     this._devPauseFire = false;
     this._devPauseLevelUp = false;
     this.devPanel = new DevPanel();
+    this.damageStats = {}; // 伤害统计 { source: totalDamage }
     this.state = Config.STATE.LOADING; this.loadTimer = 60;
 
     // Dev panel 滚动
@@ -71,6 +72,7 @@ class Game {
     this.spawnTimer = 0; this.boss = null; this.score = 0;
     this.upgrades.reset(); this.expSystem.reset();
     this.burnDots = [];
+    this.damageStats = {}; // 重置伤害统计
     this.launcher.permFireRateBonus = this.saveManager.getFireRateBonus();
     this._syncLauncherStats();
     for (var r = 0; r < Config.BRICK_INIT_ROWS; r++) {
@@ -110,12 +112,18 @@ class Game {
 
   damageBrick(brick, damage, source) {
     if (!brick.alive||(brick.type==='stealth'&&!brick.visible)) return;
+    // 记录伤害统计
+    const key = source || 'unknown';
+    this.damageStats[key] = (this.damageStats[key] || 0) + damage;
     if (brick.hit(damage)) { Sound.brickBreak(); this._onBrickDestroyed(brick); }
     else { Sound.brickHit(); this.particles.emitHitSpark(brick.getCenter().x, brick.getCenter().y, brick.color); }
   }
 
-  damageBoss(damage) {
+  damageBoss(damage, source) {
     if (!this.boss||!this.boss.alive) return;
+    // 记录伤害统计
+    const key = source || 'boss_hit';
+    this.damageStats[key] = (this.damageStats[key] || 0) + damage;
     this.boss.hit(damage); Sound.brickHit();
     this.particles.emitBossHit(this.boss.getCenterX(), this.boss.getCenterY());
     this.score += damage;
@@ -369,7 +377,7 @@ class Game {
       if(rm) continue;
       if(this.boss&&this.boss.alive) {
         if(this.boss.type==='guardian'&&this.boss.hitShield&&this.boss.hitShield(b.x,b.y,b.radius)){this.bullets.splice(i,1);Sound.brickHit();continue;}
-        if(b.collideBoss(this.boss)){var bc2=(Math.random()<critChance)?critMult:1;this.damageBoss(Math.floor(b.damage*3*bc2));if(bc2>1)this._addFloatingText('暴击!',b.x,this.boss.y+this.boss.height+10,Config.NEON_RED,14);this.bullets.splice(i,1);}
+        if(b.collideBoss(this.boss)){var bc2=(Math.random()<critChance)?critMult:1;this.damageBoss(Math.floor(b.damage*3*bc2), "bullet");if(bc2>1)this._addFloatingText('暴击!',b.x,this.boss.y+this.boss.height+10,Config.NEON_RED,14);this.bullets.splice(i,1);}
       }
     }
   }

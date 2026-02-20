@@ -56,7 +56,7 @@ class SpinBlade extends Weapon {
         if (ctx.boss && ctx.boss.alive) {
           if (Math.abs(b.x - ctx.boss.getCenterX()) < ctx.boss.width / 2 + size &&
               Math.abs(b.y - ctx.boss.getCenterY()) < ctx.boss.height / 2 + size) {
-            ctx.damageBoss(damage);
+            ctx.damageBoss(damage, "spinblade");
           }
         }
       }

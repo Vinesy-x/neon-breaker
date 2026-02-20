@@ -185,6 +185,9 @@ class DevPanel {
       case 'permDown':
         game.saveManager.setUpgrade(params.key, game.saveManager.getUpgrade(params.key) - 1);
         break;
+      case 'resetStats':
+        game.damageStats = {};
+        break;
     }
   }
 
@@ -327,6 +330,42 @@ class DevPanel {
 
     y += 80;
 
+    // ===== 伤害统计面板 =====
+    const stats = game.damageStats || {};
+    const entries = Object.entries(stats).sort((a, b) => b[1] - a[1]);
+    const totalDmg = entries.reduce((sum, e) => sum + e[1], 0);
+
+    if (totalDmg > 0) {
+      const statH = 20 + entries.length * 16;
+      ctx.fillStyle = 'rgba(255,100,100,0.1)';
+      ctx.beginPath(); ctx.roundRect(x, y, w, statH, 6); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,100,100,0.3)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect(x, y, w, statH, 6); ctx.stroke();
+
+      ctx.fillStyle = Config.NEON_RED;
+      ctx.font = 'bold 11px monospace';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      ctx.fillText(`⚔ 伤害统计 (总: ${this._formatNum(totalDmg)})`, x + 8, y + 4);
+
+      let statY = y + 20;
+      ctx.font = '10px monospace';
+      for (const [src, dmg] of entries) {
+        const pct = ((dmg / totalDmg) * 100).toFixed(1);
+        const barW = (dmg / totalDmg) * (w - 100);
+        // 进度条
+        ctx.fillStyle = 'rgba(255,100,100,0.3)';
+        ctx.fillRect(x + 80, statY + 2, barW, 10);
+        // 文字
+        ctx.fillStyle = '#FFFFFF';
+        ctx.textAlign = 'left';
+        ctx.fillText(src, x + 8, statY);
+        ctx.textAlign = 'right';
+        ctx.fillText(`${this._formatNum(dmg)} (${pct}%)`, x + w - 8, statY);
+        statY += 16;
+      }
+      y += statH + 8;
+    }
+
     const btnH = 38;
     const gap = 8;
     const cols = 2;
@@ -343,6 +382,7 @@ class DevPanel {
       { label: '💀 秒杀Boss', action: 'killBoss', color: Config.NEON_PINK },
       { label: '🚀 全武器满级', action: 'maxAllWeapons', color: '#FFD700' },
       { label: '🔄 重置全部', action: 'resetAll', color: '#FF5555' },
+      { label: '📊 清统计', action: 'resetStats', color: '#888888' },
     ];
 
     let col = 0, rowY = y;
@@ -550,6 +590,12 @@ class DevPanel {
     ctx.fillText(label, x + w / 2, y + h / 2);
 
     this._hitAreas.push({ x, y, w, h, action: hitData.action, params: hitData.params || {} });
+  }
+
+  _formatNum(n) {
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+    return n.toString();
   }
 }
 
