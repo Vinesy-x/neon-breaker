@@ -33,14 +33,15 @@ const WEAPON_TREES = {
   },
   missile: {
     name: '追踪导弹', desc: '自动追踪砖块的导弹',
-    icon: '🚀', color: '#FF14FF', basePct: 2.0, interval: 3500,
+    icon: '🚀', color: '#FF14FF', basePct: 1.5, interval: 3500,
     branches: {
-      damage:   { name: '伤害', desc: '+50%基础伤害', max: 4, requires: null },
-      count:    { name: '数量', desc: '+1发导弹', max: 3, requires: null },
-      aoe:      { name: '爆炸范围', desc: '+25%AOE', max: 3, requires: null },
-      tracking: { name: '追踪性能', desc: '+30%转向', max: 2, requires: null },
-      split:    { name: '分裂弹', desc: '命中后分裂3小弹', max: 2, requires: { count: 2 } },
-      nuke:     { name: '核弹头', desc: '巨型爆炸+屏震', max: 1, requires: { aoe: 3, damage: 4 } },
+      damage:     { name: '直击伤害', desc: '+40%直击伤害', max: 4, requires: null },
+      blastPower: { name: '爆炸伤害', desc: '+40%爆炸伤害', max: 4, requires: null },
+      count:      { name: '数量', desc: '+1发导弹', max: 3, requires: null },
+      aoe:        { name: '爆炸范围', desc: '+25%AOE', max: 3, requires: null },
+      tracking:   { name: '追踪性能', desc: '+30%转向', max: 2, requires: null },
+      split:      { name: '分裂弹', desc: '命中后分裂3小弹', max: 2, requires: { count: 2 } },
+      nuke:       { name: '核弹头', desc: '巨型爆炸+屏震', max: 1, requires: { aoe: 3, blastPower: 3 } },
     },
   },
   meteor: {

@@ -22,7 +22,11 @@ class MissileWeapon extends Weapon {
     }
 
     const baseAttack = ctx.getBaseAttack ? ctx.getBaseAttack() : 1;
-    const damage = this.getDamage(baseAttack);
+    // 直击伤害 = baseAttack × (basePct + damageLv × 0.4)
+    const directDmg = this.getDamage(baseAttack);
+    // 爆炸伤害 = baseAttack × (0.5 + blastPowerLv × 0.4)，独立于直击
+    const blastLv = this.branches.blastPower || 0;
+    const blastDmg = Math.max(1, Math.floor(baseAttack * (0.5 + blastLv * 0.4)));
     const trackMult = 1 + (this.branches.tracking || 0) * 0.3;
     const speed = 3 * trackMult;
     const baseAoe = 25 * (1 + (this.branches.aoe || 0) * 0.25);
@@ -52,11 +56,12 @@ class MissileWeapon extends Weapon {
         if (!brick.alive) continue;
         const bc = brick.getCenter();
         if (Math.abs(m.x - bc.x) < brick.width / 2 + 5 && Math.abs(m.y - bc.y) < brick.height / 2 + 5) {
-          ctx.damageBrick(brick, damage, 'missile');
+          ctx.damageBrick(brick, directDmg, 'missile');
           const effectiveAoe = nukeLv > 0 ? baseAoe * 3 : baseAoe;
-          this._explodeArea(m.x, m.y, effectiveAoe, Math.floor(damage * 0.5), ctx);
+          const effectiveBlast = nukeLv > 0 ? blastDmg * 2 : blastDmg;
+          this._explodeArea(m.x, m.y, effectiveAoe, effectiveBlast, ctx);
           this.explosions.push({ x: m.x, y: m.y, radius: effectiveAoe, alpha: 1.0 });
-          if (this.explosions.length > 8) this.explosions.shift(); // 限制爆炸数量
+          if (this.explosions.length > 8) this.explosions.shift();
           if (nukeLv > 0) ctx.screenShake = Math.min((ctx.screenShake || 0) + 6, 12);
           if (splitLv > 0) this._spawnSplits(m.x, m.y, splitLv, ctx);
           Sound.missileExplode();
@@ -66,7 +71,7 @@ class MissileWeapon extends Weapon {
       if (!hit && ctx.boss && ctx.boss.alive) {
         if (Math.abs(m.x - ctx.boss.getCenterX()) < ctx.boss.width / 2 + 5 &&
             Math.abs(m.y - ctx.boss.getCenterY()) < ctx.boss.height / 2 + 5) {
-          ctx.damageBoss(damage); hit = true;
+          ctx.damageBoss(directDmg); hit = true;
         }
       }
       if (hit || m.y < -20 || m.y > Config.SCREEN_HEIGHT + 20 ||
@@ -123,6 +128,11 @@ class MissileWeapon extends Weapon {
         trail: [], isSplitChild: true, splitLife: 40,
       });
     }
+  }
+
+  /** 直击伤害 = baseAttack × (basePct + damageLv × 0.4) */
+  getDamage(baseAttack) {
+    return Math.max(1, Math.floor(baseAttack * (this.def.basePct + (this.branches.damage || 0) * 0.4)));
   }
 
   getRenderData() { return { missiles: this.missiles, explosions: this.explosions, color: this.def.color }; }
