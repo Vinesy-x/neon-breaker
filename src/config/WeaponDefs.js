@@ -84,7 +84,7 @@ const WEAPON_TREES = {
       speed:    { name: '移速', desc: '+30%飞行速度', max: 2, requires: null },
       giant:    { name: '巨型化', desc: '旋刃体积翻倍', max: 2, requires: { duration: 2 } },
       homing:   { name: '追踪', desc: '+30%追踪能力', max: 2, requires: { speed: 2 } },
-      return:   { name: '回旋', desc: '到达后返回飞机', max: 1, requires: { duration: 2, speed: 1 } },
+      return:     { name: '回旋', desc: '到达后返回飞机', max: 1, requires: { duration: 2, speed: 1 } },
       vortex:   { name: '漩涡', desc: '吸引周围经验球', max: 2, requires: { giant: 1 } },
       bounce:   { name: '连锁弹射', desc: '碰壁反弹继续飞', max: 1, requires: { count: 2, speed: 2 } },
     },

@@ -17,14 +17,19 @@ class DroneWeapon extends Weapon {
 
   _syncDrones() {
     const count = 1 + (this.branches.count || 0);
+    // 增加无人机
     while (this.drones.length < count) {
       this.drones.push({
         angle: Math.random() * Math.PI * 2,
         fireTimer: 0,
         x: 0, y: 0,
-        shield: this.branches.shield > 0, // 护盾状态
+        shield: this.branches.shield > 0,
         shieldFlash: 0,
       });
+    }
+    // 减少无人机（降级时）
+    while (this.drones.length > count) {
+      this.drones.pop();
     }
     // 更新护盾状态
     const hasShield = this.branches.shield > 0;
@@ -79,7 +84,7 @@ class DroneWeapon extends Weapon {
             this.laserBeams.push({ x1: d.x, y1: d.y, x2: target.x, y2: target.y, alpha: 1.0 });
           } else {
             // 普通子弹
-            const shots = burstLv > 0 ? 3 : 1;
+            const shots = 1 + burstLv; // lv0=1, lv1=2, lv2=3
             const dx = target.x - d.x, dy = target.y - d.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
             for (let s = 0; s < shots; s++) {

@@ -280,7 +280,25 @@ class Game {
 
   _scrollBricks(dt) { if(!this.chapterConfig) return; var bs=this.chapterConfig.scrollSpeed; var ac=(this.currentPhase&&this.currentPhase.scrollAccel)?this.currentPhase.scrollAccel:0; var tip=(this.elapsedMs-(this.currentPhase?this.currentPhase.time:0))/1000; var ds=Math.min(bs+ac*tip,bs*3); for(var i=0;i<this.bricks.length;i++){if(this.bricks[i].alive) this.bricks[i].y+=ds*this.bricks[i].speedMult*dt;} for(var j=this.bricks.length-1;j>=0;j--){if(!this.bricks[j].alive||this.bricks[j].y>this.gameHeight+50) this.bricks.splice(j,1);} }
 
-  _checkDangerLine() { if (this._devInvincible) return false; var dy=this.gameHeight*Config.BRICK_DANGER_Y; for(var i=0;i<this.bricks.length;i++){if(this.bricks[i].alive&&this.bricks[i].y+this.bricks[i].height>=dy) return true;} return false; }
+  _checkDangerLine() {
+    if (this._devInvincible) return false;
+    var dy=this.gameHeight*Config.BRICK_DANGER_Y;
+    for(var i=0;i<this.bricks.length;i++){
+      if(this.bricks[i].alive&&this.bricks[i].y+this.bricks[i].height>=dy) {
+        // 尝试无人机护盾挡伤害
+        const droneWeapon = this.upgrades.weapons['drone'];
+        if (droneWeapon && droneWeapon.absorbDamage && droneWeapon.absorbDamage()) {
+          // 护盾吸收！消灭触线砖块
+          this.bricks[i].hit(9999);
+          this._onBrickDestroyed(this.bricks[i]);
+          this._addFloatingText('🛡 护盾!', this.bricks[i].x + this.bricks[i].width/2, dy - 20, '#50FFB4', 16);
+          return false;
+        }
+        return true;
+      }
+    }
+    return false;
+  }
 
   _updateBrickSpawn(dtMs) { if(!this.chapterConfig||!this.currentPhase||this.currentPhase.spawnMult<=0) return; var tip=(this.elapsedMs-this.currentPhase.time)/1000; var iv=this.chapterConfig.spawnInterval/(this.currentPhase.spawnMult*(1+Math.min(tip/60,0.15))); this.spawnTimer+=dtMs; if(this.spawnTimer>=iv){this.spawnTimer-=iv;this._spawnNewRow();} }
 

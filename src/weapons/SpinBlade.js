@@ -100,6 +100,13 @@ class SpinBlade extends Weapon {
         if (b.y < Config.SAFE_TOP + size || b.y > Config.SCREEN_HEIGHT * 0.75) {
           b.vy = -b.vy;
         }
+      } else if (!b.returning) {
+        // 无反弹：飞出屏幕边界时回收
+        if (b.x < -size * 2 || b.x > Config.SCREEN_WIDTH + size * 2 ||
+            b.y < -size * 2 || b.y > Config.SCREEN_HEIGHT + size * 2) {
+          this.blades.splice(i, 1);
+          continue;
+        }
       }
 
       // === tick伤害 ===
