@@ -1107,6 +1107,89 @@ class Renderer {
     ctx.fillText(Math.floor(ratio * 100) + '%', barX + barW + 4, barY + barH / 2);
   }
 
+  /** 伤害统计面板 - 返回点击区域 */
+  drawDamageStats(stats, expanded) {
+    const ctx = this.ctx;
+    const entries = Object.entries(stats || {}).sort((a, b) => b[1] - a[1]);
+    const totalDmg = entries.reduce((sum, e) => sum + e[1], 0);
+
+    // 位置：左上角，武器图标下方
+    const px = 8, py = Config.SAFE_TOP + 75;
+    const btnW = 28, btnH = 28;
+
+    // 收缩按钮
+    ctx.fillStyle = totalDmg > 0 ? 'rgba(255,100,100,0.3)' : 'rgba(255,255,255,0.1)';
+    ctx.beginPath();
+    ctx.arc(px + btnW / 2, py + btnH / 2, btnW / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = totalDmg > 0 ? '#FF6666' : 'rgba(255,255,255,0.3)';
+    ctx.font = '14px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('📊', px + btnW / 2, py + btnH / 2);
+
+    const hitArea = { x: px, y: py, w: btnW, h: btnH };
+
+    if (!expanded || totalDmg === 0) return hitArea;
+
+    // 展开面板
+    const panelW = 140;
+    const lineH = 14;
+    const maxLines = Math.min(entries.length, 8);
+    const panelH = 24 + maxLines * lineH;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.beginPath();
+    ctx.roundRect(px, py + btnH + 4, panelW, panelH, 6);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,100,100,0.5)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(px, py + btnH + 4, panelW, panelH, 6);
+    ctx.stroke();
+
+    // 标题
+    ctx.fillStyle = '#FF6666';
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('伤害: ' + this._formatNum(totalDmg), px + 6, py + btnH + 8);
+
+    // 列表
+    let ly = py + btnH + 22;
+    ctx.font = '9px monospace';
+    for (let i = 0; i < maxLines; i++) {
+      const [src, dmg] = entries[i];
+      const pct = ((dmg / totalDmg) * 100).toFixed(0);
+      const barW = (dmg / totalDmg) * 60;
+
+      // 进度条
+      ctx.fillStyle = 'rgba(255,100,100,0.4)';
+      ctx.fillRect(px + 6, ly + 2, barW, 8);
+
+      // 来源名
+      ctx.fillStyle = '#FFFFFF';
+      ctx.textAlign = 'left';
+      ctx.fillText(src.substring(0, 8), px + 6, ly);
+
+      // 百分比
+      ctx.textAlign = 'right';
+      ctx.fillText(pct + '%', px + panelW - 6, ly);
+
+      ly += lineH;
+    }
+
+    // 扩大点击区域包含整个面板
+    hitArea.h = btnH + 4 + panelH;
+    return hitArea;
+  }
+
+  _formatNum(n) {
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+    return n.toString();
+  }
+
   // ===== 升级选择（居中并列3列卡片） =====
   drawSkillChoice(choices, upgrades, title) {
     const ctx = this.ctx;

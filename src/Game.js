@@ -49,6 +49,8 @@ class Game {
     this._devPauseLevelUp = false;
     this.devPanel = new DevPanel();
     this.damageStats = {}; // 伤害统计 { source: totalDamage }
+    this.statsExpanded = false; // 统计面板是否展开
+    this._statsArea = null; // 统计按钮点击区域
     this.state = Config.STATE.LOADING; this.loadTimer = 60;
 
     // Dev panel 滚动
@@ -185,6 +187,16 @@ class Game {
       if (devResult && devResult.consumed) {
         this.input.consumeTap(); // 消费掉，不传递给游戏
         return; // 这一帧不处理游戏逻辑
+      }
+    }
+
+    // 统计面板点击检测
+    if (this._statsArea && devTap) {
+      const a = this._statsArea;
+      if (devTap.x >= a.x && devTap.x <= a.x + a.w && devTap.y >= a.y && devTap.y <= a.y + a.h) {
+        this.statsExpanded = !this.statsExpanded;
+        this.input.consumeTap();
+        return;
       }
     }
 
@@ -421,6 +433,8 @@ class Game {
     this.renderer.drawWeaponHUD(this.upgrades.getOwnedWeapons());
     this.renderer.drawChapterHUD(this.currentChapter,this.score,this.combo,this.expSystem.playerLevel,this.elapsedMs,Sound.enabled);
     this.renderer.drawExpBar(this.expSystem.exp,this.expSystem.expToNext,this.expSystem.playerLevel);
+    // 伤害统计面板
+    this._statsArea = this.renderer.drawDamageStats(this.damageStats, this.statsExpanded);
     if(shaking) this.renderer.ctx.restore();
   }
 }
