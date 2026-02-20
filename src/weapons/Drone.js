@@ -53,8 +53,8 @@ class DroneWeapon extends Weapon {
     }
 
     // === 无人机移动 ===
-    const flySpeed = 0.06 + speedLv * 0.025;
-    // 旋阵：无人机绕目标点做小幅圆周运动
+    // === 无人机移动（限速） ===
+    const maxSpeed = 1.5 + speedLv * 0.5; // 每帧最大移动像素
     const orbitSpeed = rotateLv > 0 ? 0.008 + rotateLv * 0.015 : 0;
 
     for (let i = 0; i < this.drones.length; i++) {
@@ -72,15 +72,25 @@ class DroneWeapon extends Weapon {
         d.ty = bc.y;
       }
 
+      // 计算移动向量
+      let dx = d.tx - d.x;
+      let dy = d.ty - d.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
       // 旋阵偏移
-      if (orbitSpeed > 0) {
+      if (orbitSpeed > 0 && dist < 30) {
         const t = Date.now() * orbitSpeed + i * Math.PI * 2 / this.drones.length;
         const orbitR = 15 + rotateLv * 8;
-        d.x += (d.tx + Math.cos(t) * orbitR - d.x) * flySpeed * dt;
-        d.y += (d.ty + Math.sin(t) * orbitR - d.y) * flySpeed * dt;
-      } else {
-        d.x += (d.tx - d.x) * flySpeed * dt;
-        d.y += (d.ty - d.y) * flySpeed * dt;
+        dx = d.tx + Math.cos(t) * orbitR - d.x;
+        dy = d.ty + Math.sin(t) * orbitR - d.y;
+      }
+
+      // 限速移动
+      const moveDist = Math.sqrt(dx * dx + dy * dy);
+      if (moveDist > 0) {
+        const speed = Math.min(maxSpeed * dt, moveDist);
+        d.x += (dx / moveDist) * speed;
+        d.y += (dy / moveDist) * speed;
       }
     }
 
@@ -186,30 +196,27 @@ class DroneWeapon extends Weapon {
     const bricks = ctx.bricks;
     if (!bricks || bricks.length === 0) return;
 
-    // 计算砖块权重：越靠近飞机 → 权重越高
+    // 计算砖块权重：越靠近危险线(y越大) → 权重越高
     const dangerY = Config.SCREEN_HEIGHT * Config.BRICK_DANGER_Y;
     const scored = [];
     for (const brick of bricks) {
       if (!brick.alive) continue;
       const bc = brick.getCenter();
-      // 距离飞机越近，威胁越大
-      const distToShip = Math.abs(bc.y - lcy);
-      const maxDist = lcy - Config.SAFE_TOP;
-      const proximityScore = Math.max(0, 1 - distToShip / maxDist); // 0~1, 越近越高
+      // y位置权重：越靠下(接近危险线)越危险
+      const yRatio = bc.y / dangerY; // 0~1，越接近1越危险
+      const proximityScore = yRatio * yRatio; // 平方加强前方优先级
       // HP权重
-      const hpScore = Math.min(brick.hp / 10, 1);
-      // 接近危险线额外加权
-      const dangerBonus = bc.y > dangerY * 0.7 ? 2 : 1;
-      const weight = (proximityScore * 3 + hpScore) * dangerBonus;
+      const hpScore = Math.min(brick.hp / 20, 1);
+      const weight = proximityScore * 4 + hpScore;
       scored.push({ brick, weight, x: bc.x, y: bc.y });
     }
 
     // 按权重排序
     scored.sort((a, b) => b.weight - a.weight);
 
-    // 为每台无人机分配不同目标
+    // 为每台无人机分配不同目标（欧氏距离分散）
     const used = new Set();
-    const spread = 40 + deployLv * 20; // 最小间距
+    const spread = 60 + deployLv * 25; // 最小欧氏间距
 
     for (const d of this.drones) {
       let best = null;
@@ -220,7 +227,8 @@ class DroneWeapon extends Weapon {
         for (const other of this.drones) {
           if (other === d || !other.targetBrick || !other.targetBrick.alive) continue;
           const obc = other.targetBrick.getCenter();
-          if (Math.abs(s.x - obc.x) + Math.abs(s.y - obc.y) < spread) {
+          const edist = Math.sqrt((s.x - obc.x) ** 2 + (s.y - obc.y) ** 2);
+          if (edist < spread) {
             tooClose = true;
             break;
           }
