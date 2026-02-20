@@ -726,104 +726,132 @@ class Renderer {
   }
 
   _drawDrone(data, ctx) {
-    const { drones, lines, hits, color, centerX, centerY, overchargeLv } = data;
-
+    const { drones, lines, hits, color, centerX, centerY, overchargeLv, widthLv, pulseWave } = data;
     if (!drones || drones.length === 0) return;
 
-    // === 激光连线（核心视觉） ===
+    const beamWidth = 3 + (widthLv || 0) * 3; // 光束粗度跟等级联动
+
+    // === 激光连线 ===
     if (lines && lines.length > 0) {
       // 第1层：宽光晕
       ctx.strokeStyle = 'rgba(' + this._hexToRgb(color) + ', 0.12)';
-      ctx.lineWidth = 18;
+      ctx.lineWidth = beamWidth * 5;
       ctx.lineCap = 'round';
       ctx.beginPath();
-      for (const l of lines) {
-        ctx.moveTo(l.x1, l.y1);
-        ctx.lineTo(l.x2, l.y2);
-      }
+      for (const l of lines) { ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); }
       ctx.stroke();
 
       // 第2层：主激光
       ctx.strokeStyle = color;
-      ctx.lineWidth = 4;
+      ctx.lineWidth = beamWidth;
       ctx.beginPath();
-      for (const l of lines) {
-        ctx.moveTo(l.x1, l.y1);
-        ctx.lineTo(l.x2, l.y2);
-      }
+      for (const l of lines) { ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); }
       ctx.stroke();
 
       // 第3层：白色内芯
       ctx.strokeStyle = '#FFFFFF';
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = Math.max(1, beamWidth * 0.4);
       ctx.beginPath();
-      for (const l of lines) {
-        ctx.moveTo(l.x1, l.y1);
-        ctx.lineTo(l.x2, l.y2);
-      }
+      for (const l of lines) { ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); }
       ctx.stroke();
       ctx.lineCap = 'butt';
+
+      // 激光上的流动光点
+      ctx.fillStyle = '#FFFFFF';
+      ctx.globalAlpha = 0.6;
+      const t = (Date.now() % 1000) / 1000;
+      for (const l of lines) {
+        const px = l.x1 + (l.x2 - l.x1) * t;
+        const py = l.y1 + (l.y2 - l.y1) * t;
+        ctx.beginPath();
+        ctx.arc(px, py, beamWidth * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
     }
 
-    // === 过载：阵型中心光效 ===
+    // === 过载：中心光效 ===
     if (overchargeLv > 0 && drones.length >= 3) {
+      const pulse = 0.2 + Math.sin(Date.now() * 0.006) * 0.1;
       ctx.fillStyle = color;
-      ctx.globalAlpha = 0.15 + Math.sin(Date.now() * 0.005) * 0.08;
+      ctx.globalAlpha = pulse;
       ctx.beginPath();
-      ctx.arc(centerX, centerY, 20, 0, Math.PI * 2);
+      ctx.arc(centerX, centerY, 25, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#FFFFFF';
+      ctx.globalAlpha = pulse * 0.8;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, 8, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 1;
     }
 
-    // === 命中闪光 ===
-    for (const h of hits) {
-      if (h.pulse) {
-        // 脉冲AOE视觉
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 3;
-        ctx.globalAlpha = Math.min(1, h.alpha) * 0.6;
-        ctx.beginPath();
-        ctx.arc(h.x, h.y, h.radius * (2 - Math.min(2, h.alpha)), 0, Math.PI * 2);
-        ctx.stroke();
-      } else {
+    // === 脉冲波 ===
+    if (pulseWave) {
+      const p = pulseWave.progress;
+      const r = pulseWave.maxR * p;
+      // 多层扩散波
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 4 * (1 - p);
+      ctx.globalAlpha = (1 - p) * 0.7;
+      ctx.beginPath();
+      ctx.arc(pulseWave.x, pulseWave.y, r, 0, Math.PI * 2);
+      ctx.stroke();
+      // 内层白芯波
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 2 * (1 - p);
+      ctx.globalAlpha = (1 - p) * 0.5;
+      ctx.beginPath();
+      ctx.arc(pulseWave.x, pulseWave.y, r * 0.7, 0, Math.PI * 2);
+      ctx.stroke();
+      // 中心闪光
+      if (p < 0.3) {
         ctx.fillStyle = '#FFFFFF';
+        ctx.globalAlpha = (0.3 - p) * 3;
+        ctx.beginPath();
+        ctx.arc(pulseWave.x, pulseWave.y, 15 * (1 - p), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // === 命中闪光 ===
+    if (hits.length > 0) {
+      ctx.fillStyle = '#FFFFFF';
+      for (const h of hits) {
         ctx.globalAlpha = Math.min(1, h.alpha) * 0.8;
         ctx.beginPath();
         ctx.arc(h.x, h.y, 4, 0, Math.PI * 2);
         ctx.fill();
       }
+      ctx.globalAlpha = 1;
     }
-    ctx.globalAlpha = 1;
 
-    // === 无人机本体 ===
+    // === 无人机本体（矩形机身造型） ===
     for (const d of drones) {
       // 悬浮光环
       ctx.strokeStyle = color;
       ctx.lineWidth = 1;
-      ctx.globalAlpha = 0.3;
+      ctx.globalAlpha = 0.25;
       ctx.beginPath();
-      ctx.arc(d.x, d.y, 10, 0, Math.PI * 2);
+      ctx.arc(d.x, d.y, 12, 0, Math.PI * 2);
       ctx.stroke();
 
-      // 机身（菱形）
       ctx.globalAlpha = 1;
+      // 机身
       ctx.fillStyle = color;
-      ctx.save();
-      ctx.translate(d.x, d.y);
-      ctx.rotate(d.angle);
-      ctx.beginPath();
-      ctx.moveTo(0, -7);
-      ctx.lineTo(5, 0);
-      ctx.lineTo(0, 7);
-      ctx.lineTo(-5, 0);
-      ctx.closePath();
-      ctx.fill();
-      // 核心白点
+      ctx.fillRect(d.x - 7, d.y - 4, 14, 8);
+      // 机翼
+      ctx.fillRect(d.x - 11, d.y - 2, 5, 4);
+      ctx.fillRect(d.x + 6, d.y - 2, 5, 4);
+      // 驾驶舱
       ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(d.x - 2, d.y - 2, 4, 4);
+      // 引擎光点
+      ctx.fillStyle = '#AAFFDD';
       ctx.beginPath();
-      ctx.arc(0, 0, 2, 0, Math.PI * 2);
+      ctx.arc(d.x, d.y + 5, 2, 0, Math.PI * 2);
       ctx.fill();
-      ctx.restore();
     }
   }
 
