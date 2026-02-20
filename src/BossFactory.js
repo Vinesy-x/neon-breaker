@@ -13,7 +13,7 @@ class BossBase {
     this.width = Config.BOSS_WIDTH;
     this.height = Config.BOSS_HEIGHT;
     this.x = (gameAreaWidth - this.width) / 2;
-    this.y = 60;
+    this.y = Config.SAFE_TOP + 20;
     this.gameAreaWidth = gameAreaWidth;
     this.alive = true;
     this.direction = 1;
@@ -542,7 +542,7 @@ class PhantomBoss extends BossBase {
         if (this.stateTimer >= this.invisTimer) {
           // 随机位置出现
           this.x = Math.random() * (this.gameAreaWidth - this.width);
-          this.y = 40 + Math.random() * 40;
+          this.y = Config.SAFE_TOP + 10 + Math.random() * 40;
           this.state = 'idle';
           this.appearTimer = 0;
           this.damageMult = 2.0;
