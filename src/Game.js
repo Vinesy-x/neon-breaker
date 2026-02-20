@@ -1,6 +1,7 @@
 /**
- * Game.js - v7.0 主游戏循环
+ * Game.js - v7.1 主游戏循环
  * 经验升级三选一(主) + 技能宝箱三选一(额外)
+ * v7.1: 飞机升级树重构（删除crit/barrage/shield/magnet，新增元素弹）
  */
 const Config = require('./Config');
 const Bullet = require('./Bullet');
@@ -34,13 +35,14 @@ class Game {
     this.boss = null; this.floatingTexts = []; this.screenShake = 0;
     this.fireTimer = 0; this.pendingSkillChoices = [];
     this._preChoiceState = null; this._choiceSource = null;
-    this.lastCrateTime = 0; this.shieldTimer = 0; this.shieldActive = true;
+    this.lastCrateTime = 0;
     this.saveManager = new SaveManager();
     this.currentChapter = 1; this.chapterConfig = null;
     this.elapsedMs = 0; this.currentPhase = null;
     this.coinsEarned = 0; this.bricksDestroyed = 0;
     this.spawnTimer = 0; this.bossWarningTimer = 0; this.bossTriggered = false;
     this.lastTime = 0; this.loadTimer = 0;
+    this.burnDots = [];
     this.state = Config.STATE.LOADING; this.loadTimer = 60;
   }
 
@@ -58,7 +60,7 @@ class Game {
     this.combo = 0; this.maxCombo = 0; this.fireTimer = 0; this.comboTimer = 0;
     this.spawnTimer = 0; this.boss = null; this.score = 0;
     this.upgrades.reset(); this.expSystem.reset();
-    this.shieldTimer = 0; this.shieldActive = true;
+    this.burnDots = [];
     this.launcher.bulletDamage = 1 + this.saveManager.getAttackBonus();
     this.launcher.permFireRateBonus = this.saveManager.getFireRateBonus();
     this._syncLauncherStats();
@@ -71,19 +73,22 @@ class Game {
 
   _fireBullets() {
     var sp = this.upgrades.getSpreadBonus();
-    var count = this.launcher.getBulletCount() + sp;
-    var spread = this.launcher.getSpreadAngle() + sp * 0.08;
+    var count = 1 + sp;
+    var spread = count > 1 ? (count - 1) * 0.12 : 0;
     var cx = this.launcher.getCenterX(), sy = this.launcher.y - 5;
     var dmg = Math.max(1, Math.floor(this.launcher.bulletDamage * this.upgrades.getAttackMult()));
     var pierce = this.upgrades.getPierceCount();
-    var burst = this.upgrades.getBarrageLv() > 0 ? 3 : 1;
-    for (var b = 0; b < burst; b++) {
-      for (var i = 0; i < count; i++) {
-        if (this.bullets.length >= Config.BULLET_MAX) break;
-        var a = count > 1 ? -Math.PI/2 - spread/2 + (spread/(count-1))*i : -Math.PI/2;
-        var bul = new Bullet(cx, sy - b*8, Math.cos(a)*Config.BULLET_SPEED, Math.sin(a)*Config.BULLET_SPEED, dmg);
-        bul.pierce = pierce; this.bullets.push(bul);
-      }
+    var element = this.upgrades.getElementType();
+    var elementLv = this.upgrades.getElementLevel();
+
+    for (var i = 0; i < count; i++) {
+      if (this.bullets.length >= Config.BULLET_MAX) break;
+      var a = count > 1 ? -Math.PI/2 - spread/2 + (spread/(count-1))*i : -Math.PI/2;
+      var bul = new Bullet(cx, sy, Math.cos(a)*Config.BULLET_SPEED, Math.sin(a)*Config.BULLET_SPEED, dmg);
+      bul.pierce = pierce;
+      bul.element = element;
+      bul.elementLv = elementLv;
+      this.bullets.push(bul);
     }
     this.launcher.muzzleFlash = 3;
     if (this.launcher.getFireInterval() > 120) Sound.bulletShoot();
@@ -145,8 +150,8 @@ class Game {
 
   _syncLauncherStats() {
     if (!this.launcher) return;
-    this.launcher.permFireRateBonus = this.upgrades.getFireRateBonus() + this.saveManager.getFireRateBonus();
-    this.launcher.permSpreadBonus = this.upgrades.getSpreadBonus();
+    var fireRateMult = this.upgrades.getFireRateMult();
+    this.launcher.permFireRateBonus = 1 - 1 / fireRateMult + this.saveManager.getFireRateBonus();
     this.launcher.bulletDamage = 1 + this.saveManager.getAttackBonus();
   }
 
@@ -167,8 +172,8 @@ class Game {
     }
   }
 
-  _updateChapterSelect() { var t=this.input.consumeTap(); if(!t) return; var r=this.renderer.getChapterSelectHit(t,this.saveManager.getMaxChapter(),this.saveManager.getData().chapterRecords,this.saveManager.getCoins()); if(r==='upgrade') this.state=Config.STATE.UPGRADE_SHOP; else if(r==='sound') Sound.toggle(); else if(typeof r==='number'&&r>0&&r<=this.saveManager.getMaxChapter()){this.currentChapter=r;this._initGame();} }
-  _updateUpgradeShop() { var t=this.input.consumeTap(); if(!t) return; var r=this.renderer.getUpgradeShopHit(t,this.saveManager); if(r==='back') this.state=Config.STATE.CHAPTER_SELECT; else if(r&&typeof r==='string'){if(this.saveManager.upgradeLevel(r)) Sound.selectSkill();} }
+  _updateChapterSelect() { var t=this.input.consumeTap(); if(!t) return; var r=this.renderer.getChapterSelectHit(t); if(r==='upgrade') this.state=Config.STATE.UPGRADE_SHOP; else if(r==='sound') Sound.toggle(); else if(typeof r==='number'&&r>0&&r<=this.saveManager.getMaxChapter()){this.currentChapter=r;this._initGame();} }
+  _updateUpgradeShop() { var t=this.input.consumeTap(); if(!t) return; var r=this.renderer.getUpgradeShopHit(t); if(r==='back') this.state=Config.STATE.CHAPTER_SELECT; else if(r&&typeof r==='string'){if(this.saveManager.upgradeLevel(r)) Sound.selectSkill();} }
   _updateChapterClear() { var t=this.input.consumeTap(); if(!t) return; var r=this.renderer.getChapterClearHit(t); if(r==='next'){this.currentChapter=Math.min(this.currentChapter+1,this.saveManager.getMaxChapter());this._initGame();}else if(r==='back') this.state=Config.STATE.CHAPTER_SELECT; }
   _updateGameOver() { var t=this.input.consumeTap(); if(!t) return; var coins=Math.floor((this.chapterConfig?this.chapterConfig.clearReward:0)*0.3*this.saveManager.getCoinMultiplier())+Math.min(50,Math.floor(this.bricksDestroyed/100)); if(coins>0) this.saveManager.addCoins(coins); this.state=Config.STATE.CHAPTER_SELECT; }
 
@@ -180,8 +185,8 @@ class Game {
     if(this.bossWarningTimer>0){this.bossWarningTimer-=dtMs;if(this.bossWarningTimer<=0){this._startBoss();return;}}
     this._scrollBricks(dt); this._updateBrickSpawn(dtMs); BrickFactory.updateSpecialBricks(this.bricks,dtMs);
     if(this._checkDangerLine()){Sound.gameOver();this.state=Config.STATE.GAME_OVER;return;}
-    this.upgrades.updateWeapons(dtMs,this); this._updateBullets(dt); this._updatePowerUps(dt);
-    this.expSystem.update(dt); this.particles.update(dt); this._updateFloatingTexts(dt); this._updateShield(dtMs);
+    this.upgrades.updateWeapons(dtMs,this); this._updateBullets(dt,dtMs); this._updateBurnDots(dtMs); this._updatePowerUps(dt);
+    this.expSystem.update(dt); this.particles.update(dt); this._updateFloatingTexts(dt);
     if(this.combo>0){this.comboTimer+=dtMs;if(this.comboTimer>2000){this.combo=0;this.comboTimer=0;}}
     this._tryShowLevelUpChoice();
   }
@@ -192,8 +197,8 @@ class Game {
     if(this.boss&&this.boss.alive){this.boss.update(dtMs);var s=this.boss.collectSpawnedBricks();if(s.length>0) this.bricks=this.bricks.concat(s);}
     this._scrollBricks(dt); BrickFactory.updateSpecialBricks(this.bricks,dtMs);
     if(this._checkDangerLine()){Sound.gameOver();this.state=Config.STATE.GAME_OVER;return;}
-    this.upgrades.updateWeapons(dtMs,this); this._updateBullets(dt); this._updatePowerUps(dt);
-    this.expSystem.update(dt); this.particles.update(dt); this._updateFloatingTexts(dt); this._updateShield(dtMs);
+    this.upgrades.updateWeapons(dtMs,this); this._updateBullets(dt,dtMs); this._updateBurnDots(dtMs); this._updatePowerUps(dt);
+    this.expSystem.update(dt); this.particles.update(dt); this._updateFloatingTexts(dt);
     this._tryShowLevelUpChoice();
     if(this.state===Config.STATE.LEVEL_UP||this.state===Config.STATE.SKILL_CHOICE) return;
     if(this.boss&&!this.boss.alive) {
@@ -224,8 +229,6 @@ class Game {
     }
   }
 
-  _updateShield(dtMs) { var lv=this.upgrades.getShieldLv(); if(lv<=0) return; if(!this.shieldActive){this.shieldTimer+=dtMs;if(this.shieldTimer>=30000/lv){this.shieldActive=true;this.shieldTimer=0;}} }
-
   _startBoss() { for(var i=0;i<this.bricks.length;i++){if(this.bricks[i].alive&&this.bricks[i].y<this.gameHeight*0.3) this.bricks[i].alive=false;} this.state=Config.STATE.BOSS; this.boss=createBoss(this.chapterConfig.bossType,this.currentChapter,this.gameWidth); Sound.bossAppear(); }
 
   _scrollBricks(dt) { if(!this.chapterConfig) return; var bs=this.chapterConfig.scrollSpeed; var ac=(this.currentPhase&&this.currentPhase.scrollAccel)?this.currentPhase.scrollAccel:0; var tip=(this.elapsedMs-(this.currentPhase?this.currentPhase.time:0))/1000; var ds=Math.min(bs+ac*tip,bs*3); for(var i=0;i<this.bricks.length;i++){if(this.bricks[i].alive) this.bricks[i].y+=ds*this.bricks[i].speedMult*dt;} for(var j=this.bricks.length-1;j>=0;j--){if(!this.bricks[j].alive||this.bricks[j].y>this.gameHeight+50) this.bricks.splice(j,1);} }
@@ -234,9 +237,74 @@ class Game {
 
   _updateBrickSpawn(dtMs) { if(!this.chapterConfig||!this.currentPhase||this.currentPhase.spawnMult<=0) return; var tip=(this.elapsedMs-this.currentPhase.time)/1000; var iv=this.chapterConfig.spawnInterval/(this.currentPhase.spawnMult*(1+Math.min(tip/60,0.15))); this.spawnTimer+=dtMs; if(this.spawnTimer>=iv){this.spawnTimer-=iv;this._spawnNewRow();} }
 
-  _handleInput(dt) { var dx=this.input.getPaddleDeltaX()*this.upgrades.getMoveSpeedMult(); if(dx!==0) this.launcher.setX(this.launcher.getCenterX()+dx); }
+  _handleInput(dt) { var dx=this.input.getPaddleDeltaX(); if(dx!==0) this.launcher.setX(this.launcher.getCenterX()+dx); }
 
-  _updateBullets(dt) {
+  // ===== 元素弹效果 =====
+
+  _applyFireElement(brick, elementLv) {
+    if (!brick.alive) return;
+    var c = brick.getCenter();
+    var dotDmg = Math.max(1, Math.floor(this.getBaseAttack() * 0.3 * elementLv));
+    var duration = 1000 + elementLv * 500;
+    this.burnDots.push({
+      brickRef: brick, x: c.x, y: c.y,
+      damage: dotDmg, remaining: duration, tickMs: 500, tickTimer: 0,
+    });
+    this.particles.emitHitSpark(c.x, c.y, '#FF4400');
+  }
+
+  _applyIceElement(brick, elementLv) {
+    if (!brick.alive) return;
+    brick.speedMult = Math.max(0.1, brick.speedMult * (1 - elementLv * 0.3));
+    this.particles.emitHitSpark(brick.getCenter().x, brick.getCenter().y, '#44DDFF');
+  }
+
+  _applyThunderElement(brick, elementLv, bulletDmg) {
+    if (!brick.alive) return;
+    var c = brick.getCenter();
+    var chainCount = elementLv;
+    var chainDmg = Math.max(1, Math.floor(bulletDmg * 0.5));
+    var hit = new Set();
+    var lastX = c.x, lastY = c.y;
+    for (var ch = 0; ch < chainCount; ch++) {
+      var nearest = null, nearDist = Infinity;
+      for (var j = 0; j < this.bricks.length; j++) {
+        if (!this.bricks[j].alive || hit.has(j)) continue;
+        if (this.bricks[j] === brick) continue;
+        var bc = this.bricks[j].getCenter();
+        var d = (bc.x-lastX)*(bc.x-lastX) + (bc.y-lastY)*(bc.y-lastY);
+        if (d < nearDist && d < 10000) { nearDist = d; nearest = { idx: j, brick: this.bricks[j] }; }
+      }
+      if (!nearest) break;
+      hit.add(nearest.idx);
+      var nc = nearest.brick.getCenter();
+      this.damageBrick(nearest.brick, chainDmg, 'thunder_chain');
+      this.particles.emitHitSpark(nc.x, nc.y, '#FFF050');
+      lastX = nc.x; lastY = nc.y;
+    }
+    if (chainCount > 0) Sound.lightning();
+  }
+
+  _updateBurnDots(dtMs) {
+    for (var i = this.burnDots.length - 1; i >= 0; i--) {
+      var dot = this.burnDots[i];
+      dot.remaining -= dtMs;
+      dot.tickTimer += dtMs;
+      if (dot.tickTimer >= dot.tickMs) {
+        dot.tickTimer -= dot.tickMs;
+        if (dot.brickRef && dot.brickRef.alive) {
+          this.damageBrick(dot.brickRef, dot.damage, 'fire_dot');
+        }
+      }
+      if (dot.remaining <= 0 || !dot.brickRef || !dot.brickRef.alive) {
+        this.burnDots.splice(i, 1);
+      }
+    }
+  }
+
+  _updateBullets(dt, dtMs) {
+    var critChance = this.saveManager.getCritBonus();
+    var critMult = 2.0;
     for(var i=this.bullets.length-1;i>=0;i--) {
       var b=this.bullets[i]; b.update(dt);
       if(b.isOutOfBounds(this.gameWidth,this.gameHeight)){this.bullets.splice(i,1);continue;}
@@ -245,21 +313,29 @@ class Game {
       for(var j=0;j<this.bricks.length;j++) {
         var bk=this.bricks[j]; if(!bk.alive||(bk.type==='stealth'&&!bk.visible)) continue;
         if(b.collideBrick(bk)) {
-          var cm=(Math.random()<this.upgrades.getCritChance()+this.saveManager.getCritBonus())?this.upgrades.getCritDmgMult():1;
-          this.damageBrick(bk,Math.max(1,Math.floor(b.damage*cm)),'bullet');
+          var cm=(Math.random()<critChance)?critMult:1;
+          var finalDmg = Math.max(1, Math.floor(b.damage * cm));
+          this.damageBrick(bk, finalDmg, 'bullet');
           if(cm>1){Sound.crit();this._addFloatingText('暴击!',bk.getCenter().x,bk.getCenter().y-10,Config.NEON_RED,14);}
+          if (b.element && bk.alive) {
+            switch (b.element) {
+              case 'fire': this._applyFireElement(bk, b.elementLv); break;
+              case 'ice': this._applyIceElement(bk, b.elementLv); break;
+              case 'thunder': this._applyThunderElement(bk, b.elementLv, finalDmg); break;
+            }
+          }
           if(b.pierce>0) b.pierce--; else{this.bullets.splice(i,1);rm=true;break;}
         }
       }
       if(rm) continue;
       if(this.boss&&this.boss.alive) {
         if(this.boss.type==='guardian'&&this.boss.hitShield&&this.boss.hitShield(b.x,b.y,b.radius)){this.bullets.splice(i,1);Sound.brickHit();continue;}
-        if(b.collideBoss(this.boss)){var bc2=(Math.random()<this.upgrades.getCritChance()+this.saveManager.getCritBonus())?this.upgrades.getCritDmgMult():1;this.damageBoss(Math.floor(b.damage*3*bc2));if(bc2>1)this._addFloatingText('暴击!',b.x,this.boss.y+this.boss.height+10,Config.NEON_RED,14);this.bullets.splice(i,1);}
+        if(b.collideBoss(this.boss)){var bc2=(Math.random()<critChance)?critMult:1;this.damageBoss(Math.floor(b.damage*3*bc2));if(bc2>1)this._addFloatingText('暴击!',b.x,this.boss.y+this.boss.height+10,Config.NEON_RED,14);this.bullets.splice(i,1);}
       }
     }
   }
 
-  _updatePowerUps(dt) { var mt=this.upgrades.hasMagnet()?{x:this.launcher.getCenterX(),y:this.launcher.y}:null; for(var i=this.powerUps.length-1;i>=0;i--){var p=this.powerUps[i];p.update(dt,mt);if(p.collideLauncher(this.launcher)){this._applyPowerUp(p);this.powerUps.splice(i,1);continue;}if(p.isOutOfBounds(this.gameHeight)) this.powerUps.splice(i,1);} }
+  _updatePowerUps(dt) { for(var i=this.powerUps.length-1;i>=0;i--){var p=this.powerUps[i];p.update(dt,null);if(p.collideLauncher(this.launcher)){this._applyPowerUp(p);this.powerUps.splice(i,1);continue;}if(p.isOutOfBounds(this.gameHeight)) this.powerUps.splice(i,1);} }
 
   _updateFloatingTexts(dt) { for(var i=this.floatingTexts.length-1;i>=0;i--){var t=this.floatingTexts[i];t.y+=t.vy*dt;t.life-=dt;t.alpha=Math.max(0,t.life/40);if(t.life<=0) this.floatingTexts.splice(i,1);} }
 
@@ -290,7 +366,7 @@ class Game {
     this.renderer.drawWeapons(this.upgrades.weapons,this.launcher);
     this.renderer.drawWeaponWings(this.upgrades.weapons,this.launcher);
     for(var k=0;k<this.bullets.length;k++) this.renderer.drawBullet(this.bullets[k]);
-    if(this.launcher) this.renderer.drawLauncher(this.launcher);
+    if(this.launcher) this.renderer.drawLauncher(this.launcher, this.upgrades);
     this.renderer.drawParticles(this.particles.particles);
     this.renderer.drawFloatingTexts(this.floatingTexts);
     this.renderer.drawWeaponHUD(this.upgrades.getOwnedWeapons());

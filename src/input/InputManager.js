@@ -1,7 +1,7 @@
 /**
  * InputManager.js - 触摸输入管理
  */
-const Config = require('./Config');
+const Config = require('../Config');
 
 class InputManager {
   constructor() {

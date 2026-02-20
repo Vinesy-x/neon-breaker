@@ -5,15 +5,15 @@
 
 const WEAPON_TREES = {
   kunai: {
-    name: '光能飞刀', desc: '丢出飞刀向前飞行，穿透砖块',
-    icon: '🔪', color: '#00FFFF', basePct: 1.0, interval: 1500,
+    name: '光能飞刀', desc: '飞刀命中爆炸，范围AOE伤害',
+    icon: '🔪', color: '#00FFFF', basePct: 1.2, interval: 1800,
     branches: {
       damage:  { name: '伤害', desc: '+50%基础伤害', max: 5, requires: null },
       count:   { name: '刀数', desc: '+1把飞刀', max: 3, requires: null },
-      pierce:  { name: '穿透', desc: '+1穿透层数', max: 3, requires: null },
-      speed:   { name: '飞行速度', desc: '+30%速度', max: 2, requires: null },
-      scatter: { name: '散射', desc: '扇形发射', max: 2, requires: { count: 2 } },
-      return:  { name: '回旋', desc: '飞刀返回再造成伤害', max: 1, requires: { pierce: 2 } },
+      aoe:     { name: '爆炸范围', desc: '+25%爆炸半径', max: 3, requires: null },
+      speed:   { name: '冷却缩减', desc: '-20%技能CD', max: 3, requires: null },
+      pierce:  { name: '穿透', desc: '穿透后继续飞行再爆炸', max: 2, requires: { count: 2 } },
+      chain:   { name: '连锁爆炸', desc: '被击杀砖块也会爆炸', max: 2, requires: { aoe: 2, damage: 2 } },
     },
   },
   lightning: {

@@ -1,6 +1,13 @@
 /**
- * UpgradeManager.js - 升级管理器
+ * UpgradeManager.js - 升级管理器 v7.1
  * 管理武器升级树 + 飞机升级树 + 三选一生成
+ *
+ * 飞机升级公式：
+ *   - attack:    伤害倍率 = 1.0 + lv * 0.5
+ *   - fireRate:  射速倍率 = 1.0 + lv * 0.5（加法叠加，满4级=3倍射速）
+ *   - spread:    散射数 = lv（0~3）
+ *   - pierce:    穿透层数 = lv（0~5）
+ *   - fireBullet/iceBullet/thunderBullet: 互斥元素弹
  */
 const Config = require('../Config');
 const { createWeapon } = require('../weapons/WeaponFactory');
@@ -37,6 +44,16 @@ class UpgradeManager {
         if ((this.shipTree[rk] || 0) < def.requires[rk]) return false;
       }
     }
+    // 互斥组检查：如果该分支有互斥组，且已选了同组其他分支，则不允许
+    if (def.exclusiveGroup) {
+      for (const sk in Config.SHIP_TREE) {
+        if (sk === key) continue;
+        const sDef = Config.SHIP_TREE[sk];
+        if (sDef.exclusiveGroup === def.exclusiveGroup && (this.shipTree[sk] || 0) > 0) {
+          return false;
+        }
+      }
+    }
     this.shipTree[key]++;
     return true;
   }
@@ -49,21 +66,52 @@ class UpgradeManager {
         if ((this.shipTree[rk] || 0) < def.requires[rk]) return false;
       }
     }
+    // 互斥组：已选了同组其他分支则不可选
+    if (def.exclusiveGroup) {
+      for (const sk in Config.SHIP_TREE) {
+        if (sk === key) continue;
+        const sDef = Config.SHIP_TREE[sk];
+        if (sDef.exclusiveGroup === def.exclusiveGroup && (this.shipTree[sk] || 0) > 0) {
+          return false;
+        }
+      }
+    }
     return true;
   }
 
   // ===== 飞机被动数值 =====
-  getAttackMult()   { return 1.0 + (this.shipTree.attack || 0) * 0.15; }
-  getFireRateBonus() { return (this.shipTree.fireRate || 0) * 0.10; }
-  getSpreadBonus()   { return this.shipTree.spread || 0; }
-  getPierceCount()   { return this.shipTree.pierce || 0; }
-  getCritChance()    { return (this.shipTree.crit || 0) * 0.08; }
-  getCritDmgMult()   { return 2.0 + (this.shipTree.critDmg || 0) * 0.3; }
-  getMoveSpeedMult() { return 1.0 + (this.shipTree.moveSpeed || 0) * 0.10; }
-  getBarrageLv()     { return this.shipTree.barrage || 0; }
-  getShieldLv()      { return this.shipTree.shield || 0; }
-  hasMagnet()        { return (this.shipTree.magnet || 0) > 0; }
-  getBaseAttack()    { return Math.max(1, Math.floor(10 * this.getAttackMult())); }
+
+  /** 子弹伤害倍率: 1.0 + lv * 0.5 */
+  getAttackMult() { return 1.0 + (this.shipTree.attack || 0) * 0.5; }
+
+  /** 射速倍率: 1.0 + lv * 0.5（用于缩短射击间隔） */
+  getFireRateMult() { return 1.0 + (this.shipTree.fireRate || 0) * 0.5; }
+
+  /** 散射额外弹道数 */
+  getSpreadBonus() { return this.shipTree.spread || 0; }
+
+  /** 穿透层数 */
+  getPierceCount() { return this.shipTree.pierce || 0; }
+
+  /** 基础攻击力 = floor(10 * attackMult) */
+  getBaseAttack() { return Math.max(1, Math.floor(10 * this.getAttackMult())); }
+
+  // ===== 元素弹 =====
+
+  /** 获取当前激活的元素类型: 'fire' | 'ice' | 'thunder' | null */
+  getElementType() {
+    if ((this.shipTree.fireBullet || 0) > 0) return 'fire';
+    if ((this.shipTree.iceBullet || 0) > 0) return 'ice';
+    if ((this.shipTree.thunderBullet || 0) > 0) return 'thunder';
+    return null;
+  }
+
+  /** 获取元素等级 */
+  getElementLevel() {
+    return (this.shipTree.fireBullet || 0)
+         + (this.shipTree.iceBullet || 0)
+         + (this.shipTree.thunderBullet || 0);
+  }
 
   // ===== 三选一生成 =====
   generateChoices() {
@@ -102,12 +150,18 @@ class UpgradeManager {
       if (!this.canUpgradeShip(sk)) continue;
       const def = Config.SHIP_TREE[sk];
       const curLv = this.shipTree[sk];
+      // 品质影响优先级
+      let priority = curLv === 0 ? 2 : 1;
+      if (def.quality === 'rare') priority = curLv === 0 ? 3 : 2;
+      if (def.quality === 'exclusive') priority = curLv === 0 ? 3 : 2;
+
       pool.push({
         type: 'shipBranch', key: sk,
         name: '飞机·' + def.name, desc: def.desc,
         icon: def.icon, color: def.color,
         level: curLv + 1, maxLevel: def.max,
-        priority: curLv === 0 ? 2 : 1,
+        priority: priority,
+        quality: def.quality || 'normal',
       });
     }
 

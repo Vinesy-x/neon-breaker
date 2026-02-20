@@ -54,6 +54,8 @@ class Renderer {
   // ===== 子弹 =====
   drawBullet(bullet) {
     const ctx = this.ctx;
+    const elementColors = { fire: '#FF4400', ice: '#44DDFF', thunder: '#FFF050' };
+    const bulletColor = bullet.element ? (elementColors[bullet.element] || bullet.color) : bullet.color;
     // 拖尾
     for (let i = 0; i < bullet.trail.length; i++) {
       const t = bullet.trail[i];
@@ -61,13 +63,15 @@ class Renderer {
       const radius = bullet.radius * (i + 1) / bullet.trail.length * 0.8;
       ctx.beginPath();
       ctx.arc(t.x, t.y, radius, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(0, 255, 255, ' + alpha + ')';
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = bulletColor;
       ctx.fill();
     }
+    ctx.globalAlpha = 1;
     // 弹体
     ctx.beginPath();
     ctx.arc(bullet.x, bullet.y, bullet.radius, 0, Math.PI * 2);
-    ctx.fillStyle = bullet.color;
+    ctx.fillStyle = bulletColor;
     ctx.fill();
     // 白色高光核心
     ctx.beginPath();
@@ -77,13 +81,18 @@ class Renderer {
   }
 
   // ===== 发射器 =====
-  drawLauncher(launcher) {
+  drawLauncher(launcher, upgrades) {
     const ctx = this.ctx;
     const { x, y, width, height, color, muzzleFlash } = launcher;
     const cx = x + width / 2;
+    const spreadCount = upgrades ? upgrades.getSpreadBonus() : 0;
+    const totalGuns = 1 + spreadCount;
+    const elementType = upgrades ? upgrades.getElementType() : null;
+    const elementColors = { fire: '#FF4400', ice: '#44DDFF', thunder: '#FFF050' };
+    const elemColor = elementType ? elementColors[elementType] : null;
 
     // 主体 - 梯形飞船
-    ctx.fillStyle = color;
+    ctx.fillStyle = elemColor || color;
 
     ctx.beginPath();
     ctx.moveTo(cx - width / 2, y + height);
@@ -93,41 +102,47 @@ class Renderer {
     ctx.closePath();
     ctx.fill();
 
-    // 炮管
+    // 炮管（根据散射数量动态增加）
     const gunW = Config.LAUNCHER_GUN_WIDTH;
     const gunH = Config.LAUNCHER_GUN_HEIGHT;
-    ctx.fillStyle = '#FFFFFF';
-    ctx.globalAlpha = 0.9;
-    ctx.fillRect(cx - gunW / 2, y - gunH + 4, gunW, gunH);
-    ctx.globalAlpha = 1;
+    const gunGap = 10;
+    const gunsStartX = cx - ((totalGuns - 1) * gunGap) / 2;
 
-    // 炮管顶端
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(cx, y - gunH + 6, gunW / 2 + 1, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 发射口闪光
-    if (muzzleFlash > 0) {
-      const flashAlpha = muzzleFlash / 3;
-      ctx.globalAlpha = flashAlpha * 0.8;
+    for (let g = 0; g < totalGuns; g++) {
+      const gx = gunsStartX + g * gunGap;
       ctx.fillStyle = '#FFFFFF';
-      ctx.beginPath();
-      ctx.arc(cx, y - gunH + 2, 8, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = flashAlpha * 0.4;
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(cx, y - gunH + 2, 14, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.globalAlpha = 0.9;
+      ctx.fillRect(gx - gunW / 2, y - gunH + 4, gunW, gunH);
       ctx.globalAlpha = 1;
+
+      // 炮管顶端（元素弹时用元素色）
+      ctx.fillStyle = elemColor || color;
+      ctx.beginPath();
+      ctx.arc(gx, y - gunH + 6, gunW / 2 + 1, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 发射口闪光
+      if (muzzleFlash > 0) {
+        const flashAlpha = muzzleFlash / 3;
+        ctx.globalAlpha = flashAlpha * 0.8;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(gx, y - gunH + 2, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = flashAlpha * 0.4;
+        ctx.fillStyle = elemColor || color;
+        ctx.beginPath();
+        ctx.arc(gx, y - gunH + 2, 10, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
     }
 
-        // 尾焰
+    // 尾焰
     const flameH = 6 + Math.random() * 5;
     const flameW = width / 3;
     ctx.globalAlpha = 0.5;
-    ctx.fillStyle = color;
+    ctx.fillStyle = elemColor || color;
     ctx.beginPath();
     ctx.moveTo(cx - flameW, y + height);
     ctx.lineTo(cx, y + height + flameH);
@@ -144,7 +159,17 @@ class Renderer {
     ctx.lineTo(cx + flameW * 0.4, y + height);
     ctx.closePath();
     ctx.fill();
+    ctx.globalAlpha = 1;
 
+    // 元素光环
+    if (elemColor) {
+      ctx.globalAlpha = 0.15;
+      ctx.fillStyle = elemColor;
+      ctx.beginPath();
+      ctx.arc(cx, y + height / 2, width * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
   }
 
   // ===== 砖块 =====
@@ -462,19 +487,95 @@ class Renderer {
   }
 
   _drawKunai(data, ctx) {
-    const { knives, color } = data;
+    const { knives, explosions, color } = data;
+
+    // 绘制拖尾
+    for (const k of knives) {
+      if (k.trail && k.trail.length > 1) {
+        for (let t = 0; t < k.trail.length; t++) {
+          const tr = k.trail[t];
+          ctx.globalAlpha = tr.alpha * 0.4;
+          ctx.fillStyle = color;
+          const sz = 2 + t * 0.3;
+          ctx.beginPath();
+          ctx.arc(tr.x, tr.y, sz, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // 绘制飞刀本体（更大更清晰的光刀）
     for (const k of knives) {
       ctx.save();
       ctx.translate(k.x, k.y);
       ctx.rotate(Math.atan2(k.vy, k.vx));
+
+      // 外发光
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 10;
+
+      // 刀身（更大）
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.moveTo(8, 0); ctx.lineTo(-4, -4); ctx.lineTo(-2, 0); ctx.lineTo(-4, 4);
-      ctx.closePath(); ctx.fill();
-      ctx.fillStyle = '#FFFFFF'; ctx.globalAlpha = 0.6;
-      ctx.beginPath(); ctx.moveTo(5, 0); ctx.lineTo(-1, -2); ctx.lineTo(-1, 2);
-      ctx.closePath(); ctx.fill();
-      ctx.globalAlpha = 1; ctx.restore();
+      ctx.moveTo(12, 0);
+      ctx.lineTo(-5, -5);
+      ctx.lineTo(-2, 0);
+      ctx.lineTo(-5, 5);
+      ctx.closePath();
+      ctx.fill();
+
+      // 内芯高光
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.globalAlpha = 0.7;
+      ctx.beginPath();
+      ctx.moveTo(8, 0);
+      ctx.lineTo(-1, -2.5);
+      ctx.lineTo(-1, 2.5);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    }
+
+    // 绘制爆炸特效
+    if (explosions) {
+      for (const e of explosions) {
+        const progress = 1 - e.life / e.maxLife; // 0→1
+        const r = Math.min(e.radius, e.maxRadius);
+        const alpha = (1 - progress) * 0.7;
+
+        // 外圈冲击波
+        ctx.globalAlpha = alpha * 0.5;
+        ctx.strokeStyle = e.isChain ? '#FF6600' : color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, r, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // 填充光晕
+        ctx.globalAlpha = alpha * 0.25;
+        const grad = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, r);
+        grad.addColorStop(0, e.isChain ? '#FFAA00' : '#FFFFFF');
+        grad.addColorStop(0.4, e.isChain ? '#FF6600' : color);
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, r, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 核心闪光（前半段）
+        if (progress < 0.4) {
+          ctx.globalAlpha = (0.4 - progress) * 2;
+          ctx.fillStyle = '#FFFFFF';
+          ctx.beginPath();
+          ctx.arc(e.x, e.y, r * 0.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1;
     }
   }
 
@@ -1215,7 +1316,7 @@ class Renderer {
       ctx.fillText(u.desc, itemMargin + 46, y + 24);
 
       // 等级条
-      const SaveManagerClass = require('./SaveManager');
+      const SaveManagerClass = require('./systems/SaveManager');
       const maxLvl = SaveManagerClass.UPGRADE_CONFIG[u.key] ? SaveManagerClass.UPGRADE_CONFIG[u.key].maxLevel : 1;
       ctx.fillStyle = 'rgba(255,255,255,0.4)';
       ctx.font = '9px monospace';
