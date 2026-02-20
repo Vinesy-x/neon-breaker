@@ -1,26 +1,25 @@
 /**
- * DevPanel.js - 开发者工具面板
- * 游戏内点击🔧展开，可直接添加/升级武器、加经验等
+ * DevPanel.js - 开发者工具面板 v2
+ * Tab页签式布局，按钮更大，操作更方便
  */
 const Config = require('./Config');
 
 class DevPanel {
   constructor() {
     this.open = false;
-    this.scroll = 0;          // 滚动偏移
+    this.tab = 0;           // 0=快捷 1=武器 2=飞机
+    this.scroll = 0;
     this.maxScroll = 0;
-    this._hitAreas = [];      // { x, y, w, h, action, params }
-    this._btnArea = null;     // 🔧 按钮区域
+    this._hitAreas = [];
+    this._btnArea = null;
     this._closeArea = null;
-    this._scrollStartY = 0;
-    this._isDragging = false;
+    this._tabAreas = [];
   }
 
-  /** 检测点击，返回 action 对象或 null */
   handleTap(tap, game) {
     if (!tap) return null;
 
-    // 🔧 按钮 - 任何游戏状态都可点
+    // 🔧 按钮
     if (this._btnArea) {
       const a = this._btnArea;
       if (tap.x >= a.x && tap.x <= a.x + a.w && tap.y >= a.y && tap.y <= a.y + a.h) {
@@ -41,6 +40,16 @@ class DevPanel {
       }
     }
 
+    // Tab 页签
+    for (let i = 0; i < this._tabAreas.length; i++) {
+      const a = this._tabAreas[i];
+      if (tap.x >= a.x && tap.x <= a.x + a.w && tap.y >= a.y && tap.y <= a.y + a.h) {
+        this.tab = i;
+        this.scroll = 0;
+        return { consumed: true };
+      }
+    }
+
     // 面板内按钮
     for (const area of this._hitAreas) {
       if (tap.x >= area.x && tap.x <= area.x + area.w &&
@@ -50,19 +59,15 @@ class DevPanel {
       }
     }
 
-    // 点在面板区域内 → 消费掉，不传递给游戏
-    const panelX = 10, panelY = Config.SAFE_TOP + 10;
-    const panelW = Config.SCREEN_WIDTH - 20;
-    const panelH = Config.SCREEN_HEIGHT - panelY - Config.SAFE_BOTTOM - 10;
-    if (tap.x >= panelX && tap.x <= panelX + panelW &&
-        tap.y >= panelY && tap.y <= panelY + panelH) {
+    // 点在面板内 → 消费
+    const p = this._panelRect;
+    if (p && tap.x >= p.x && tap.x <= p.x + p.w && tap.y >= p.y && tap.y <= p.y + p.h) {
       return { consumed: true };
     }
 
     return null;
   }
 
-  /** 处理滑动（用于面板内滚动） */
   handleDrag(dy) {
     if (!this.open) return;
     this.scroll = Math.max(0, Math.min(this.maxScroll, this.scroll - dy));
@@ -76,12 +81,16 @@ class DevPanel {
           game._syncLauncherStats();
         }
         break;
-
+      case 'removeWeapon':
+        if (game.upgrades.hasWeapon(params.key)) {
+          delete game.upgrades.weapons[params.key];
+          game._syncLauncherStats();
+        }
+        break;
       case 'upgradeWeaponBranch':
         game.upgrades.upgradeWeaponBranch(params.weaponKey, params.branchKey);
         game._syncLauncherStats();
         break;
-
       case 'downgradeWeaponBranch': {
         const weapon = game.upgrades.weapons[params.weaponKey];
         if (weapon && weapon.getBranch(params.branchKey) > 0) {
@@ -90,7 +99,6 @@ class DevPanel {
         }
         break;
       }
-
       case 'maxWeaponBranch': {
         const weapon = game.upgrades.weapons[params.weaponKey];
         if (weapon) {
@@ -102,74 +110,51 @@ class DevPanel {
         }
         break;
       }
-
       case 'upgradeShip':
         game.upgrades.upgradeShip(params.key);
         game._syncLauncherStats();
         break;
-
-      case 'downgradeShip': {
+      case 'downgradeShip':
         if ((game.upgrades.shipTree[params.key] || 0) > 0) {
           game.upgrades.shipTree[params.key]--;
           game._syncLauncherStats();
         }
         break;
-      }
-
       case 'maxShip': {
-        const def = Config.SHIP_TREE[params.key];
-        if (def) {
-          while (game.upgrades.canUpgradeShip(params.key)) {
-            game.upgrades.upgradeShip(params.key);
-          }
-          game._syncLauncherStats();
+        while (game.upgrades.canUpgradeShip(params.key)) {
+          game.upgrades.upgradeShip(params.key);
         }
+        game._syncLauncherStats();
         break;
       }
-
-      case 'addExp':
-        game.expSystem.addExp(params.amount);
-        break;
-
-      case 'levelUp':
-        // 直接升一级
-        game.expSystem.addExp(game.expSystem.expToNext - game.expSystem.exp);
-        break;
-
       case 'levelUp10':
         for (let i = 0; i < 10; i++) {
           game.expSystem.addExp(game.expSystem.expToNext - game.expSystem.exp);
         }
         break;
-
       case 'clearBricks':
         for (const b of game.bricks) b.alive = false;
         game.bricks = [];
         break;
-
       case 'toggleInvincible':
         game._devInvincible = !game._devInvincible;
         break;
-
+      case 'togglePauseFire':
+        game._devPauseFire = !game._devPauseFire;
+        break;
       case 'killBoss':
         if (game.boss && game.boss.alive) {
           game.boss.hp = 0;
           game.boss.alive = false;
         }
         break;
-
       case 'spawnBoss':
-        if (!game.boss || !game.boss.alive) {
-          game._startBoss();
-        }
+        if (!game.boss || !game.boss.alive) game._startBoss();
         break;
-
       case 'addCoins':
         game.saveManager.addCoins(params.amount);
         break;
-
       case 'maxAllWeapons':
-        // 添加所有武器并满级
         for (const wk in Config.WEAPON_TREES) {
           if (!game.upgrades.hasWeapon(wk) && game.upgrades.getWeaponCount() < Config.MAX_WEAPONS) {
             game.upgrades.addWeapon(wk);
@@ -186,123 +171,173 @@ class DevPanel {
         }
         game._syncLauncherStats();
         break;
+      case 'resetAll':
+        game.upgrades.reset();
+        game._syncLauncherStats();
+        break;
     }
   }
 
-  /** 绘制面板 */
   draw(ctx, game) {
     this._hitAreas = [];
+    this._tabAreas = [];
 
-    // 🔧 按钮（左下角，音效按钮上面）
-    const btnSize = 28;
+    // 🔧 按钮
+    const btnSize = 32;
     const btnX = 10;
-    const btnY = Config.SCREEN_HEIGHT - Config.SAFE_BOTTOM - 80;
+    const btnY = Config.SCREEN_HEIGHT - Config.SAFE_BOTTOM - 84;
     this._btnArea = { x: btnX, y: btnY, w: btnSize, h: btnSize };
 
-    // 绘制🔧按钮
-    ctx.fillStyle = this.open ? 'rgba(0,255,255,0.3)' : 'rgba(255,255,255,0.15)';
+    ctx.fillStyle = this.open ? 'rgba(0,255,255,0.35)' : 'rgba(255,255,255,0.12)';
     ctx.beginPath();
     ctx.arc(btnX + btnSize / 2, btnY + btnSize / 2, btnSize / 2, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = this.open ? Config.NEON_CYAN : 'rgba(255,255,255,0.6)';
-    ctx.font = '16px monospace';
+    ctx.fillStyle = this.open ? Config.NEON_CYAN : 'rgba(255,255,255,0.5)';
+    ctx.font = '18px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('🔧', btnX + btnSize / 2, btnY + btnSize / 2);
 
     if (!this.open) return;
 
-    // 面板背景
-    const panelX = 10;
-    const panelY = Config.SAFE_TOP + 10;
-    const panelW = Config.SCREEN_WIDTH - 20;
-    const panelH = Config.SCREEN_HEIGHT - panelY - Config.SAFE_BOTTOM - 10;
+    // 面板
+    const px = 8, py = Config.SAFE_TOP + 6;
+    const pw = Config.SCREEN_WIDTH - 16;
+    const ph = Config.SCREEN_HEIGHT - py - Config.SAFE_BOTTOM - 6;
+    this._panelRect = { x: px, y: py, w: pw, h: ph };
 
-    ctx.fillStyle = 'rgba(8, 2, 32, 0.92)';
-    ctx.beginPath();
-    ctx.roundRect(panelX, panelY, panelW, panelH, 8);
-    ctx.fill();
-    ctx.strokeStyle = Config.NEON_CYAN;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.roundRect(panelX, panelY, panelW, panelH, 8);
-    ctx.stroke();
+    ctx.fillStyle = 'rgba(5, 1, 25, 0.95)';
+    ctx.beginPath(); ctx.roundRect(px, py, pw, ph, 10); ctx.fill();
+    ctx.strokeStyle = Config.NEON_CYAN; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.roundRect(px, py, pw, ph, 10); ctx.stroke();
 
-    // 标题栏
+    // 标题 + 关闭
     ctx.fillStyle = Config.NEON_CYAN;
-    ctx.font = 'bold 14px monospace';
+    ctx.font = 'bold 15px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    ctx.fillText('⚙ DEV TOOLS ⚙', panelX + panelW / 2, panelY + 8);
+    ctx.fillText('DEV TOOLS', px + pw / 2, py + 8);
 
-    // 关闭按钮
-    const closeSize = 24;
-    const closeX = panelX + panelW - closeSize - 6;
-    const closeY = panelY + 4;
-    this._closeArea = { x: closeX, y: closeY, w: closeSize, h: closeSize };
-    ctx.fillStyle = 'rgba(255,50,50,0.6)';
-    ctx.beginPath();
-    ctx.arc(closeX + closeSize / 2, closeY + closeSize / 2, closeSize / 2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 12px monospace';
-    ctx.fillText('✕', closeX + closeSize / 2, closeY + 6);
+    const clsS = 28, clsX = px + pw - clsS - 4, clsY = py + 4;
+    this._closeArea = { x: clsX, y: clsY, w: clsS, h: clsS };
+    ctx.fillStyle = 'rgba(255,50,50,0.7)';
+    ctx.beginPath(); ctx.arc(clsX + clsS / 2, clsY + clsS / 2, clsS / 2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#FFF'; ctx.font = 'bold 14px monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('✕', clsX + clsS / 2, clsY + clsS / 2);
 
-    // ===== 内容区域（带裁剪） =====
-    const contentX = panelX + 6;
-    const contentW = panelW - 12;
-    const contentTop = panelY + 30;
-    const contentH = panelH - 38;
+    // ===== Tab 页签 =====
+    const tabNames = ['⚡ 快捷', '🔪 武器', '✈ 飞机'];
+    const tabY = py + 32;
+    const tabH = 34;
+    const tabGap = 4;
+    const tabW = (pw - tabGap * (tabNames.length + 1)) / tabNames.length;
+
+    for (let i = 0; i < tabNames.length; i++) {
+      const tx = px + tabGap + i * (tabW + tabGap);
+      const isActive = this.tab === i;
+
+      ctx.fillStyle = isActive ? 'rgba(0,255,255,0.2)' : 'rgba(255,255,255,0.05)';
+      ctx.beginPath(); ctx.roundRect(tx, tabY, tabW, tabH, 6); ctx.fill();
+
+      if (isActive) {
+        ctx.strokeStyle = Config.NEON_CYAN; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.roundRect(tx, tabY, tabW, tabH, 6); ctx.stroke();
+      }
+
+      ctx.fillStyle = isActive ? '#FFFFFF' : 'rgba(255,255,255,0.5)';
+      ctx.font = 'bold 13px monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(tabNames[i], tx + tabW / 2, tabY + tabH / 2);
+
+      this._tabAreas.push({ x: tx, y: tabY, w: tabW, h: tabH });
+    }
+
+    // ===== 内容区域 =====
+    const ctop = tabY + tabH + 8;
+    const ch = ph - (ctop - py) - 6;
+    const cx = px + 8, cw = pw - 16;
 
     ctx.save();
-    ctx.beginPath();
-    ctx.rect(panelX, contentTop, panelW, contentH);
-    ctx.clip();
+    ctx.beginPath(); ctx.rect(px, ctop, pw, ch); ctx.clip();
 
-    let cy = contentTop - this.scroll;
-    const rowH = 30;
-    const smallRowH = 24;
-    const sectionGap = 10;
+    let cy = ctop - this.scroll;
 
-    // ===== 快捷操作 =====
-    cy = this._drawSection(ctx, '⚡ 快捷操作', contentX, cy, contentW);
-    const quickBtns = [
-      { label: '升10级', action: 'levelUp10', color: Config.NEON_GREEN },
-      { label: '清屏', action: 'clearBricks', color: Config.NEON_ORANGE },
-      { label: game._devInvincible ? '无敌 ON' : '无敌 OFF', action: 'toggleInvincible', color: game._devInvincible ? Config.NEON_GREEN : '#888' },
-      { label: '+1000💰', action: 'addCoins', params: { amount: 1000 }, color: '#FFD700' },
-      { label: '召唤Boss', action: 'spawnBoss', color: Config.NEON_RED },
-      { label: '秒杀Boss', action: 'killBoss', color: Config.NEON_PINK },
+    switch (this.tab) {
+      case 0: cy = this._drawQuickTab(ctx, game, cx, cy, cw); break;
+      case 1: cy = this._drawWeaponTab(ctx, game, cx, cy, cw); break;
+      case 2: cy = this._drawShipTab(ctx, game, cx, cy, cw); break;
+    }
+
+    this.maxScroll = Math.max(0, (cy + this.scroll) - (ctop + ch));
+    ctx.restore();
+
+    // 滚动条
+    if (this.maxScroll > 0) {
+      const thumbH = Math.max(20, ch * (ch / (ch + this.maxScroll)));
+      const thumbY = ctop + (this.scroll / this.maxScroll) * (ch - thumbH);
+      ctx.fillStyle = 'rgba(255,255,255,0.1)';
+      ctx.fillRect(px + pw - 5, ctop, 3, ch);
+      ctx.fillStyle = 'rgba(0,255,255,0.4)';
+      ctx.fillRect(px + pw - 5, thumbY, 3, thumbH);
+    }
+  }
+
+  // ===== Tab 0: 快捷操作 =====
+  _drawQuickTab(ctx, game, x, y, w) {
+    const btnH = 38;
+    const gap = 8;
+    const cols = 2;
+    const btnW = (w - gap) / cols;
+
+    const btns = [
+      { label: '⬆ 升10级', action: 'levelUp10', color: Config.NEON_GREEN },
+      { label: '💣 清屏', action: 'clearBricks', color: Config.NEON_ORANGE },
+      { label: game._devInvincible ? '🛡 无敌 ON' : '🛡 无敌 OFF', action: 'toggleInvincible', color: game._devInvincible ? Config.NEON_GREEN : '#666' },
+      { label: game._devPauseFire ? '🔫 射击 OFF' : '🔫 射击 ON', action: 'togglePauseFire', color: game._devPauseFire ? '#FF5555' : Config.NEON_CYAN },
+      { label: '💰 +1000金', action: 'addCoins', params: { amount: 1000 }, color: '#FFD700' },
+      { label: '👹 召唤Boss', action: 'spawnBoss', color: Config.NEON_RED },
+      { label: '💀 秒杀Boss', action: 'killBoss', color: Config.NEON_PINK },
+      { label: '🚀 全武器满级', action: 'maxAllWeapons', color: '#FFD700' },
+      { label: '🔄 重置全部', action: 'resetAll', color: '#FF5555' },
     ];
-    cy = this._drawButtonGrid(ctx, quickBtns, contentX, cy, contentW, 3);
-    cy += sectionGap;
 
-    // ===== 武器管理 =====
-    cy = this._drawSection(ctx, '🔪 武器', contentX, cy, contentW);
+    let col = 0, rowY = y;
+    for (const btn of btns) {
+      const bx = x + col * (btnW + gap);
+      this._drawBigBtn(ctx, btn.label, bx, rowY, btnW, btnH, btn.color,
+        { action: btn.action, params: btn.params || {} });
+      col++;
+      if (col >= cols) { col = 0; rowY += btnH + gap; }
+    }
+    return rowY + (col > 0 ? btnH + gap : 0);
+  }
 
-    // 添加武器按钮
-    const weaponKeys = Object.keys(Config.WEAPON_TREES);
-    for (const wk of weaponKeys) {
+  // ===== Tab 1: 武器管理 =====
+  _drawWeaponTab(ctx, game, x, y, w) {
+    const rowH = 32;
+    let cy = y;
+
+    for (const wk of Object.keys(Config.WEAPON_TREES)) {
       const wDef = Config.WEAPON_TREES[wk];
       const owned = game.upgrades.hasWeapon(wk);
 
-      // 武器名称行
-      ctx.fillStyle = owned ? wDef.color : '#666';
-      ctx.font = 'bold 12px monospace';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'top';
-      ctx.fillText(wDef.icon + ' ' + wDef.name + (owned ? ' ✓' : ''), contentX + 4, cy + 2);
+      // 武器标题行
+      ctx.fillStyle = owned ? wDef.color : '#555';
+      ctx.font = 'bold 14px monospace';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText(wDef.icon + ' ' + wDef.name, x + 4, cy + rowH / 2);
 
       if (!owned) {
-        // 添加按钮
-        const addBtnW = 40;
-        const addBtnX = contentX + contentW - addBtnW - 2;
-        this._drawBtn(ctx, '添加', addBtnX, cy, addBtnW, smallRowH - 2, wDef.color,
+        this._drawBigBtn(ctx, '添加', x + w - 60, cy + 2, 56, rowH - 4, wDef.color,
           { action: 'addWeapon', params: { key: wk } });
+      } else {
+        this._drawBigBtn(ctx, '移除', x + w - 60, cy + 2, 56, rowH - 4, '#FF5555',
+          { action: 'removeWeapon', params: { key: wk } });
       }
-      cy += smallRowH;
+      cy += rowH + 2;
 
-      // 分支升级（仅已拥有的）
+      // 分支（仅已拥有）
       if (owned) {
         const weapon = game.upgrades.weapons[wk];
         for (const bk in wDef.branches) {
@@ -310,166 +345,115 @@ class DevPanel {
           const curLv = weapon.getBranch(bk);
           const maxLv = bDef.max;
 
-          // 分支名 + 等级条
-          ctx.fillStyle = curLv >= maxLv ? '#FFD700' : 'rgba(255,255,255,0.6)';
-          ctx.font = '10px monospace';
-          ctx.textAlign = 'left';
-          ctx.fillText('  ' + bDef.name + ' ' + curLv + '/' + maxLv, contentX + 4, cy + 4);
+          // 名称 + 等级
+          ctx.fillStyle = curLv >= maxLv ? '#FFD700' : 'rgba(255,255,255,0.7)';
+          ctx.font = '12px monospace';
+          ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+          ctx.fillText(bDef.name, x + 12, cy + rowH / 2);
 
-          // 等级点
-          const dotStartX = contentX + 80;
+          // 等级点（更大）
+          const dotX = x + 76;
           for (let d = 0; d < maxLv; d++) {
-            ctx.fillStyle = d < curLv ? wDef.color : 'rgba(255,255,255,0.15)';
+            ctx.fillStyle = d < curLv ? wDef.color : 'rgba(255,255,255,0.12)';
             ctx.beginPath();
-            ctx.arc(dotStartX + d * 12, cy + smallRowH / 2, 3, 0, Math.PI * 2);
+            ctx.arc(dotX + d * 16, cy + rowH / 2, 4.5, 0, Math.PI * 2);
             ctx.fill();
           }
 
-          // -1 按钮
+          // 按钮组: -1  +1  MAX
+          const btnW2 = 34, btnH2 = rowH - 6, gap2 = 4;
+          const startX = x + w - btnW2 * 3 - gap2 * 2;
+
           if (curLv > 0) {
-            const dnBtnW = 22;
-            const dnBtnX = contentX + contentW - dnBtnW * 4 - 16;
-            this._drawBtn(ctx, '-1', dnBtnX, cy + 1, dnBtnW, smallRowH - 4, '#FF5555',
+            this._drawBigBtn(ctx, '-1', startX, cy + 3, btnW2, btnH2, '#FF5555',
               { action: 'downgradeWeaponBranch', params: { weaponKey: wk, branchKey: bk } });
           }
-
-          // +1 按钮
           if (curLv < maxLv) {
-            const upBtnW = 26;
-            const upBtnX = contentX + contentW - upBtnW * 2 - 8;
-            this._drawBtn(ctx, '+1', upBtnX, cy + 1, upBtnW, smallRowH - 4, wDef.color,
+            this._drawBigBtn(ctx, '+1', startX + btnW2 + gap2, cy + 3, btnW2, btnH2, wDef.color,
               { action: 'upgradeWeaponBranch', params: { weaponKey: wk, branchKey: bk } });
-
-            // MAX 按钮
-            const maxBtnX = upBtnX + upBtnW + 4;
-            this._drawBtn(ctx, 'MAX', maxBtnX, cy + 1, upBtnW, smallRowH - 4, '#FFD700',
+            this._drawBigBtn(ctx, 'MAX', startX + (btnW2 + gap2) * 2, cy + 3, btnW2, btnH2, '#FFD700',
               { action: 'maxWeaponBranch', params: { weaponKey: wk, branchKey: bk } });
           }
 
-          cy += smallRowH;
+          cy += rowH;
         }
-        cy += 4; // 武器之间小间距
+
+        // 分隔线
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, cy + 4); ctx.lineTo(x + w, cy + 4); ctx.stroke();
+        cy += 10;
       }
     }
-    cy += sectionGap;
+    return cy;
+  }
 
-    // ===== 飞机升级 =====
-    cy = this._drawSection(ctx, '✈ 飞机', contentX, cy, contentW);
+  // ===== Tab 2: 飞机升级 =====
+  _drawShipTab(ctx, game, x, y, w) {
+    const rowH = 34;
+    let cy = y;
+
     for (const sk in Config.SHIP_TREE) {
       const def = Config.SHIP_TREE[sk];
       const curLv = game.upgrades.getShipLevel(sk);
       const maxLv = def.max;
 
-      ctx.fillStyle = curLv >= maxLv ? '#FFD700' : 'rgba(255,255,255,0.6)';
-      ctx.font = '10px monospace';
-      ctx.textAlign = 'left';
-      ctx.fillText(def.icon + ' ' + def.name + ' ' + curLv + '/' + maxLv, contentX + 4, cy + 4);
+      // 名称
+      ctx.fillStyle = curLv >= maxLv ? '#FFD700' : 'rgba(255,255,255,0.7)';
+      ctx.font = '12px monospace';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText((def.icon || '•') + ' ' + def.name, x + 4, cy + rowH / 2);
+
+      // 等级数字
+      ctx.fillStyle = curLv > 0 ? (def.color || Config.NEON_CYAN) : 'rgba(255,255,255,0.3)';
+      ctx.font = 'bold 12px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(curLv + '/' + maxLv, x + 100, cy + rowH / 2);
 
       // 等级点
-      const dotStartX = contentX + 90;
-      for (let d = 0; d < Math.min(maxLv, 6); d++) {
-        ctx.fillStyle = d < curLv ? (def.color || Config.NEON_CYAN) : 'rgba(255,255,255,0.15)';
+      const dotX = x + 120;
+      for (let d = 0; d < Math.min(maxLv, 5); d++) {
+        ctx.fillStyle = d < curLv ? (def.color || Config.NEON_CYAN) : 'rgba(255,255,255,0.1)';
         ctx.beginPath();
-        ctx.arc(dotStartX + d * 12, cy + smallRowH / 2, 3, 0, Math.PI * 2);
+        ctx.arc(dotX + d * 14, cy + rowH / 2, 4, 0, Math.PI * 2);
         ctx.fill();
       }
 
+      // 按钮组
+      const btnW2 = 34, btnH2 = rowH - 6, gap2 = 4;
+      const startX = x + w - btnW2 * 3 - gap2 * 2;
+
       if (curLv > 0) {
-        const dnBtnW = 22;
-        const dnBtnX = contentX + contentW - dnBtnW * 4 - 16;
-        this._drawBtn(ctx, '-1', dnBtnX, cy + 1, dnBtnW, smallRowH - 4, '#FF5555',
+        this._drawBigBtn(ctx, '-1', startX, cy + 3, btnW2, btnH2, '#FF5555',
           { action: 'downgradeShip', params: { key: sk } });
       }
-
       if (curLv < maxLv) {
-        const upBtnW = 26;
-        const upBtnX = contentX + contentW - upBtnW * 2 - 8;
-        this._drawBtn(ctx, '+1', upBtnX, cy + 1, upBtnW, smallRowH - 4, def.color || Config.NEON_CYAN,
+        this._drawBigBtn(ctx, '+1', startX + btnW2 + gap2, cy + 3, btnW2, btnH2, def.color || Config.NEON_CYAN,
           { action: 'upgradeShip', params: { key: sk } });
-        const maxBtnX = upBtnX + upBtnW + 4;
-        this._drawBtn(ctx, 'MAX', maxBtnX, cy + 1, upBtnW, smallRowH - 4, '#FFD700',
+        this._drawBigBtn(ctx, 'MAX', startX + (btnW2 + gap2) * 2, cy + 3, btnW2, btnH2, '#FFD700',
           { action: 'maxShip', params: { key: sk } });
       }
 
-      cy += smallRowH;
+      cy += rowH;
     }
-    cy += sectionGap;
-
-    // ===== 一键全满 =====
-    cy = this._drawSection(ctx, '🚀 一键', contentX, cy, contentW);
-    const megaBtns = [
-      { label: '全武器满级', action: 'maxAllWeapons', color: '#FFD700' },
-    ];
-    cy = this._drawButtonGrid(ctx, megaBtns, contentX, cy, contentW, 2);
-
-    // 更新最大滚动
-    this.maxScroll = Math.max(0, (cy + this.scroll) - (contentTop + contentH));
-
-    ctx.restore();
-
-    // 滚动条指示
-    if (this.maxScroll > 0) {
-      const trackH = contentH;
-      const thumbH = Math.max(20, trackH * (contentH / (contentH + this.maxScroll)));
-      const thumbY = contentTop + (this.scroll / this.maxScroll) * (trackH - thumbH);
-      ctx.fillStyle = 'rgba(255,255,255,0.15)';
-      ctx.fillRect(panelX + panelW - 4, contentTop, 3, trackH);
-      ctx.fillStyle = 'rgba(0,255,255,0.4)';
-      ctx.fillRect(panelX + panelW - 4, thumbY, 3, thumbH);
-    }
+    return cy;
   }
 
-  // ===== 绘制辅助 =====
-
-  _drawSection(ctx, title, x, y, w) {
-    ctx.fillStyle = 'rgba(0,255,255,0.1)';
-    ctx.fillRect(x, y, w, 20);
-    ctx.fillStyle = Config.NEON_CYAN;
-    ctx.font = 'bold 11px monospace';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.fillText(title, x + 6, y + 4);
-    return y + 24;
-  }
-
-  _drawBtn(ctx, label, x, y, w, h, color, hitData) {
-    ctx.fillStyle = 'rgba(255,255,255,0.08)';
-    ctx.beginPath();
-    ctx.roundRect(x, y, w, h, 3);
-    ctx.fill();
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.roundRect(x, y, w, h, 3);
-    ctx.stroke();
+  // ===== 大按钮 =====
+  _drawBigBtn(ctx, label, x, y, w, h, color, hitData) {
+    // 背景
+    ctx.fillStyle = 'rgba(255,255,255,0.06)';
+    ctx.beginPath(); ctx.roundRect(x, y, w, h, 5); ctx.fill();
+    // 边框
+    ctx.strokeStyle = color; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.roundRect(x, y, w, h, 5); ctx.stroke();
+    // 文字
     ctx.fillStyle = color;
-    ctx.font = 'bold 9px monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(label, x + w / 2, y + h / 2);
 
     this._hitAreas.push({ x, y, w, h, action: hitData.action, params: hitData.params || {} });
-  }
-
-  _drawButtonGrid(ctx, btns, x, y, totalW, cols) {
-    const gap = 6;
-    const btnW = (totalW - gap * (cols - 1)) / cols;
-    const btnH = 26;
-    let col = 0;
-    let rowY = y;
-
-    for (const btn of btns) {
-      const bx = x + col * (btnW + gap);
-      this._drawBtn(ctx, btn.label, bx, rowY, btnW, btnH, btn.color,
-        { action: btn.action, params: btn.params || {} });
-      col++;
-      if (col >= cols) {
-        col = 0;
-        rowY += btnH + 4;
-      }
-    }
-
-    return rowY + (col > 0 ? btnH + 4 : 0);
   }
 }
 

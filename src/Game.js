@@ -45,6 +45,7 @@ class Game {
     this.lastTime = 0; this.loadTimer = 0;
     this.burnDots = [];
     this._devInvincible = false;
+    this._devPauseFire = false;
     this.devPanel = new DevPanel();
     this.state = Config.STATE.LOADING; this.loadTimer = 60;
 
@@ -203,7 +204,7 @@ class Game {
 
   _updatePlaying(dt,dtMs) {
     this._handleInput(dt); this.launcher.update(dt,dtMs);
-    this.fireTimer+=dtMs; if(this.fireTimer>=this.launcher.getFireInterval()){this.fireTimer-=this.launcher.getFireInterval();this._fireBullets();}
+    if(!this._devPauseFire){this.fireTimer+=dtMs; if(this.fireTimer>=this.launcher.getFireInterval()){this.fireTimer-=this.launcher.getFireInterval();this._fireBullets();}}
     this.elapsedMs+=dtMs; this.currentPhase=ChapterConfig.getPhaseAt(this.currentChapter,this.elapsedMs);
     if(!this.bossTriggered&&this.currentPhase.phase==='boss'){this.bossTriggered=true;this.bossWarningTimer=Config.BOSS_WARNING_DURATION;}
     if(this.bossWarningTimer>0){this.bossWarningTimer-=dtMs;if(this.bossWarningTimer<=0){this._startBoss();return;}}
@@ -217,7 +218,7 @@ class Game {
 
   _updateBoss(dt,dtMs) {
     this._handleInput(dt); this.launcher.update(dt,dtMs);
-    this.fireTimer+=dtMs; if(this.fireTimer>=this.launcher.getFireInterval()){this.fireTimer-=this.launcher.getFireInterval();this._fireBullets();}
+    if(!this._devPauseFire){this.fireTimer+=dtMs; if(this.fireTimer>=this.launcher.getFireInterval()){this.fireTimer-=this.launcher.getFireInterval();this._fireBullets();}}
     if(this.boss&&this.boss.alive){this.boss.update(dtMs);var s=this.boss.collectSpawnedBricks();if(s.length>0) this.bricks=this.bricks.concat(s);}
     this._scrollBricks(dt); BrickFactory.updateSpecialBricks(this.bricks,dtMs);
     if(this._checkDangerLine()){Sound.gameOver();this.state=Config.STATE.GAME_OVER;return;}
