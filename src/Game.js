@@ -53,12 +53,22 @@ class Game {
     this._statsArea = null; // 统计按钮点击区域
     this.state = Config.STATE.LOADING; this.loadTimer = 60;
 
+    // 章节滚动状态
+    this._scrollVelocity = 0;
+    this._scrolling = false;
+
     // 统一滑动分发
     this.input.onDragY = (dy) => {
       if (this.devPanel.open) { this.devPanel.handleDrag(dy); return; }
       if (this.state === Config.STATE.CHAPTER_SELECT) {
-        this.renderer._chapterScrollY = Math.max(0, (this.renderer._chapterScrollY || 0) - dy);
+        this.renderer._chapterScrollY = (this.renderer._chapterScrollY || 0) - dy;
+        this._scrollVelocity = -dy; // 记录速度用于惯性
+        this._scrolling = true;
       }
+    };
+
+    this.input.onDragEnd = () => {
+      this._scrolling = false;
     };
   }
 
@@ -223,12 +233,42 @@ class Game {
   }
 
   _updateChapterSelect() {
+    // 滚动物理（惯性 + 回弹）
+    const maxChapter = this.saveManager.getMaxChapter();
+    const cols = 3, cardH = 64, gap = 10;
+    const totalRows = Math.ceil(maxChapter / cols);
+    const contentH = totalRows * (cardH + gap);
+    const viewH = Config.SCREEN_HEIGHT - Config.SAFE_TOP - 60 - 44 - Config.SAFE_BOTTOM;
+    const maxScroll = Math.max(0, contentH - viewH);
+
+    let scrollY = this.renderer._chapterScrollY || 0;
+
+    if (!this._scrolling) {
+      // 惯性减速
+      scrollY += this._scrollVelocity;
+      this._scrollVelocity *= 0.92;
+      if (Math.abs(this._scrollVelocity) < 0.3) this._scrollVelocity = 0;
+
+      // 回弹
+      if (scrollY < 0) {
+        scrollY += (0 - scrollY) * 0.2;
+        if (scrollY > -0.5) scrollY = 0;
+        this._scrollVelocity = 0;
+      } else if (scrollY > maxScroll) {
+        scrollY += (maxScroll - scrollY) * 0.2;
+        if (scrollY < maxScroll + 0.5) scrollY = maxScroll;
+        this._scrollVelocity = 0;
+      }
+    }
+
+    this.renderer._chapterScrollY = scrollY;
+
     var t = this.input.consumeTap();
     if (!t) return;
     var r = this.renderer.getChapterSelectHit(t);
     if (r === 'upgrade') this.state = Config.STATE.UPGRADE_SHOP;
     else if (r === 'sound') Sound.toggle();
-    else if (typeof r === 'number' && r > 0 && r <= this.saveManager.getMaxChapter()) { this.currentChapter = r; this._initGame(); }
+    else if (typeof r === 'number' && r > 0 && r <= maxChapter) { this.currentChapter = r; this._initGame(); }
   }
   _updateUpgradeShop() { var t=this.input.consumeTap(); if(!t) return; var r=this.renderer.getUpgradeShopHit(t); if(r==='back') this.state=Config.STATE.CHAPTER_SELECT; else if(r&&typeof r==='string'){if(this.saveManager.upgradeLevel(r)) Sound.selectSkill();} }
   _updateChapterClear() { var t=this.input.consumeTap(); if(!t) return; var r=this.renderer.getChapterClearHit(t); if(r==='next'){this.currentChapter=Math.min(this.currentChapter+1,this.saveManager.getMaxChapter());this._initGame();}else if(r==='back') this.state=Config.STATE.CHAPTER_SELECT; }

@@ -1613,6 +1613,8 @@ class Renderer {
     const cardW = Math.floor((sw - margin * 2 - gap * (cols - 1)) / cols);
     const cardH = 64;
     const gridTop = top + 58;
+    const tabH = 44;
+    const gridBottom = sh - Config.SAFE_BOTTOM - tabH;
     const bossIcons = { charger: '🔴', guardian: '🔵', summoner: '🟣', laser: '🟡', phantom: '⚪' };
     const bossTypes = ['charger', 'guardian', 'summoner', 'laser', 'phantom'];
 
@@ -1620,6 +1622,12 @@ class Renderer {
 
     const totalRows = Math.ceil(100 / cols);
     const scrollY = this._chapterScrollY || 0;
+
+    // 裁剪滚动区域
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, gridTop, sw, gridBottom - gridTop);
+    ctx.clip();
 
     for (let i = 0; i < 100; i++) {
       const row = Math.floor(i / cols);
@@ -1689,8 +1697,28 @@ class Renderer {
       }
     }
 
+    // 恢复裁剪
+    ctx.restore();
+
+    // 滚动区域上下渐隐
+    ctx.fillStyle = 'rgba(0,0,0,0.8)';
+    ctx.fillRect(0, gridTop, sw, 8);
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0, gridBottom - 8, sw, 8);
+
+    // 分割线
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(margin, gridTop);
+    ctx.lineTo(sw - margin, gridTop);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(margin, gridBottom);
+    ctx.lineTo(sw - margin, gridBottom);
+    ctx.stroke();
+
     // 底部Tab栏
-    const tabH = 44;
     const tabY = sh - Config.SAFE_BOTTOM - tabH;
     const tabW = sw / 2;
 

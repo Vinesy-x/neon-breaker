@@ -18,6 +18,7 @@ class InputManager {
     this.onGameOverTap = null; // Game over 回调
 
     this.onDragY = null; // 拖动回调（dev panel滚动用）
+    this.onDragEnd = null; // 拖动结束回调
 
     this._bindEvents();
   }
@@ -63,6 +64,7 @@ class InputManager {
         this.hasTap = true;
       }
       this._tapCandidate = null;
+      if (this.onDragEnd) this.onDragEnd();
     });
 
     wx.onTouchCancel(() => {
