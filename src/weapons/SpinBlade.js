@@ -154,18 +154,16 @@ class SpinBlade extends Weapon {
         const hitRadius = b.size + (giantLv > 0 ? 4 : 0);
         const rampMult = rampLv > 0 ? 1 + (b.aliveMs / 1000) * 0.12 * rampLv : 1;
         const tickDmg = damage * rampMult;
-        const maxHits = pierceLv > 0 ? 999 : 1;
-        let hitCount = 0;
+        // 默认贯穿：每tick打所有砖块，pierce分支增加伤害
+        const pierceDmgMult = pierceLv > 0 ? 1.3 : 1;
 
         for (let j = 0; j < ctx.bricks.length; j++) {
-          if (hitCount >= maxHits) break;
           const brick = ctx.bricks[j];
           if (!brick.alive) continue;
           const bc = brick.getCenter();
           if (Math.abs(b.x - bc.x) < brick.width / 2 + hitRadius &&
               Math.abs(b.y - bc.y) < brick.height / 2 + hitRadius) {
-            ctx.damageBrick(brick, tickDmg, 'spinBlade');
-            hitCount++;
+            ctx.damageBrick(brick, tickDmg * pierceDmgMult, 'spinBlade');
             // 撕裂DOT
             if (bleedLv > 0 && brick.alive) {
               const dotDmg = damage * 0.15 * bleedLv;
@@ -209,7 +207,7 @@ class SpinBlade extends Weapon {
   /** 计算转向力：朝砖块密度高的方向偏移 */
   _calcSteer(blade, bricks, size) {
     let sumX = 0, sumY = 0, count = 0;
-    const detectRange = 120;
+    const detectRange = 200;
 
     for (const brick of bricks) {
       if (!brick.alive) continue;
@@ -252,20 +250,20 @@ class SpinBlade extends Weapon {
   }
 
   _spawnSplitBlades(parent, splitLv) {
-    const splitCount = 2 + (splitLv - 1);
-    const splitDuration = 2500 + splitLv * 500;
+    const splitCount = 2 + splitLv; // 3-4个
+    const splitDuration = 5000 + splitLv * 1500; // 5-8秒
     for (let s = 0; s < splitCount; s++) {
       // 分裂刃水平散开
-      const angle = (s === 0 ? 0 : Math.PI) + (Math.random() - 0.5) * 0.5;
+      const angle = (Math.PI * 2 / splitCount) * s + Math.random() * 0.3;
       this.blades.push({
         x: parent.x, y: parent.y,
-        vx: Math.cos(angle) * 1.2,
-        vy: (Math.random() - 0.5) * 0.3,
+        vx: Math.cos(angle) * 1.5,
+        vy: Math.sin(angle) * 0.5,
         angle: Math.random() * Math.PI * 2,
         life: splitDuration, maxLife: splitDuration,
-        size: parent.size * 0.6,
+        size: parent.size * 0.75, // 75%大小
         tickTimer: 0, aliveMs: parent.aliveMs, isSplit: true,
-        lingering: false, lingerTimer: 0,
+        lingering: false, lingerTimer: 0, reachedTop: true,
       });
     }
   }

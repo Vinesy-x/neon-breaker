@@ -76,12 +76,12 @@ const WEAPON_TREES = {
   },
   spinBlade: {
     name: '等离子旋刃', desc: '弹墙旋刃，后排持续清扫',
-    icon: '🌀', color: '#AA44FF', basePct: 1.8, interval: 6000, tickInterval: 250,
+    icon: '🌀', color: '#AA44FF', basePct: 2.5, interval: 6000, tickInterval: 180,
     branches: {
       damage:    { name: '伤害', desc: '+50%基础伤害', max: 5, requires: null },
       duration:  { name: '续航', desc: '+2秒存在时间', max: 3, requires: null },
       giant:     { name: '巨型化', desc: '旋刃变大+判定范围↑', max: 3, requires: null },
-      pierce:    { name: '贯穿', desc: '每tick可命中所有砖块', max: 1, requires: { damage: 2 } },
+      pierce:    { name: '锋锐', desc: '贯穿伤害+30%', max: 1, requires: { damage: 2 } },
       shockwave: { name: '回旋斩', desc: '弹墙时释放环形刀气波', max: 2, requires: { damage: 2 } },
       ramp:      { name: '蓄势', desc: '存活每秒+12%伤害', max: 3, requires: { duration: 2 } },
       bleed:     { name: '撕裂', desc: '命中留DOT(15%/秒×2秒)', max: 2, requires: { damage: 3 } },
