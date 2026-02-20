@@ -52,32 +52,63 @@ class Renderer {
   }
 
   // ===== 子弹 =====
+  // ===== 子弹（批量绘制优化） =====
+  drawBullets(bullets) {
+    if (!bullets || bullets.length === 0) return;
+    const ctx = this.ctx;
+    const elementColors = { fire: '#FF4400', ice: '#44DDFF', thunder: '#FFF050' };
+
+    // 先画所有拖尾（低alpha，一起画）
+    ctx.globalAlpha = 0.25;
+    for (let k = 0; k < bullets.length; k++) {
+      const b = bullets[k];
+      const bulletColor = b.element ? (elementColors[b.element] || b.color) : b.color;
+      ctx.fillStyle = bulletColor;
+      for (let i = 0; i < b.trail.length; i++) {
+        const t = b.trail[i];
+        const radius = b.radius * (i + 1) / b.trail.length * 0.6;
+        ctx.beginPath();
+        ctx.arc(t.x, t.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // 再画所有弹体
+    ctx.globalAlpha = 1;
+    for (let k = 0; k < bullets.length; k++) {
+      const b = bullets[k];
+      const bulletColor = b.element ? (elementColors[b.element] || b.color) : b.color;
+      ctx.fillStyle = bulletColor;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 最后画所有高光核心（白色批量）
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    for (let k = 0; k < bullets.length; k++) {
+      const b = bullets[k];
+      ctx.moveTo(b.x + b.radius * 0.5, b.y);
+      ctx.arc(b.x, b.y, b.radius * 0.4, 0, Math.PI * 2);
+    }
+    ctx.fill();
+  }
+
   drawBullet(bullet) {
+    // 保留单个接口兼容，但推荐用drawBullets批量
     const ctx = this.ctx;
     const elementColors = { fire: '#FF4400', ice: '#44DDFF', thunder: '#FFF050' };
     const bulletColor = bullet.element ? (elementColors[bullet.element] || bullet.color) : bullet.color;
-    // 拖尾
     for (let i = 0; i < bullet.trail.length; i++) {
       const t = bullet.trail[i];
-      const alpha = (i + 1) / bullet.trail.length * 0.4;
-      const radius = bullet.radius * (i + 1) / bullet.trail.length * 0.8;
-      ctx.beginPath();
-      ctx.arc(t.x, t.y, radius, 0, Math.PI * 2);
-      ctx.globalAlpha = alpha;
+      ctx.globalAlpha = (i + 1) / bullet.trail.length * 0.3;
       ctx.fillStyle = bulletColor;
-      ctx.fill();
+      ctx.beginPath(); ctx.arc(t.x, t.y, bullet.radius * 0.6, 0, Math.PI * 2); ctx.fill();
     }
     ctx.globalAlpha = 1;
-    // 弹体
-    ctx.beginPath();
-    ctx.arc(bullet.x, bullet.y, bullet.radius, 0, Math.PI * 2);
     ctx.fillStyle = bulletColor;
-    ctx.fill();
-    // 白色高光核心
-    ctx.beginPath();
-    ctx.arc(bullet.x, bullet.y, bullet.radius * 0.5, 0, Math.PI * 2);
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(bullet.x, bullet.y, bullet.radius, 0, Math.PI * 2); ctx.fill();
   }
 
   // ===== 发射器 =====
@@ -306,12 +337,17 @@ class Renderer {
 
   // ===== 粒子 =====
   drawParticles(particles) {
+    if (!particles || particles.length === 0) return;
     const ctx = this.ctx;
+    // 按颜色分组批量画，减少状态切换
+    // 简化：大部分粒子用fillRect，统一alpha
     for (let i = 0; i < particles.length; i++) {
       const p = particles[i];
-      ctx.globalAlpha = p.getAlpha();
+      const a = p.getAlpha();
+      if (a < 0.05) continue;
+      ctx.globalAlpha = a;
       ctx.fillStyle = p.color;
-      ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+      ctx.fillRect(p.x - p.size * 0.5, p.y - p.size * 0.5, p.size, p.size);
     }
     ctx.globalAlpha = 1;
   }
@@ -528,9 +564,13 @@ class Renderer {
       ctx.rotate(Math.atan2(k.vy, k.vx));
       ctx.scale(s, s);
 
-      // 外发光
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 8 + s * 5;
+      // 外发光（用半透明大圆替代shadowBlur，性能好很多）
+      ctx.globalAlpha = 0.2;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(0, 0, 10 * s, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
 
       // 1) 弹体主体（圆角矩形）
       ctx.fillStyle = color;
@@ -546,8 +586,6 @@ class Renderer {
       ctx.beginPath();
       ctx.arc(6, 0, 3.5, -Math.PI / 2, Math.PI / 2);
       ctx.fill();
-
-      ctx.shadowBlur = 0;
 
       // 3) 弹头高光
       ctx.fillStyle = '#FFFFFF';
@@ -613,108 +651,51 @@ class Renderer {
       ctx.restore();
     }
 
-    // ===== 爆炸特效 =====
+    // ===== 爆炸特效（性能优化版） =====
     if (explosions) {
       for (const e of explosions) {
-        const progress = 1 - e.life / e.maxLife; // 0→1
+        const progress = 1 - e.life / e.maxLife;
         const r = Math.min(e.radius, e.maxRadius);
-        const alpha = (1 - progress * progress) * 0.9; // 平方衰减，开头更亮
+        const alpha = (1 - progress * progress) * 0.85;
+        if (alpha < 0.05) continue;
 
-        // 1) 外圈冲击波（双层环）
-        ctx.globalAlpha = alpha * 0.6;
+        // 1) 冲击波环
+        ctx.globalAlpha = alpha * 0.5;
         ctx.strokeStyle = e.isChain ? '#FF6600' : color;
-        ctx.lineWidth = 3 - progress * 2;
+        ctx.lineWidth = Math.max(1, 3 - progress * 2.5);
         ctx.beginPath();
         ctx.arc(e.x, e.y, r, 0, Math.PI * 2);
-        ctx.stroke();
-        // 外环（更大更淡）
-        ctx.globalAlpha = alpha * 0.25;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.arc(e.x, e.y, r * 1.3, 0, Math.PI * 2);
         ctx.stroke();
 
-        // 2) 填充光晕（径向渐变）
-        ctx.globalAlpha = alpha * 0.35;
-        const grad = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, r);
-        grad.addColorStop(0, '#FFFFFF');
-        grad.addColorStop(0.2, e.isChain ? '#FFAA00' : color);
-        grad.addColorStop(0.6, e.isChain ? '#FF440066' : 'rgba(0,255,255,0.3)');
-        grad.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = grad;
+        // 2) 内部填充（半透明圆替代渐变）
+        ctx.globalAlpha = alpha * 0.2;
+        ctx.fillStyle = e.isChain ? '#FF6600' : color;
         ctx.beginPath();
-        ctx.arc(e.x, e.y, r, 0, Math.PI * 2);
+        ctx.arc(e.x, e.y, r * 0.7, 0, Math.PI * 2);
         ctx.fill();
 
-        // 3) 十字光芒（爆炸标志性效果）
+        // 3) 十字光芒（前60%）
         if (progress < 0.6) {
-          const crossAlpha = (0.6 - progress) * 1.5;
-          const crossLen = r * (1.2 + progress * 0.5);
-          const crossW = 2 - progress * 2;
-          ctx.globalAlpha = crossAlpha * 0.7;
+          const crossAlpha = (0.6 - progress) * 1.2;
+          const crossLen = r * (1 + progress * 0.4);
+          ctx.globalAlpha = crossAlpha * 0.6;
           ctx.strokeStyle = '#FFFFFF';
-          ctx.lineWidth = Math.max(0.5, crossW);
-          // 水平
+          ctx.lineWidth = Math.max(0.5, 1.5 - progress * 2);
           ctx.beginPath();
           ctx.moveTo(e.x - crossLen, e.y);
           ctx.lineTo(e.x + crossLen, e.y);
-          ctx.stroke();
-          // 垂直
-          ctx.beginPath();
           ctx.moveTo(e.x, e.y - crossLen);
           ctx.lineTo(e.x, e.y + crossLen);
           ctx.stroke();
-          // 45度斜线（更短更细）
-          ctx.globalAlpha = crossAlpha * 0.4;
-          ctx.lineWidth = Math.max(0.3, crossW * 0.6);
-          const dLen = crossLen * 0.6;
-          ctx.beginPath();
-          ctx.moveTo(e.x - dLen, e.y - dLen);
-          ctx.lineTo(e.x + dLen, e.y + dLen);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.moveTo(e.x + dLen, e.y - dLen);
-          ctx.lineTo(e.x - dLen, e.y + dLen);
-          ctx.stroke();
         }
 
-        // 4) 核心白色闪光球（前30%极亮）
-        if (progress < 0.3) {
-          const coreAlpha = (0.3 - progress) * 3;
-          const coreR = r * 0.35 * (1 - progress * 2);
-          ctx.globalAlpha = coreAlpha;
+        // 4) 核心闪光（前25%）
+        if (progress < 0.25) {
+          ctx.globalAlpha = (0.25 - progress) * 4;
           ctx.fillStyle = '#FFFFFF';
           ctx.beginPath();
-          ctx.arc(e.x, e.y, Math.max(2, coreR), 0, Math.PI * 2);
+          ctx.arc(e.x, e.y, Math.max(2, r * 0.25), 0, Math.PI * 2);
           ctx.fill();
-          // 芯外圈光晕
-          ctx.globalAlpha = coreAlpha * 0.5;
-          ctx.fillStyle = e.isChain ? '#FFCC44' : '#88FFFF';
-          ctx.beginPath();
-          ctx.arc(e.x, e.y, Math.max(4, coreR * 1.8), 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-        // 5) 碎片飞散（小方块，后半段）
-        if (progress > 0.1 && progress < 0.8) {
-          const fragCount = e.isChain ? 4 : 6;
-          const fragAlpha = (0.8 - progress) * 1.2;
-          ctx.globalAlpha = fragAlpha * 0.6;
-          for (let f = 0; f < fragCount; f++) {
-            const angle = (Math.PI * 2 / fragCount) * f + progress * 2;
-            const dist = r * (0.3 + progress * 0.9);
-            const fx = e.x + Math.cos(angle) * dist;
-            const fy = e.y + Math.sin(angle) * dist;
-            const fSize = 2 - progress * 1.5;
-            if (fSize > 0.3) {
-              ctx.fillStyle = e.isChain ? '#FFAA44' : color;
-              ctx.save();
-              ctx.translate(fx, fy);
-              ctx.rotate(angle + progress * 5);
-              ctx.fillRect(-fSize, -fSize, fSize * 2, fSize * 2);
-              ctx.restore();
-            }
-          }
         }
       }
       ctx.globalAlpha = 1;
@@ -763,20 +744,27 @@ class Renderer {
 
   _drawDrone(data, ctx) {
     const { drones, bullets, color } = data;
-    // 无人机子弹
-    for (const b of bullets) {
-      if (b.isLaser) {
+    // 子弹批量
+    if (bullets.length > 0) {
+      // 先画激光类
+      for (const b of bullets) {
+        if (!b.isLaser) continue;
         ctx.globalAlpha = b.alpha;
         ctx.strokeStyle = color; ctx.lineWidth = 2;
         ctx.beginPath(); ctx.moveTo(b.x1, b.y1); ctx.lineTo(b.x2, b.y2); ctx.stroke();
-        ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(b.x1, b.y1); ctx.lineTo(b.x2, b.y2); ctx.stroke();
-        ctx.globalAlpha = 1;
-      } else {
-        ctx.fillStyle = color;
-        ctx.beginPath(); ctx.arc(b.x, b.y, 2, 0, Math.PI * 2); ctx.fill();
       }
+      // 再批量画子弹
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      for (const b of bullets) {
+        if (b.isLaser) continue;
+        ctx.moveTo(b.x + 2, b.y);
+        ctx.arc(b.x, b.y, 2, 0, Math.PI * 2);
+      }
+      ctx.fill();
     }
+    ctx.globalAlpha = 1;
     // 无人机本体
     for (const d of drones) {
       ctx.fillStyle = color;
@@ -859,50 +847,52 @@ class Renderer {
 
   _drawMissile(data, ctx) {
     const { missiles, explosions, color } = data;
+
+    // 拖尾批量（单层，单色）
+    ctx.fillStyle = Config.NEON_ORANGE;
     for (const m of missiles) {
       for (let i = 0; i < m.trail.length; i++) {
         const t = m.trail[i];
-        const alpha = (i + 1) / m.trail.length * 0.6;
-        const size = 2 + (i / m.trail.length) * 3;
-        ctx.globalAlpha = alpha;
-        ctx.fillStyle = Config.NEON_ORANGE;
+        const size = 1.5 + (i / m.trail.length) * 2.5;
+        ctx.globalAlpha = (i + 1) / m.trail.length * 0.5;
         ctx.beginPath();
         ctx.arc(t.x, t.y, size, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = 'rgba(255,255,200,0.5)';
-        ctx.beginPath();
-        ctx.arc(t.x, t.y, size * 0.5, 0, Math.PI * 2);
-        ctx.fill();
       }
-      ctx.globalAlpha = 1;
-
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(m.x, m.y, 5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#FFFFFF';
-      ctx.beginPath();
-      ctx.arc(m.x, m.y - 1, 2, 0, Math.PI * 2);
-      ctx.fill();
     }
 
+    // 弹体批量
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    for (const m of missiles) {
+      ctx.moveTo(m.x + 5, m.y);
+      ctx.arc(m.x, m.y, 5, 0, Math.PI * 2);
+    }
+    ctx.fill();
+
+    // 弹体高光批量
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    for (const m of missiles) {
+      ctx.moveTo(m.x + 2, m.y - 1);
+      ctx.arc(m.x, m.y - 1, 2, 0, Math.PI * 2);
+    }
+    ctx.fill();
+
+    // 爆炸（精简：冲击环+核心闪光）
     for (const e of explosions) {
-      ctx.globalAlpha = e.alpha * 0.4;
+      if (e.alpha < 0.05) continue;
+      const r = e.radius * (1.2 - e.alpha * 0.5);
+      ctx.globalAlpha = e.alpha * 0.35;
       ctx.strokeStyle = color;
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(e.x, e.y, e.radius * (1.2 - e.alpha * 0.5), 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.globalAlpha = e.alpha * 0.2;
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(e.x, e.y, e.radius * (1 - e.alpha * 0.3), 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = e.alpha * 0.8;
-      ctx.fillStyle = '#FFFFFF';
-      ctx.beginPath();
-      ctx.arc(e.x, e.y, 6 * e.alpha, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(e.x, e.y, r, 0, Math.PI * 2); ctx.stroke();
+      if (e.alpha > 0.5) {
+        ctx.globalAlpha = e.alpha * 0.6;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath(); ctx.arc(e.x, e.y, 4 * e.alpha, 0, Math.PI * 2); ctx.fill();
+      }
     }
     ctx.globalAlpha = 1;
   }
@@ -1024,17 +1014,15 @@ class Renderer {
     if (!orbs || orbs.length === 0) return;
     const ctx = this.ctx;
     const size = Config.EXP_ORB_SIZE;
+    // 批量画所有经验球（单色）
+    ctx.fillStyle = Config.EXP_ORB_COLOR;
+    ctx.beginPath();
     for (let i = 0; i < orbs.length; i++) {
       const o = orbs[i];
-      ctx.fillStyle = Config.EXP_ORB_COLOR;
-      ctx.beginPath();
+      ctx.moveTo(o.x + size, o.y);
       ctx.arc(o.x, o.y, size, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#FFFFFF';
-      ctx.beginPath();
-      ctx.arc(o.x - 1, o.y - 1, size * 0.4, 0, Math.PI * 2);
-      ctx.fill();
     }
+    ctx.fill();
   }
 
   // ===== 经验条 =====

@@ -394,7 +394,7 @@ class Game {
     this.renderer.drawExpOrbs(this.expSystem.orbs);
     this.renderer.drawWeapons(this.upgrades.weapons,this.launcher);
     this.renderer.drawWeaponWings(this.upgrades.weapons,this.launcher);
-    for(var k=0;k<this.bullets.length;k++) this.renderer.drawBullet(this.bullets[k]);
+    this.renderer.drawBullets(this.bullets);
     if(this.launcher) this.renderer.drawLauncher(this.launcher, this.upgrades);
     this.renderer.drawParticles(this.particles.particles);
     this.renderer.drawFloatingTexts(this.floatingTexts);

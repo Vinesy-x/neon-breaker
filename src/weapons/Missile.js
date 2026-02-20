@@ -44,7 +44,7 @@ class MissileWeapon extends Weapon {
         m.y += (dy / dist) * speed * dt;
       }
       m.trail.push({ x: m.x, y: m.y });
-      if (m.trail.length > 6) m.trail.shift();
+      if (m.trail.length > 4) m.trail.shift();
 
       let hit = false;
       for (let j = 0; j < ctx.bricks.length; j++) {
@@ -56,6 +56,7 @@ class MissileWeapon extends Weapon {
           const effectiveAoe = nukeLv > 0 ? baseAoe * 3 : baseAoe;
           this._explodeArea(m.x, m.y, effectiveAoe, Math.floor(damage * 0.5), ctx);
           this.explosions.push({ x: m.x, y: m.y, radius: effectiveAoe, alpha: 1.0 });
+          if (this.explosions.length > 8) this.explosions.shift(); // 限制爆炸数量
           if (nukeLv > 0) ctx.screenShake = Math.min((ctx.screenShake || 0) + 6, 12);
           if (splitLv > 0) this._spawnSplits(m.x, m.y, splitLv, ctx);
           Sound.missileExplode();
@@ -110,6 +111,8 @@ class MissileWeapon extends Weapon {
 
   _spawnSplits(cx, cy, level, ctx) {
     const n = 3 * level;
+    // 限制同屏导弹数量，防止爆炸
+    if (this.missiles.length >= 30) return;
     for (let i = 0; i < n; i++) {
       const angle = (Math.PI * 2 / n) * i;
       this.missiles.push({

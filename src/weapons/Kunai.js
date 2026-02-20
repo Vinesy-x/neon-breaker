@@ -208,6 +208,8 @@ class Kunai extends Weapon {
   }
 
   _explodeAt(x, y, radius, damage, ctx, chainLv) {
+    // 限制爆炸数量
+    if (this.explosions.length >= 10) this.explosions.shift();
     this.explosions.push({
       x, y,
       radius: radius * 0.15,
