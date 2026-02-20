@@ -49,7 +49,7 @@ class SpinBlade extends Weapon {
 
     const size = 14 + giantLv * 8;
     const bounceTop = Config.SAFE_TOP + 10;
-    const bounceBottom = Config.SCREEN_HEIGHT * 0.72;
+    const bounceBottom = Config.SCREEN_HEIGHT * 0.88;
     const tickInterval = superLv > 0
       ? Math.floor((this.def.tickInterval || 250) / 2)
       : (this.def.tickInterval || 250);
@@ -216,7 +216,7 @@ class SpinBlade extends Weapon {
     const durationMs = (10 + (this.branches.duration || 0) * 2) * 1000;
     // 水平发射为主，轻微向上
     const angle = (Math.random() > 0.5 ? 0 : Math.PI) + (Math.random() - 0.5) * 0.3;
-    const spd = 1.2;
+    const spd = 1.5;
 
     this.blades.push({
       x: cx, y: cy - 50, // 从稍高处发射
