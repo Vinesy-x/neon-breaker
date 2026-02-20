@@ -1,5 +1,6 @@
 /**
- * PowerUp.js - 掉落道具（射击模式版）
+ * PowerUp.js - v6.0 掉落系统（金币 + 技能宝箱）
+ * 砖块击碎 → 金币(100%) + 技能宝箱(低概率+冷却)
  */
 const Config = require('./Config');
 
@@ -7,39 +8,35 @@ class PowerUp {
   constructor(x, y, type) {
     this.x = x;
     this.y = y;
-    this.type = type;
+    this.type = type; // 'coin' | 'skillCrate'
     this.size = Config.POWERUP_SIZE;
     this.speed = Config.POWERUP_SPEED;
     this.alive = true;
     this.time = 0;
 
-    switch (type) {
-      case 'firerate':
-        this.color = Config.NEON_YELLOW;
-        this.icon = '»';
-        break;
-      case 'spread':
-        this.color = Config.NEON_PINK;
-        this.icon = '⋮';
-        break;
-      case 'score':
-        this.color = Config.NEON_GREEN;
-        this.icon = '★';
-        break;
+    if (type === 'coin') {
+      this.color = '#FFD700';
+      this.icon = '●';
+      this.size = 10;
+    } else {
+      this.color = '#FF14FF';
+      this.icon = '📦';
+      this.size = 22;
+      this.speed = 1.5; // 宝箱掉慢一点
     }
   }
 
   update(dt, magnetTarget) {
     this.time += dt;
 
-    // 磁力吸附
     if (magnetTarget) {
       const dx = magnetTarget.x - this.x;
       const dy = magnetTarget.y - this.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist > 5) {
-        this.x += (dx / dist) * 4 * dt;
-        this.y += (dy / dist) * 4 * dt;
+        const magnetSpeed = this.type === 'skillCrate' ? 5 : 4;
+        this.x += (dx / dist) * magnetSpeed * dt;
+        this.y += (dy / dist) * magnetSpeed * dt;
       }
     } else {
       this.y += this.speed * dt;
@@ -60,14 +57,31 @@ class PowerUp {
   }
 }
 
-const POWERUP_TYPES = ['firerate', 'spread', 'score'];
+/**
+ * 生成掉落物
+ * @param {number} x
+ * @param {number} y
+ * @param {number} lastCrateTime - 上次宝箱掉落时间戳
+ * @param {number} now - 当前时间戳(ms)
+ * @returns {{ items: PowerUp[], crateDropped: boolean }}
+ */
+function generateDrops(x, y, lastCrateTime, now) {
+  const items = [];
+  let crateDropped = false;
 
-function maybeDropPowerUp(x, y) {
-  if (Math.random() < Config.POWERUP_DROP_CHANCE) {
-    const type = POWERUP_TYPES[Math.floor(Math.random() * POWERUP_TYPES.length)];
-    return new PowerUp(x, y, type);
+  // 金币（高概率）
+  if (Math.random() < Config.COIN_DROP_CHANCE) {
+    items.push(new PowerUp(x + (Math.random() - 0.5) * 10, y, 'coin'));
   }
-  return null;
+
+  // 技能宝箱（低概率 + 冷却控制）
+  const cooldownOk = (now - lastCrateTime) >= Config.SKILL_CRATE_COOLDOWN;
+  if (cooldownOk && Math.random() < Config.SKILL_CRATE_CHANCE) {
+    items.push(new PowerUp(x, y - 5, 'skillCrate'));
+    crateDropped = true;
+  }
+
+  return { items, crateDropped };
 }
 
-module.exports = { PowerUp, maybeDropPowerUp };
+module.exports = { PowerUp, generateDrops };

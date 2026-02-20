@@ -94,7 +94,9 @@ class SaveManager {
   // ===== 章节进度 =====
 
   getMaxChapter() {
-    return this._data.maxChapter || 1;
+    // DEV: 全部解锁方便测试
+    return 100;
+    // return this._data.maxChapter || 1;
   }
 
   isChapterCleared(chapter) {

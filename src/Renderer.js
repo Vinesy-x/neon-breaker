@@ -294,25 +294,29 @@ class Renderer {
   // ===== 道具 =====
   drawPowerUp(powerUp) {
     const ctx = this.ctx;
-    const { x, y, size, color, time } = powerUp;
+    const { x, y, size, color, time, type } = powerUp;
     const pulse = 0.8 + Math.sin(time * 0.15) * 0.2;
     const drawSize = size * pulse;
-    // 外发光
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(x, y, drawSize / 2, 0, Math.PI * 2);
-    ctx.fill();
-    // 白色高光
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.beginPath();
-    ctx.arc(x - 2, y - 2, drawSize / 4, 0, Math.PI * 2);
-    ctx.fill();
-    // 外圈
-    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(x, y, drawSize / 2 + 3, 0, Math.PI * 2);
-    ctx.stroke();
+    if (type === 'coin') {
+      ctx.fillStyle = '#FFD700';
+      ctx.beginPath(); ctx.arc(x, y, drawSize / 2, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.beginPath(); ctx.arc(x - 1, y - 1, drawSize / 4, 0, Math.PI * 2); ctx.fill();
+    } else if (type === 'skillCrate') {
+      // 发光宝箱
+      ctx.fillStyle = 'rgba(255, 20, 255, 0.15)';
+      ctx.beginPath(); ctx.arc(x, y, drawSize, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = color;
+      ctx.fillRect(x - drawSize / 2, y - drawSize / 2, drawSize, drawSize);
+      ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 1;
+      ctx.strokeRect(x - drawSize / 2, y - drawSize / 2, drawSize, drawSize);
+      ctx.fillStyle = '#FFFFFF'; ctx.font = 'bold 10px monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('?', x, y);
+    } else {
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(x, y, drawSize / 2, 0, Math.PI * 2); ctx.fill();
+    }
   }
 
   // ===== Boss =====
@@ -371,86 +375,198 @@ class Renderer {
     for (const key in weapons) {
       const weapon = weapons[key];
       const data = weapon.getRenderData(lcx, lcy);
+      if (!data) continue;
 
       switch (key) {
-        case 'orbitBlade': this._drawOrbitBlade(data, ctx); break;
-        case 'fireSurge': this._drawFireSurge(data, ctx); break;
+        case 'kunai': this._drawKunai(data, ctx); break;
         case 'lightning': this._drawLightning(data, ctx); break;
         case 'missile': this._drawMissile(data, ctx); break;
-        case 'laserBeam': this._drawLaserBeam(data, ctx); break;
-        case 'iceField': this._drawIceField(data, ctx); break;
+        case 'meteor': this._drawMeteor(data, ctx); break;
+        case 'drone': this._drawDrone(data, ctx); break;
+        case 'spinBlade': this._drawSpinBlade(data, ctx); break;
       }
     }
   }
 
-  _drawOrbitBlade(data, ctx) {
-    const { blades, color } = data;
+  drawWeaponWings(weapons, launcher) {
+    const ctx = this.ctx;
+    const lcx = launcher.getCenterX();
+    const lcy = launcher.y;
+    const keys = Object.keys(weapons);
+    for (let i = 0; i < keys.length; i++) {
+      const weapon = weapons[keys[i]];
+      const wing = weapon.getWingData(lcx, lcy);
+      if (!wing) continue;
+      const side = (i % 2 === 0) ? -1 : 1;
+      const row = Math.floor(i / 2);
+      const wx = lcx + side * (28 + row * 12);
+      const wy = lcy - 5 + row * 8;
+      ctx.globalAlpha = 0.7;
+      switch (wing.type) {
+        case 'kunai': // 小光刃
+          ctx.fillStyle = wing.color;
+          ctx.beginPath();
+          ctx.moveTo(wx, wy - 6); ctx.lineTo(wx + side * 4, wy); ctx.lineTo(wx, wy + 6);
+          ctx.closePath(); ctx.fill(); break;
+        case 'lightning': // 电弧球
+          ctx.fillStyle = wing.color;
+          ctx.beginPath(); ctx.arc(wx, wy, 4, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.arc(wx, wy, 6, 0, Math.PI * 2); ctx.stroke(); break;
+        case 'missile': // 弹仓
+          ctx.fillStyle = wing.color;
+          ctx.fillRect(wx - 3, wy - 5, 6, 10);
+          ctx.fillStyle = '#FFFFFF'; ctx.fillRect(wx - 1, wy - 3, 2, 6); break;
+        case 'meteor': // 能量核心
+          ctx.fillStyle = wing.color;
+          ctx.beginPath(); ctx.arc(wx, wy - 10, 5, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = 'rgba(255,255,255,0.5)';
+          ctx.beginPath(); ctx.arc(wx, wy - 10, 2, 0, Math.PI * 2); ctx.fill(); break;
+        case 'drone': // 小型无人机
+          ctx.fillStyle = wing.color;
+          ctx.fillRect(wx - 4, wy - 2, 8, 4);
+          ctx.fillStyle = '#FFFFFF'; ctx.fillRect(wx - 1, wy - 1, 2, 2); break;
+        case 'spinBlade': // 微型旋刃
+          ctx.save(); ctx.translate(wx, wy);
+          ctx.rotate(Date.now() * 0.005);
+          ctx.fillStyle = wing.color;
+          ctx.beginPath();
+          ctx.moveTo(0, -5); ctx.lineTo(3, 0); ctx.lineTo(0, 5); ctx.lineTo(-3, 0);
+          ctx.closePath(); ctx.fill();
+          ctx.restore(); break;
+      }
+      ctx.globalAlpha = 1;
+    }
+  }
 
-    if (blades.length > 0) {
-      const first = blades[0];
-      const lcx = first.x - Math.cos(first.angle) * 70;
-      const lcy = first.y - Math.sin(first.angle) * 70;
-      ctx.strokeStyle = 'rgba(' + this._hexToRgb(color) + ', 0.12)';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([4, 6]);
+  drawWeaponHUD(weaponList) {
+    if (!weaponList || weaponList.length === 0) return;
+    const ctx = this.ctx;
+    const iconSize = 20;
+    const gap = 6;
+    const startX = Config.SCREEN_WIDTH - iconSize - 6;
+    const startY = Config.SAFE_TOP + 36;
+    for (let i = 0; i < weaponList.length; i++) {
+      const w = weaponList[i];
+      const y = startY + i * (iconSize + gap + 8);
+      ctx.fillStyle = 'rgba(255,255,255,0.06)';
+      ctx.beginPath(); ctx.roundRect(startX - 2, y - 2, iconSize + 4, iconSize + 4, 4); ctx.fill();
+      ctx.strokeStyle = w.color; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect(startX - 2, y - 2, iconSize + 4, iconSize + 4, 4); ctx.stroke();
+      ctx.fillStyle = w.color; ctx.font = (iconSize - 2) + 'px monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(w.icon, startX + iconSize / 2, y + iconSize / 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = '7px monospace';
+      ctx.fillText('Lv.' + w.totalLevel, startX + iconSize / 2, y + iconSize + 6);
+    }
+  }
+
+  _drawKunai(data, ctx) {
+    const { knives, color } = data;
+    for (const k of knives) {
+      ctx.save();
+      ctx.translate(k.x, k.y);
+      ctx.rotate(Math.atan2(k.vy, k.vx));
+      ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.arc(lcx, lcy, 70, 0, Math.PI * 2);
+      ctx.moveTo(8, 0); ctx.lineTo(-4, -4); ctx.lineTo(-2, 0); ctx.lineTo(-4, 4);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#FFFFFF'; ctx.globalAlpha = 0.6;
+      ctx.beginPath(); ctx.moveTo(5, 0); ctx.lineTo(-1, -2); ctx.lineTo(-1, 2);
+      ctx.closePath(); ctx.fill();
+      ctx.globalAlpha = 1; ctx.restore();
+    }
+  }
+
+  _drawOrbitBlade(data, ctx) {
+    // legacy stub - no longer used
+  }
+
+  _drawMeteor(data, ctx) {
+    const { meteors, burnZones, color } = data;
+    // 燃烧区域
+    for (const z of burnZones) {
+      const alpha = Math.min(0.3, z.life / 3000);
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = '#FF4400';
+      ctx.beginPath(); ctx.arc(z.x, z.y, z.radius, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = alpha * 0.5;
+      ctx.fillStyle = '#FFD700';
+      ctx.beginPath(); ctx.arc(z.x, z.y, z.radius * 0.5, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    // 陨石
+    for (const m of meteors) {
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(m.x, m.y, 8, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#FFD700'; ctx.globalAlpha = 0.6;
+      ctx.beginPath(); ctx.arc(m.x, m.y, 4, 0, Math.PI * 2); ctx.fill();
+      // 尾焰
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = '#FF4400';
+      ctx.beginPath(); ctx.arc(m.x, m.y - 10, 6, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+      // 落点预警
+      ctx.strokeStyle = 'rgba(255, 100, 0, 0.3)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(m.targetX - 15, m.targetY);
+      ctx.lineTo(m.targetX + 15, m.targetY);
       ctx.stroke();
       ctx.setLineDash([]);
     }
+  }
 
+  _drawDrone(data, ctx) {
+    const { drones, bullets, color } = data;
+    // 无人机子弹
+    for (const b of bullets) {
+      if (b.isLaser) {
+        ctx.globalAlpha = b.alpha;
+        ctx.strokeStyle = color; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(b.x1, b.y1); ctx.lineTo(b.x2, b.y2); ctx.stroke();
+        ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(b.x1, b.y1); ctx.lineTo(b.x2, b.y2); ctx.stroke();
+        ctx.globalAlpha = 1;
+      } else {
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.arc(b.x, b.y, 2, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    // 无人机本体
+    for (const d of drones) {
+      ctx.fillStyle = color;
+      ctx.fillRect(d.x - 6, d.y - 3, 12, 6);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(d.x - 1, d.y - 1, 2, 2);
+      ctx.strokeStyle = color; ctx.lineWidth = 0.5;
+      ctx.beginPath(); ctx.arc(d.x, d.y, 8, 0, Math.PI * 2); ctx.stroke();
+    }
+  }
+
+  _drawSpinBlade(data, ctx) {
+    const { blades, color } = data;
     for (const b of blades) {
+      const size = b.size || 12;
       ctx.globalAlpha = 0.2;
       ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(b.x, b.y, 12, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.beginPath(); ctx.arc(b.x, b.y, size + 4, 0, Math.PI * 2); ctx.fill();
       ctx.globalAlpha = 1;
-
       ctx.save();
       ctx.translate(b.x, b.y);
       ctx.rotate(b.angle);
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.moveTo(0, -12);
-      ctx.lineTo(6, 0);
-      ctx.lineTo(0, 12);
-      ctx.lineTo(-6, 0);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = '#FFFFFF';
-      ctx.globalAlpha = 0.7;
+      ctx.moveTo(0, -size); ctx.lineTo(size * 0.5, 0); ctx.lineTo(0, size); ctx.lineTo(-size * 0.5, 0);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#FFFFFF'; ctx.globalAlpha = 0.6;
       ctx.beginPath();
-      ctx.moveTo(0, -5);
-      ctx.lineTo(2, 0);
-      ctx.lineTo(0, 5);
-      ctx.lineTo(-2, 0);
-      ctx.closePath();
-      ctx.fill();
+      ctx.moveTo(0, -size * 0.4); ctx.lineTo(size * 0.2, 0); ctx.lineTo(0, size * 0.4); ctx.lineTo(-size * 0.2, 0);
+      ctx.closePath(); ctx.fill();
       ctx.globalAlpha = 1;
       ctx.restore();
     }
-  }
-
-  _drawFireSurge(data, ctx) {
-    const { waves, color } = data;
-    for (const w of waves) {
-      ctx.globalAlpha = w.alpha * 0.7;
-
-      ctx.fillStyle = color;
-      ctx.fillRect(w.x - w.width / 2, w.y - 8, w.width, 16);
-
-      ctx.fillStyle = 'rgba(255, 255, 150, 0.5)';
-      ctx.fillRect(w.x - w.width / 4, w.y - 3, w.width / 2, 6);
-
-      for (let s = 0; s < 3; s++) {
-        const sx = w.x + (Math.random() - 0.5) * w.width * 0.8;
-        const sy = w.y + (Math.random() - 0.5) * 12;
-        ctx.fillStyle = 'rgba(255, 255, 100, 0.7)';
-        ctx.fillRect(sx, sy, 2, 2);
-      }
-    }
-    ctx.globalAlpha = 1;
   }
 
   _drawLightning(data, ctx) {
@@ -548,62 +664,7 @@ class Renderer {
     ctx.globalAlpha = 1;
   }
 
-  _drawLaserBeam(data, ctx) {
-    const { beams, color } = data;
-    for (const b of beams) {
-      ctx.globalAlpha = b.alpha;
-      const bh = Config.SCREEN_HEIGHT;
-
-      ctx.fillStyle = 'rgba(255, 50, 50, 0.1)';
-      ctx.fillRect(b.x - b.width * 3, b.topY, b.width * 6, bh);
-
-      ctx.fillStyle = 'rgba(255, 80, 80, 0.3)';
-      ctx.fillRect(b.x - b.width * 1.5, b.topY, b.width * 3, bh);
-
-      ctx.fillStyle = color;
-      ctx.fillRect(b.x - b.width / 2, b.topY, b.width, bh);
-
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-      ctx.fillRect(b.x - 1, b.topY, 2, bh);
-
-
-      const scanY = (Date.now() * 0.3) % bh;
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-      ctx.fillRect(b.x - b.width * 2, scanY, b.width * 4, 2);
-    }
-    ctx.globalAlpha = 1;
-  }
-
-  _drawIceField(data, ctx) {
-    const { icicles, color } = data;
-    for (const ic of icicles) {
-      for (let i = 0; i < ic.trail.length; i++) {
-        const t = ic.trail[i];
-        const alpha = (i + 1) / ic.trail.length * 0.5;
-        ctx.globalAlpha = alpha;
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.arc(t.x, t.y, 2, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.globalAlpha = 1;
-
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.moveTo(ic.x, ic.y + 10);
-      ctx.lineTo(ic.x - 5, ic.y - 6);
-      ctx.lineTo(ic.x + 5, ic.y - 6);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-      ctx.beginPath();
-      ctx.moveTo(ic.x, ic.y + 5);
-      ctx.lineTo(ic.x - 2, ic.y - 3);
-      ctx.lineTo(ic.x + 2, ic.y - 3);
-      ctx.closePath();
-      ctx.fill();
-    }
-  }
+  // legacy laser/ice removed - replaced by meteor/drone/spinBlade
 
   _hexToRgb(hex) {
     const r = parseInt(hex.slice(1, 3), 16);
@@ -773,7 +834,7 @@ class Renderer {
   }
 
   // ===== 升级选择（居中并列3列卡片） =====
-  drawLevelUpChoice(choices, playerLevel, upgrades) {
+  drawSkillChoice(choices, upgrades) {
     const ctx = this.ctx;
     const sw = Config.SCREEN_WIDTH;
     const sh = Config.SCREEN_HEIGHT;
@@ -782,92 +843,84 @@ class Renderer {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
     ctx.fillRect(0, 0, sw, sh);
 
-    ctx.fillStyle = Config.NEON_GREEN;
-    ctx.font = 'bold 24px monospace';
+    ctx.fillStyle = Config.NEON_PINK;
+    ctx.font = 'bold 22px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('⬆ LEVEL ' + playerLevel, cx, sh * 0.18);
+    ctx.fillText('📦 技能宝箱', cx, sh * 0.16);
 
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.font = '14px monospace';
-    ctx.fillText('选择一项强化', cx, sh * 0.18 + 28);
+    ctx.font = '13px monospace';
+    ctx.fillText('选择一项强化', cx, sh * 0.16 + 26);
 
     const count = choices.length;
+    if (count === 0) return;
     const gap = 8;
     const totalW = sw - 20;
     const cardW = Math.floor((totalW - gap * (count - 1)) / count);
-    const cardH = sh * 0.5;
+    const cardH = sh * 0.52;
     const startX = (sw - (cardW * count + gap * (count - 1))) / 2;
-    const startY = sh * 0.26;
+    const startY = sh * 0.24;
 
     for (let i = 0; i < count; i++) {
       const c = choices[i];
       const cardX = startX + i * (cardW + gap);
       const cardY = startY;
+      const isNew = c.type === 'newWeapon';
 
-      const isNew = c.isNew && c.type === 'weapon';
       ctx.fillStyle = 'rgba(8, 2, 32, 0.92)';
-      ctx.beginPath();
-      ctx.roundRect(cardX, cardY, cardW, cardH, 10);
-      ctx.fill();
-
+      ctx.beginPath(); ctx.roundRect(cardX, cardY, cardW, cardH, 10); ctx.fill();
       ctx.strokeStyle = c.color;
       ctx.lineWidth = isNew ? 1.5 : 1;
-      ctx.beginPath();
-      ctx.roundRect(cardX, cardY, cardW, cardH, 10);
-      ctx.stroke();
+      ctx.beginPath(); ctx.roundRect(cardX, cardY, cardW, cardH, 10); ctx.stroke();
 
       const rgb = this._hexToRgb(c.color);
       ctx.fillStyle = 'rgba(' + rgb + ', 0.3)';
-      ctx.beginPath();
-      ctx.roundRect(cardX + 1, cardY + 1, cardW - 2, 3, [2, 2, 0, 0]);
-      ctx.fill();
+      ctx.beginPath(); ctx.roundRect(cardX + 1, cardY + 1, cardW - 2, 3, [2, 2, 0, 0]); ctx.fill();
 
       const ccx = cardX + cardW / 2;
 
-      const typeLabel = c.type === 'weapon' ? '武器' : '强化';
+      // 类型标签
+      var typeLabel = '强化';
+      if (c.type === 'newWeapon') typeLabel = '新武器';
+      else if (c.type === 'weaponBranch') typeLabel = '武器';
+      else if (c.type === 'shipBranch') typeLabel = '飞机';
       ctx.fillStyle = 'rgba(255,255,255,0.4)';
-      ctx.font = 'bold 13px monospace';
+      ctx.font = 'bold 12px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText(typeLabel, ccx, cardY + 22);
+      ctx.fillText(typeLabel, ccx, cardY + 20);
 
       if (isNew) {
         ctx.fillStyle = Config.NEON_YELLOW;
-        ctx.font = 'bold 13px monospace';
-        ctx.fillText('NEW!', ccx, cardY + 40);
+        ctx.font = 'bold 12px monospace';
+        ctx.fillText('NEW!', ccx, cardY + 36);
       }
 
+      // 图标
       ctx.fillStyle = c.color;
-      ctx.font = '44px monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(c.icon, ccx, cardY + cardH * 0.3);
+      ctx.font = '40px monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(c.icon, ccx, cardY + cardH * 0.28);
 
+      // 名称
       ctx.fillStyle = '#FFFFFF';
-      ctx.font = 'bold 16px monospace';
+      ctx.font = 'bold 14px monospace';
       ctx.textBaseline = 'middle';
-      this._drawTextWrap(ctx, c.name, ccx, cardY + cardH * 0.52, cardW - 8, 18);
+      this._drawTextWrap(ctx, c.name, ccx, cardY + cardH * 0.48, cardW - 8, 16);
 
+      // 描述
       ctx.fillStyle = 'rgba(255,255,255,0.65)';
-      ctx.font = '13px monospace';
-      this._drawTextWrap(ctx, c.desc, ccx, cardY + cardH * 0.66, cardW - 8, 16);
+      ctx.font = '12px monospace';
+      this._drawTextWrap(ctx, c.desc, ccx, cardY + cardH * 0.62, cardW - 8, 14);
 
-      if (c.type === 'weapon') {
-        const def = Config.WEAPONS[c.key];
-        const curLv = upgrades ? upgrades.getWeaponLevel(c.key) : 0;
-        const maxLv = def ? def.maxLevel : 5;
-        this._drawLevelDots(ctx, ccx, cardY + cardH * 0.85, curLv, maxLv, c.color, cardW);
-      } else {
-        const def = Config.BUFFS.find(b => b.key === c.key);
-        const curLv = upgrades ? upgrades.getBuffLevel(c.key) : 0;
-        const maxLv = def ? def.maxLevel : 3;
-        this._drawLevelDots(ctx, ccx, cardY + cardH * 0.85, curLv, maxLv, c.color, cardW);
+      // 等级指示器
+      if (c.level && c.maxLevel) {
+        this._drawLevelDots(ctx, ccx, cardY + cardH * 0.82, c.level - 1, c.maxLevel, c.color, cardW);
       }
 
       c._hitArea = { x: cardX, y: cardY, w: cardW, h: cardH };
     }
   }
-
   _drawTextWrap(ctx, text, cx, y, maxW, lineH) {
     const charW = parseInt(ctx.font) * 0.6;
     const maxChars = Math.floor(maxW / charW);
@@ -919,30 +972,28 @@ class Renderer {
     ctx.fillStyle = Config.NEON_CYAN;
     ctx.font = '16px monospace';
     ctx.fillText('得分: ' + score, cx, cy - 60);
-    ctx.fillStyle = Config.NEON_GREEN;
-    ctx.fillText('等级: Lv.' + playerLevel, cx, cy - 35);
 
     if (ownedList && ownedList.length > 0) {
       ctx.fillStyle = 'rgba(255,255,255,0.5)';
       ctx.font = '11px monospace';
-      ctx.fillText('你的 Build:', cx, cy + 5);
+      ctx.fillText('你的武器:', cx, cy - 25);
 
-      const perRow = 6, icoSz = 22, icoGap = 6;
+      const perRow = 4, icoSz = 24, icoGap = 8;
       const totalW = Math.min(ownedList.length, perRow) * (icoSz + icoGap) - icoGap;
       const startX = cx - totalW / 2;
       for (let i = 0; i < ownedList.length; i++) {
         const p = ownedList[i];
-        const row = Math.floor(i / perRow);
         const col = i % perRow;
+        const row = Math.floor(i / perRow);
         const px = startX + col * (icoSz + icoGap) + icoSz / 2;
-        const py = cy + 30 + row * (icoSz + icoGap + 4);
+        const py = cy + row * (icoSz + 12);
         ctx.fillStyle = p.color;
         ctx.font = (icoSz - 4) + 'px monospace';
         ctx.textAlign = 'center';
         ctx.fillText(p.icon, px, py);
         ctx.fillStyle = 'rgba(255,255,255,0.5)';
         ctx.font = '7px monospace';
-        ctx.fillText(typeof p.level === 'number' ? 'Lv.' + p.level : p.level, px, py + 12);
+        ctx.fillText('Lv.' + p.totalLevel, px, py + 14);
       }
     }
 
@@ -952,34 +1003,7 @@ class Renderer {
     ctx.fillText('点击屏幕重新开始', cx, cy + 110);
   }
 
-  // ===== 进化通知 =====
-  drawEvolveNotification(notif) {
-    if (!notif) return;
-    const ctx = this.ctx;
-    const cx = Config.SCREEN_WIDTH / 2;
-    const cy = Config.SCREEN_HEIGHT * 0.3;
-    const alpha = Math.min(1, notif.timer / 20);
-
-    ctx.globalAlpha = alpha;
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-    ctx.beginPath();
-    ctx.roundRect(cx - 100, cy - 25, 200, 50, 12);
-    ctx.fill();
-    ctx.strokeStyle = notif.color;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.roundRect(cx - 100, cy - 25, 200, 50, 12);
-    ctx.stroke();
-
-    ctx.fillStyle = notif.color;
-    ctx.font = 'bold 16px monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('⬆ 进化!', cx, cy - 8);
-    ctx.font = 'bold 14px monospace';
-    ctx.fillText(notif.icon + ' ' + notif.name, cx, cy + 12);
-    ctx.globalAlpha = 1;
-  }
+  // evolve notification removed in v6.0
 
   drawLoading() {
     const ctx = this.ctx;
