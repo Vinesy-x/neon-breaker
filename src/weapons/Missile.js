@@ -22,11 +22,11 @@ class MissileWeapon extends Weapon {
     }
 
     const baseAttack = ctx.getBaseAttack ? ctx.getBaseAttack() : 1;
-    // 直击伤害 = baseAttack × (basePct + damageLv × 0.4)
+    // 直击伤害 = baseAttack × 1.5 × (1 + damageLv × 0.5)
     const directDmg = this.getDamage(baseAttack);
-    // 爆炸伤害 = baseAttack × (0.5 + blastPowerLv × 0.4)，独立于直击
+    // 爆炸伤害 = baseAttack × 0.5 × (1 + blastLv × 0.5)
     const blastLv = this.branches.blastPower || 0;
-    const blastDmg = Math.max(1, Math.floor(baseAttack * (0.5 + blastLv * 0.4)));
+    const blastDmg = Math.max(1, Math.floor(baseAttack * 0.5 * (1 + blastLv * 0.5)));
     const trackMult = 1 + (this.branches.tracking || 0) * 0.3;
     const speed = 3 * trackMult;
     const baseAoe = 25 * (1 + (this.branches.aoe || 0) * 0.25);
@@ -130,9 +130,9 @@ class MissileWeapon extends Weapon {
     }
   }
 
-  /** 直击伤害 = baseAttack × (basePct + damageLv × 0.4) */
+  /** 直击伤害 = baseAttack × basePct × (1 + damageLv × 0.5) */
   getDamage(baseAttack) {
-    return Math.max(1, Math.floor(baseAttack * (this.def.basePct + (this.branches.damage || 0) * 0.4)));
+    return Math.max(1, Math.floor(baseAttack * this.def.basePct * (1 + (this.branches.damage || 0) * 0.5)));
   }
 
   getRenderData() { return { missiles: this.missiles, explosions: this.explosions, color: this.def.color }; }
