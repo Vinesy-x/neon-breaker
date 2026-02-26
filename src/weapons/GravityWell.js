@@ -219,7 +219,7 @@ class GravityWellWeapon extends Weapon {
 
       // 百分比HP伤害（事件视界）
       if (horizonLv > 0) {
-        var pctDmg = b.maxHp * 0.02 * horizonLv;
+        var pctDmg = b.maxHp * 0.01 * horizonLv;  // 0.02→0.01 nerf
         pctDmg = Math.min(pctDmg, baseAttack * PCT_HP_CAP_MULT);
         ctx.damageBrick(b, pctDmg, 'gravityWell_pctHp', 'energy');
         well.energyAccum += pctDmg;
@@ -343,7 +343,7 @@ class GravityWellWeapon extends Weapon {
     // 湮灭链溅射
     if (annihilateLv > 0) {
       var splashRange = 50 + annihilateLv * 15;  // 范围也砍
-      var splashDmg = dmg * 0.05 * annihilateLv;  // 0.1 → 0.05 继续削
+      var splashDmg = dmg * 0.03 * annihilateLv;  // 0.05 → 0.03 继续削
       var bricks = ctx.bricks || [];
       for (var i = 0; i < bricks.length; i++) {
         var other = bricks[i];
