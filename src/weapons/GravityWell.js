@@ -320,11 +320,11 @@ class GravityWellWeapon extends Weapon {
 
   _annihilate(negaBrick, brick, ctx, annihilateLv) {
     var absNega = Math.abs(negaBrick.hp);
-    var dmg = Math.min(absNega, brick.hp);
+    var dmg = Math.min(absNega, brick.hp) * 0.7;  // 湮灭伤害打 0.7 折
 
     // 扣血
     ctx.damageBrick(brick, dmg, 'negaBrick', 'energy');
-    negaBrick.hp += dmg; // 负值趋近0
+    negaBrick.hp += dmg / 0.7; // 负值趋近0（保持原消耗量）
 
     // 湮灭闪光粒子
     for (var p = 0; p < 12; p++) {

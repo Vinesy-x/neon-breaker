@@ -30,7 +30,7 @@ class IonBeamWeapon extends Weapon {
   }
 
   getDamage(baseAttack) {
-    return Math.max(0.1, baseAttack * this.def.basePct * (1 + (this.branches.damage || 0) * 0.5));
+    return Math.max(0.1, baseAttack * this.def.basePct * (1 + (this.branches.damage || 0) * 0.7));  // 0.5→0.7 buff
   }
 
   update(dtMs, ctx) {
