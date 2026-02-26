@@ -25,11 +25,12 @@ class CombatSystem {
     damageType = damageType || 'physical';
     
     // === 奇点引擎联动：能量伤害累积到黑洞 ===
-    if (damageType === 'energy') {
+    // 排除溅射伤害避免无限循环，累积效率打 0.3 折
+    if (damageType === 'energy' && source !== 'negaBrick_splash') {
       var gravityWell = this.game.upgrades.weapons.gravityWell;
       if (gravityWell) {
         var bc = brick.getCenter();
-        gravityWell.accumulateEnergy(damage, bc.x, bc.y);
+        gravityWell.accumulateEnergy(damage * 0.3, bc.x, bc.y);
       }
     }
     
