@@ -266,37 +266,43 @@ class DroneWeapon extends Weapon {
       return;
     }
 
-    // === 分区域分配：把屏幕分成N个区域，每台无人机负责一个区域 ===
+    // === 前后分区：一半无人机在前（y大），一半在后（y小） ===
     const aliveBricks = bricks.filter(b => b.alive);
     const numDrones = this.drones.length;
     
-    // 把砖块按x坐标排序，然后均分给各个无人机
-    const sortedByX = [...aliveBricks].sort((a, b) => a.getCenter().x - b.getCenter().x);
-    const bricksPerDrone = Math.ceil(sortedByX.length / numDrones);
+    // 按y坐标排序（从大到小 = 从前到后）
+    const sortedByY = [...aliveBricks].sort((a, b) => b.getCenter().y - a.getCenter().y);
+    
+    // 分成前半和后半
+    const midIdx = Math.ceil(sortedByY.length / 2);
+    const frontBricks = sortedByY.slice(0, midIdx);  // 前排（y大）
+    const backBricks = sortedByY.slice(midIdx);       // 后排（y小）
+    
+    // 一半无人机负责前排，一半负责后排
+    const frontDrones = Math.ceil(numDrones / 2);
     
     for (let i = 0; i < numDrones; i++) {
       const d = this.drones[i];
-      const startIdx = i * bricksPerDrone;
-      const endIdx = Math.min(startIdx + bricksPerDrone, sortedByX.length);
-      const regionBricks = sortedByX.slice(startIdx, endIdx);
+      const isFront = i < frontDrones;
+      const pool = isFront ? frontBricks : backBricks;
       
-      if (regionBricks.length === 0) {
-        // 这个区域没砖块了，找最近的
-        let best = null, bestDist = Infinity;
-        for (const brick of aliveBricks) {
-          const bc = brick.getCenter();
-          const dist = Math.sqrt((bc.x - d.x) ** 2 + (bc.y - d.y) ** 2);
-          if (dist < bestDist) { bestDist = dist; best = brick; }
+      if (pool.length === 0) {
+        // 这个区域没砖块了，从另一边选
+        const fallback = isFront ? backBricks : frontBricks;
+        if (fallback.length > 0) {
+          // 选x位置分散的
+          const xIdx = Math.floor((i % Math.ceil(numDrones/2)) / Math.ceil(numDrones/2) * fallback.length);
+          d.targetBrick = fallback[Math.min(xIdx, fallback.length - 1)];
         }
-        d.targetBrick = best;
       } else {
-        // 在区域内选最危险的（最靠下）
-        let best = null, bestY = -Infinity;
-        for (const brick of regionBricks) {
-          const bc = brick.getCenter();
-          if (bc.y > bestY) { bestY = bc.y; best = brick; }
-        }
-        d.targetBrick = best;
+        // 在区域内按x位置分散选择
+        const slotInRegion = isFront ? i : (i - frontDrones);
+        const dronesInRegion = isFront ? frontDrones : (numDrones - frontDrones);
+        
+        // 把区域内砖块按x排序，然后均分
+        const sortedByX = [...pool].sort((a, b) => a.getCenter().x - b.getCenter().x);
+        const idx = Math.floor(slotInRegion / dronesInRegion * sortedByX.length);
+        d.targetBrick = sortedByX[Math.min(idx, sortedByX.length - 1)];
       }
     }
   }
