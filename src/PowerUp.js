@@ -20,7 +20,7 @@ class PowerUp {
       this.size = 10;
     } else {
       this.color = '#FF14FF';
-      this.icon = '📦';
+      this.icon = '';
       this.size = 22;
       this.speed = 1.5; // 宝箱掉慢一点
     }

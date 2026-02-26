@@ -11,12 +11,28 @@
  */
 const Config = require('../Config');
 const { createWeapon } = require('../weapons/WeaponFactory');
+const SaveManager = require('./SaveManager');
 
 class UpgradeManager {
-  constructor() {
+  constructor(saveManager) {
     this.weapons = {};       // key -> Weapon (最多4个)
     this.shipTree = {};      // 飞机升级树分支等级
     for (const sk in Config.SHIP_TREE) this.shipTree[sk] = 0;
+    this.currentChapter = 1; // 当前章节（用于武器解锁过滤）
+    this.saveManager = saveManager || null; // 武器商店等级检查
+  }
+
+  // 武器解锁章节映射（迫击炮和闪电链默认拥有）
+  static WEAPON_UNLOCK_CHAPTERS = {
+    kunai: 1, lightning: 1, missile: 1, meteor: 1, // 初始6武器中的4个
+    drone: 10, spinBlade: 15, blizzard: 25, ionBeam: 40, frostStorm: 55, gravityWell: 1, // TODO: 正式版改为70
+  };
+
+  setChapter(chapter) { this.currentChapter = chapter; }
+
+  isWeaponUnlocked(key) {
+    const unlockChapter = UpgradeManager.WEAPON_UNLOCK_CHAPTERS[key] || 1;
+    return this.currentChapter >= unlockChapter;
   }
 
   // ===== 武器操作 =====
@@ -44,16 +60,7 @@ class UpgradeManager {
         if ((this.shipTree[rk] || 0) < def.requires[rk]) return false;
       }
     }
-    // 互斥组检查：如果该分支有互斥组，且已选了同组其他分支，则不允许
-    if (def.exclusiveGroup) {
-      for (const sk in Config.SHIP_TREE) {
-        if (sk === key) continue;
-        const sDef = Config.SHIP_TREE[sk];
-        if (sDef.exclusiveGroup === def.exclusiveGroup && (this.shipTree[sk] || 0) > 0) {
-          return false;
-        }
-      }
-    }
+    if (def.exclusiveGroup && !this._checkExclusive(key, def)) return false;
     this.shipTree[key]++;
     return true;
   }
@@ -66,17 +73,34 @@ class UpgradeManager {
         if ((this.shipTree[rk] || 0) < def.requires[rk]) return false;
       }
     }
-    // 互斥组：已选了同组其他分支则不可选
-    if (def.exclusiveGroup) {
-      for (const sk in Config.SHIP_TREE) {
-        if (sk === key) continue;
-        const sDef = Config.SHIP_TREE[sk];
-        if (sDef.exclusiveGroup === def.exclusiveGroup && (this.shipTree[sk] || 0) > 0) {
-          return false;
-        }
+    if (def.exclusiveGroup && !this._checkExclusive(key, def)) return false;
+    return true;
+  }
+
+  /** 互斥组检查：允许同一进阶线（requires链上的祖先） */
+  _checkExclusive(key, def) {
+    for (const sk in Config.SHIP_TREE) {
+      if (sk === key) continue;
+      const sDef = Config.SHIP_TREE[sk];
+      if (sDef.exclusiveGroup === def.exclusiveGroup && (this.shipTree[sk] || 0) > 0) {
+        // 如果冲突分支在自己的 requires 链上，允许（同一进阶线）
+        if (this._isInRequiresChain(key, sk)) continue;
+        // 如果自己在冲突分支的 requires 链上，也允许
+        if (this._isInRequiresChain(sk, key)) continue;
+        return false;
       }
     }
     return true;
+  }
+
+  _isInRequiresChain(targetKey, ancestorKey) {
+    const def = Config.SHIP_TREE[targetKey];
+    if (!def || !def.requires) return false;
+    for (const rk in def.requires) {
+      if (rk === ancestorKey) return true;
+      if (this._isInRequiresChain(rk, ancestorKey)) return true;
+    }
+    return false;
   }
 
   // ===== 飞机被动数值 =====
@@ -118,10 +142,11 @@ class UpgradeManager {
     const pool = [];
     const weaponCount = this.getWeaponCount();
 
-    // 新武器（<4个时）
+    // 新武器（<4个时，且已解锁）
     if (weaponCount < Config.MAX_WEAPONS) {
       for (const wk in Config.WEAPON_TREES) {
         if (this.weapons[wk]) continue;
+        if (!this.isWeaponUnlocked(wk)) continue; // 过滤未解锁
         const def = Config.WEAPON_TREES[wk];
         pool.push({ type: 'newWeapon', key: wk, name: def.name, desc: def.desc, icon: def.icon, color: def.color, priority: 3 });
       }
@@ -131,9 +156,26 @@ class UpgradeManager {
     for (const wk in this.weapons) {
       const weapon = this.weapons[wk];
       const wDef = Config.WEAPON_TREES[wk];
+      // 获取武器商店等级门槛信息
+      const shopUnlocks = SaveManager.getWeaponUnlocks(wk);
+      const shopLevel = this.saveManager ? this.saveManager.getWeaponLevel(wk) : 99;
+      // 构建"需要商店等级X才解锁"的分支集合
+      const gatedBranches = {};
+      for (const u of shopUnlocks) gatedBranches[u.branchKey] = u.level;
+
       for (const bk in wDef.branches) {
         if (!weapon.canUpgrade(bk)) continue;
         const bDef = wDef.branches[bk];
+        // 检查武器商店等级门槛
+        if (gatedBranches[bk] && shopLevel < gatedBranches[bk]) continue;
+        // 双重检查 requires 前置条件
+        if (bDef.requires) {
+          let reqMet = true;
+          for (const rk in bDef.requires) {
+            if ((weapon.branches[rk] || 0) < bDef.requires[rk]) { reqMet = false; break; }
+          }
+          if (!reqMet) continue;
+        }
         const curLv = weapon.getBranch(bk);
         pool.push({
           type: 'weaponBranch', weaponKey: wk, branchKey: bk,
@@ -146,8 +188,15 @@ class UpgradeManager {
     }
 
     // 飞机升级
+    const shipUnlocks = SaveManager.getWeaponUnlocks('ship');
+    const shipShopLevel = this.saveManager ? this.saveManager.getWeaponLevel('ship') : 99;
+    const shipGated = {};
+    for (const u of shipUnlocks) shipGated[u.branchKey] = u.level;
+
     for (const sk in Config.SHIP_TREE) {
       if (!this.canUpgradeShip(sk)) continue;
+      // 商店等级门槛
+      if (shipGated[sk] && shipShopLevel < shipGated[sk]) continue;
       const def = Config.SHIP_TREE[sk];
       const curLv = this.shipTree[sk];
       // 品质影响优先级

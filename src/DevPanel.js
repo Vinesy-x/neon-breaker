@@ -3,6 +3,7 @@
  * Tab页签式布局，按钮更大，操作更方便
  */
 const Config = require('./Config');
+const DAMAGE_NAMES = require('./config/DamageNames');
 
 class DevPanel {
   constructor() {
@@ -18,6 +19,9 @@ class DevPanel {
     // Boss测试参数
     this.bossTestType = 0;   // 0~4 对应5种Boss
     this.bossTestChapter = 1; // 测试章节
+
+    // 跳关参数
+    this.gotoChapter = 1;
   }
 
   handleTap(tap, game) {
@@ -84,6 +88,28 @@ class DevPanel {
           game.upgrades.addWeapon(params.key);
           game._syncLauncherStats();
         }
+        break;
+      case 'addWeaponMax':
+        if (!game.upgrades.hasWeapon(params.key)) {
+          game.upgrades.addWeapon(params.key);
+        }
+        // 全分支满级
+        { const weapon = game.upgrades.weapons[params.key];
+          const tree = Config.WEAPON_TREES[params.key];
+          if (weapon && tree) {
+            for (const bk in tree.branches) weapon.branches[bk] = tree.branches[bk].max;
+          }
+        }
+        game._syncLauncherStats();
+        break;
+      case 'maxAllBranches':
+        { const weapon = game.upgrades.weapons[params.key];
+          const tree = Config.WEAPON_TREES[params.key];
+          if (weapon && tree) {
+            for (const bk in tree.branches) weapon.branches[bk] = tree.branches[bk].max;
+          }
+        }
+        game._syncLauncherStats();
         break;
       case 'removeWeapon':
         if (game.upgrades.hasWeapon(params.key)) {
@@ -199,6 +225,13 @@ class DevPanel {
       case 'resetStats':
         game.damageStats = {};
         break;
+      case 'cycleSpeed': {
+        var speeds = [1, 2, 3, 5, 10];
+        var cur = game._devTimeScale || 1;
+        var idx = speeds.indexOf(cur);
+        game._devTimeScale = speeds[(idx + 1) % speeds.length];
+        break;
+      }
       case 'bossTestTypeNext':
         this.bossTestType = (this.bossTestType + 1) % 5;
         break;
@@ -217,6 +250,60 @@ class DevPanel {
         this.open = false; // 关闭面板开始测试
         break;
       }
+      case 'gotoChapterUp':
+        this.gotoChapter = Math.min(100, this.gotoChapter + (params.amount || 1));
+        break;
+      case 'gotoChapterDown':
+        this.gotoChapter = Math.max(1, this.gotoChapter - (params.amount || 1));
+        break;
+      case 'gotoChapter':
+        game.currentChapter = this.gotoChapter;
+        // 自动解锁该章节前所有武器
+        if (game.upgrades) {
+          game.upgrades.setChapter(this.gotoChapter);
+          var weaponUnlocks = { missile:3, meteor:6, drone:10, spinBlade:15, blizzard:25, ionBeam:40, frostStorm:55 };
+          // 默认武器
+          if (!game.upgrades.hasWeapon('kunai')) game.upgrades.addWeapon('kunai');
+          if (!game.upgrades.hasWeapon('lightning')) game.upgrades.addWeapon('lightning');
+          for (var wk in weaponUnlocks) {
+            if (this.gotoChapter >= weaponUnlocks[wk] && !game.upgrades.hasWeapon(wk)) {
+              game.upgrades.addWeapon(wk);
+            }
+          }
+          // 根据章节给一些基础升级（模拟正常游戏进度）
+          var totalLevels = Math.min(Math.floor(this.gotoChapter * 1.5), 50);
+          var ownedWeapons = Object.keys(game.upgrades.weapons);
+          for (var lv = 0; lv < totalLevels; lv++) {
+            var rwk = ownedWeapons[lv % ownedWeapons.length];
+            var weapon = game.upgrades.weapons[rwk];
+            if (weapon) {
+              // 找第一个能升的分支升一级
+              var branches = Object.keys(weapon.def.branches);
+              for (var bi = 0; bi < branches.length; bi++) {
+                if (weapon.canUpgrade(branches[bi])) {
+                  weapon.upgradeBranch(branches[bi]);
+                  break;
+                }
+              }
+            }
+          }
+          // 根据章节设置飞机等级
+          if (game.upgrades.planeLevel !== undefined) {
+            game.upgrades.planeLevel = Math.min(Math.floor(this.gotoChapter * 0.8) + 1, 30);
+          }
+        }
+        // 更新存档最大章节
+        if (game.saveManager && game.saveManager._data) {
+          game.saveManager._data.maxChapter = Math.max(game.saveManager._data.maxChapter || 1, this.gotoChapter);
+          game.saveManager.save();
+        }
+        game._initGame();
+        this.open = false;
+        break;
+      case 'unlockAllChapters':
+        game.saveManager._data.maxChapter = 100;
+        game.saveManager.save();
+        break;
     }
   }
 
@@ -366,15 +453,7 @@ class DevPanel {
     const totalDmg = entries.reduce((sum, e) => sum + e[1], 0);
 
     if (totalDmg > 0) {
-      const nameMap = {
-        'bullet': '飞机子弹', 'kunai': '迫击炮', 'kunai_aoe': '迫击炮AOE',
-        'missile': '追踪导弹', 'lightning': '闪电链', 'lightning_aoe': '闪电爆炸',
-        'meteor': '陨石', 'drone_laser': '无人机阵', 'drone_arc': '无人机电弧',
-        'drone_cross': '无人机过载', 'drone_pulse': '无人机脉冲',
-        'fire_dot': '燃烧', 'thunder_chain': '雷击', 'shock': '感电',
-        'spinBlade': '等离子旋刃', 'kunai_chain': '迫击连锁',
-        'spinBlade_sw': '回旋斩', 'bleed': '撕裂DOT',
-      };
+      const nameMap = DAMAGE_NAMES;
       const statH = 20 + entries.length * 16;
       ctx.fillStyle = 'rgba(255,100,100,0.1)';
       ctx.beginPath(); ctx.roundRect(x, y, w, statH, 6); ctx.fill();
@@ -422,6 +501,8 @@ class DevPanel {
       { label: '🚀 全武器满级', action: 'maxAllWeapons', color: '#FFD700' },
       { label: '🔄 重置全部', action: 'resetAll', color: '#FF5555' },
       { label: '📊 清统计', action: 'resetStats', color: '#888888' },
+      { label: `⏩ 速度 ×${game._devTimeScale || 1}`, action: 'cycleSpeed', color: (game._devTimeScale || 1) > 1 ? Config.NEON_YELLOW : '#888888' },
+      { label: '🔓 解锁全关', action: 'unlockAllChapters', color: '#FFD700' },
     ];
 
     let col = 0, rowY = y;
@@ -432,7 +513,38 @@ class DevPanel {
       col++;
       if (col >= cols) { col = 0; rowY += btnH + gap; }
     }
-    return rowY + (col > 0 ? btnH + gap : 0);
+    rowY += (col > 0 ? btnH + gap : 0);
+
+    // 跳关控件
+    rowY += 8;
+    ctx.fillStyle = 'rgba(255,200,0,0.1)';
+    ctx.beginPath(); ctx.roundRect(x, rowY, w, 44, 6); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,200,0,0.3)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.roundRect(x, rowY, w, 44, 6); ctx.stroke();
+
+    ctx.fillStyle = Config.NEON_YELLOW;
+    ctx.font = 'bold 12px monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText('🚀 跳关: 第 ' + this.gotoChapter + ' 章', x + 10, rowY + 22);
+
+    const smallBtnW = 32, smallBtnH = 28;
+    // -10
+    this._drawBigBtn(ctx, '-10', x + w - smallBtnW * 4 - 24, rowY + 8, smallBtnW, smallBtnH, '#888',
+      { action: 'gotoChapterDown', params: { amount: 10 } });
+    // -1
+    this._drawBigBtn(ctx, '-1', x + w - smallBtnW * 3 - 18, rowY + 8, smallBtnW, smallBtnH, '#888',
+      { action: 'gotoChapterDown', params: { amount: 1 } });
+    // +1
+    this._drawBigBtn(ctx, '+1', x + w - smallBtnW * 2 - 12, rowY + 8, smallBtnW, smallBtnH, Config.NEON_CYAN,
+      { action: 'gotoChapterUp', params: { amount: 1 } });
+    // +10
+    this._drawBigBtn(ctx, '+10', x + w - smallBtnW - 6, rowY + 8, smallBtnW, smallBtnH, Config.NEON_CYAN,
+      { action: 'gotoChapterUp', params: { amount: 10 } });
+
+    rowY += 52;
+    this._drawBigBtn(ctx, '🚀 解锁至第 ' + this.gotoChapter + ' 章', x, rowY, w, btnH, Config.NEON_YELLOW,
+      { action: 'gotoChapter', params: {} });
+
+    return rowY + btnH + gap;
   }
 
   // ===== Tab 1: 武器管理 =====
@@ -451,9 +563,13 @@ class DevPanel {
       ctx.fillText(wDef.icon + ' ' + wDef.name, x + 4, cy + rowH / 2);
 
       if (!owned) {
-        this._drawBigBtn(ctx, '添加', x + w - 60, cy + 2, 56, rowH - 4, wDef.color,
+        this._drawBigBtn(ctx, '添加', x + w - 120, cy + 2, 56, rowH - 4, wDef.color,
           { action: 'addWeapon', params: { key: wk } });
+        this._drawBigBtn(ctx, '满级', x + w - 60, cy + 2, 56, rowH - 4, '#FFD700',
+          { action: 'addWeaponMax', params: { key: wk } });
       } else {
+        this._drawBigBtn(ctx, '满级', x + w - 120, cy + 2, 56, rowH - 4, '#FFD700',
+          { action: 'maxAllBranches', params: { key: wk } });
         this._drawBigBtn(ctx, '移除', x + w - 60, cy + 2, 56, rowH - 4, '#FF5555',
           { action: 'removeWeapon', params: { key: wk } });
       }

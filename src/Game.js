@@ -1,23 +1,34 @@
 /**
- * Game.js - v7.1 主游戏循环
- * 经验升级三选一(主) + 技能宝箱三选一(额外)
- * v7.1: 飞机升级树重构（删除crit/barrage/shield/magnet，新增元素弹）
+ * Game.js - v8.0 主游戏循环（重构版）
+ * 只保留：状态机、初始化、主循环调度、渲染调度、UI交互
+ * 战斗/碰撞/元素/DOT 逻辑委托给对应 System
+ *
+ * v8.0: 从 817 行上帝类拆分为 4 个系统模块
+ *   - CombatSystem: 伤害计算、子弹发射、砖块/Boss受击、掉落
+ *   - CollisionSystem: 子弹碰撞、危险线、砖块融合、掉落物碰撞
+ *   - ElementSystem: 火/冰/雷元素效果
+ *   - DotSystem: 持续伤害（灼烧/感电/通用DOT）
  */
 const Config = require('./Config');
-const Bullet = require('./Bullet');
 const Launcher = require('./Launcher');
 const BrickFactory = require('./BrickFactory');
 const ChapterConfig = require('./ChapterConfig');
 const { createBoss } = require('./BossFactory');
 const SaveManager = require('./systems/SaveManager');
 const { ParticleManager } = require('./Particle');
-const { generateDrops } = require('./PowerUp');
 const UpgradeManager = require('./systems/UpgradeManager');
 const ExpSystem = require('./systems/ExpSystem');
 const Renderer = require('./Renderer');
 const InputManager = require('./input/InputManager');
 const Sound = require('./systems/SoundManager');
 const DevPanel = require('./DevPanel');
+
+// 系统模块
+const CombatSystem = require('./systems/CombatSystem');
+const CollisionSystem = require('./systems/CollisionSystem');
+const ElementSystem = require('./systems/ElementSystem');
+const DotSystem = require('./systems/DotSystem');
+const UIController = require('./systems/UIController');
 
 class Game {
   constructor(canvas) {
@@ -26,43 +37,82 @@ class Game {
     this.input = new InputManager();
     this.gameWidth = Config.SCREEN_WIDTH;
     this.gameHeight = Config.SCREEN_HEIGHT;
+
+    // 游戏状态
     this.state = Config.STATE.LOADING;
-    this.score = 0; this.combo = 0; this.maxCombo = 0; this.comboTimer = 0;
-    this.bullets = []; this.bricks = []; this.launcher = null;
+    this.score = 0;
+    this.combo = 0;
+    this.maxCombo = 0;
+    this.comboTimer = 0;
+
+    // 游戏对象
+    this.bullets = [];
+    this.bricks = [];
+    this.launcher = null;
     this.particles = new ParticleManager();
     this.powerUps = [];
-    this.upgrades = new UpgradeManager();
-    this.expSystem = new ExpSystem();
-    this.boss = null; this.floatingTexts = []; this.screenShake = 0;
-    this.fireTimer = 0; this.pendingSkillChoices = [];
-    this._preChoiceState = null; this._choiceSource = null;
-    this.lastCrateTime = 0;
+    this.boss = null;
+    this.floatingTexts = [];
+    this.screenShake = 0;
+
+    // 持久系统
     this.saveManager = new SaveManager();
-    this.currentChapter = 1; this.chapterConfig = null;
-    this.elapsedMs = 0; this.currentPhase = null;
-    this.coinsEarned = 0; this.bricksDestroyed = 0;
-    this.spawnTimer = 0; this.bossWarningTimer = 0; this.bossTriggered = false;
-    this.lastTime = 0; this.loadTimer = 0;
-    this.burnDots = [];
+    this.saveManager.initCloud('cloud1-0gnbjg5o5d331b5c');
+    this.upgrades = new UpgradeManager(this.saveManager);
+    this.expSystem = new ExpSystem();
+
+    // 战斗系统（初始化顺序：element/dot 先于 combat，因为 combat 依赖它们）
+    this.elementSystem = new ElementSystem(this);
+    this.dotSystem = new DotSystem(this);
+    this.combat = new CombatSystem(this);
+    this.collision = new CollisionSystem(this);
+    this.ui = new UIController(this);
+
+    // 计时器 & 状态
+    this.fireTimer = 0;
+    this.pendingSkillChoices = [];
+    this._preChoiceState = null;
+    this._choiceSource = null;
+    this.lastCrateTime = 0;
+
+    // 章节
+    this.currentChapter = 1;
+    this.chapterConfig = null;
+    this.elapsedMs = 0;
+    this.currentPhase = null;
+    this.coinsEarned = 0;
+    this.bricksDestroyed = 0;
+    this.spawnTimer = 0;
+    this.bossWarningTimer = 0;
+    this.bossTriggered = false;
+
+    // 帧控制
+    this.lastTime = 0;
+    this.loadTimer = 60;
+
+    // Dev
     this._devInvincible = false;
     this._devPauseFire = false;
     this._devPauseLevelUp = false;
-    this.devPanel = new DevPanel();
-    this.damageStats = {}; // 伤害统计 { source: totalDamage }
-    this.statsExpanded = false; // 统计面板是否展开
-    this._statsArea = null; // 统计按钮点击区域
-    this.state = Config.STATE.LOADING; this.loadTimer = 60;
+    this.devPanel = Config.DEV_MODE ? new DevPanel() : null;
+    this.damageStats = {};
+    this.statsExpanded = false;
+    this._statsArea = null;
 
-    // 章节滚动状态
+    // 章节滚动
     this._scrollVelocity = 0;
     this._scrolling = false;
 
     // 统一滑动分发
     this.input.onDragY = (dy) => {
-      if (this.devPanel.open) { this.devPanel.handleDrag(dy); return; }
+      if (this.devPanel && this.devPanel.open) { this.devPanel.handleDrag(dy); return; }
+      if (this.state === Config.STATE.WEAPON_SHOP && this.renderer._weaponDetailKey && this.renderer._weaponDetailTab === 1) {
+        this.renderer._skillTreeScrollY = Math.max(0, (this.renderer._skillTreeScrollY || 0) - dy);
+        return;
+      }
       if (this.state === Config.STATE.CHAPTER_SELECT) {
-        this.renderer._chapterScrollY = (this.renderer._chapterScrollY || 0) - dy;
-        this._scrollVelocity = -dy; // 记录速度用于惯性
+        this.renderer._chapterScrollY = (this.renderer._chapterScrollY || 0) + dy;
+        this._scrollVelocity = dy;
         this._scrolling = true;
       }
     };
@@ -72,115 +122,70 @@ class Game {
     };
   }
 
+  // ===== 公共接口（供系统模块和武器调用） =====
+
   getBaseAttack() { return 1 + this.saveManager.getAttackBonus(); }
+
+  /** 兼容接口：武器通过 ctx.damageBrick 调用 */
+  damageBrick(brick, damage, source, damageType) {
+    this.combat.damageBrick(brick, damage, source, damageType);
+  }
+
+  /** 兼容接口：武器通过 ctx.damageBoss 调用 */
+  damageBoss(damage, source) {
+    this.combat.damageBoss(damage, source);
+  }
+
+  /** 兼容接口：武器通过 ctx.addDot 调用 */
+  addDot(brick, damage, duration, type) {
+    this.dotSystem.addDot(brick, damage, duration, type);
+  }
+
+  _addFloatingText(t, x, y, c, s) {
+    this.floatingTexts.push({ text: t, x: x, y: y, color: c || Config.NEON_YELLOW, size: s || 16, alpha: 1, vy: -1.5, life: 40 });
+  }
+
+  // ===== 初始化 =====
 
   _initGame() {
     this.chapterConfig = ChapterConfig.get(this.currentChapter);
-    this.elapsedMs = 0; this.currentPhase = ChapterConfig.getPhaseAt(this.currentChapter, 0);
-    this.coinsEarned = 0; this.bricksDestroyed = 0; this.bossTriggered = false;
-    this.bossWarningTimer = 0; this.lastCrateTime = 0;
+    this.elapsedMs = 0;
+    this.currentPhase = ChapterConfig.getPhaseAt(this.currentChapter, 0);
+    this.coinsEarned = 0;
+    this.bricksDestroyed = 0;
+    this.bossTriggered = false;
+    this.bossWarningTimer = 0;
+    this.lastCrateTime = 0;
+
     this.launcher = new Launcher(this.gameWidth, this.gameHeight);
     this.launcher.reset(this.gameWidth, this.gameHeight);
-    this.bullets = []; this.bricks = []; this.powerUps = [];
-    this.particles.clear(); this.floatingTexts = [];
-    this.combo = 0; this.maxCombo = 0; this.fireTimer = 0; this.comboTimer = 0;
-    this.spawnTimer = 0; this.boss = null; this.score = 0;
-    this.upgrades.reset(); this.expSystem.reset();
-    this.burnDots = [];
-    this.damageStats = {}; // 重置伤害统计
+    this.bullets = [];
+    this.bricks = [];
+    this.powerUps = [];
+    this.particles.clear();
+    this.floatingTexts = [];
+    this.combo = 0;
+    this.maxCombo = 0;
+    this.fireTimer = 0;
+    this.comboTimer = 0;
+    this.spawnTimer = 0;
+    this.boss = null;
+    this.score = 0;
+
+    this.upgrades.reset();
+    this.upgrades.setChapter(this.currentChapter);
+    this.expSystem.reset();
+    this.dotSystem.reset();
+    this.damageStats = {};
+
     this.launcher.permFireRateBonus = this.saveManager.getFireRateBonus();
     this._syncLauncherStats();
+
     for (var r = 0; r < Config.BRICK_INIT_ROWS; r++) {
       var y = Config.BRICK_TOP_OFFSET + r * (Config.BRICK_HEIGHT + Config.BRICK_PADDING);
       this.bricks = this.bricks.concat(BrickFactory.generateRow(this.gameWidth, y, this.currentPhase, this.chapterConfig));
     }
     this.state = Config.STATE.PLAYING;
-  }
-
-  _fireBullets() {
-    var sp = this.upgrades.getSpreadBonus();
-    var count = 1 + sp;
-    var spread = count > 1 ? (count - 1) * 0.12 : 0;
-    var cx = this.launcher.getCenterX(), sy = this.launcher.y - 5;
-    // 子弹伤害 = baseAttack × 子弹系数(1.0) × (1 + 飞机树子弹伤害加成)
-    var bulletCoef = 1.0;
-    var dmg = Math.max(0.1, this.getBaseAttack() * bulletCoef * this.upgrades.getAttackMult());
-    var pierce = this.upgrades.getPierceCount();
-    var element = this.upgrades.getElementType();
-    var elementLv = this.upgrades.getElementLevel();
-
-    for (var i = 0; i < count; i++) {
-      if (this.bullets.length >= Config.BULLET_MAX) break;
-      var a = count > 1 ? -Math.PI/2 - spread/2 + (spread/(count-1))*i : -Math.PI/2;
-      var bul = new Bullet(cx, sy, Math.cos(a)*Config.BULLET_SPEED, Math.sin(a)*Config.BULLET_SPEED, dmg);
-      bul.pierce = pierce;
-      bul.element = element;
-      bul.elementLv = elementLv;
-      this.bullets.push(bul);
-    }
-    this.launcher.muzzleFlash = 3;
-    if (this.launcher.getFireInterval() > 120) Sound.bulletShoot();
-  }
-
-  _addFloatingText(t,x,y,c,s) { this.floatingTexts.push({text:t,x:x,y:y,color:c||Config.NEON_YELLOW,size:s||16,alpha:1,vy:-1.5,life:40}); }
-  _spawnNewRow() { if (!this.currentPhase||this.currentPhase.spawnMult<=0) return; this.bricks=this.bricks.concat(BrickFactory.generateRow(this.gameWidth,Config.BRICK_TOP_OFFSET-Config.BRICK_HEIGHT-Config.BRICK_PADDING,this.currentPhase,this.chapterConfig)); }
-
-  damageBrick(brick, damage, source) {
-    if (!brick.alive||(brick.type==='stealth'&&!brick.visible)) return;
-    // 记录伤害统计
-    const key = source || 'unknown';
-    this.damageStats[key] = (this.damageStats[key] || 0) + damage;
-    if (brick.hit(damage)) { Sound.brickBreak(); this._onBrickDestroyed(brick); }
-    else { Sound.brickHit(); this.particles.emitHitSpark(brick.getCenter().x, brick.getCenter().y, brick.color); }
-  }
-
-  damageBoss(damage, source) {
-    if (!this.boss||!this.boss.alive) return;
-    // 记录伤害统计
-    const key = source || 'boss_hit';
-    this.damageStats[key] = (this.damageStats[key] || 0) + damage;
-    this.boss.hit(damage); Sound.brickHit();
-    this.particles.emitBossHit(this.boss.getCenterX(), this.boss.getCenterY());
-    this.score += Math.ceil(damage);
-    this.expSystem.spawnOrbs(this.boss.getCenterX(), this.boss.getCenterY(), damage*2, this.saveManager.getExpMultiplier());
-  }
-
-  _onBrickDestroyed(brick) {
-    var c = brick.getCenter();
-    this.particles.emitBrickBreak(brick.x, brick.y, brick.width, brick.height, brick.color);
-    if (brick.maxHp >= 3) this.screenShake = Math.min(this.screenShake+2, 8);
-    this.combo++; this.comboTimer = 0;
-    if (this.combo > this.maxCombo) this.maxCombo = this.combo;
-    this.score += Math.floor(Config.COMBO_SCORE_BASE * brick.maxHp * (1+Math.floor(this.combo/5)*0.5));
-    this.bricksDestroyed++;
-    if (this.combo>1&&this.combo%5===0) { Sound.combo(this.combo); this._addFloatingText(this.combo+' COMBO!',c.x,c.y-10,Config.NEON_YELLOW,14+Math.min(this.combo,12)); this.particles.emitCombo(c.x,c.y,this.combo); }
-    if (brick.type==='split'&&!brick.isSplitChild) this.bricks=this.bricks.concat(BrickFactory.spawnSplitChildren(brick));
-    this.expSystem.spawnOrbs(c.x, c.y, this.expSystem.calcBrickExp(brick), this.saveManager.getExpMultiplier());
-    var drops = generateDrops(c.x, c.y, this.lastCrateTime, this.elapsedMs);
-    for (var i=0;i<drops.items.length;i++) this.powerUps.push(drops.items[i]);
-    if (drops.crateDropped) this.lastCrateTime = this.elapsedMs;
-  }
-
-  _applyPowerUp(pu) {
-    if (pu.type==='coin') { var v=Math.floor(this.saveManager.getCoinMultiplier()); this.coinsEarned+=v; this._addFloatingText('+'+v+'💰',pu.x,pu.y,'#FFD700',12); }
-    else if (pu.type==='skillCrate') { Sound.powerUp(); this._addFloatingText('技能宝箱!',pu.x,pu.y,Config.NEON_PINK,16); if(!this._devPauseLevelUp) this._triggerChoice('crate'); }
-  }
-
-  _triggerChoice(source) {
-    this.pendingSkillChoices = this.upgrades.generateChoices();
-    if (this.pendingSkillChoices.length > 0) {
-      this._preChoiceState = this.state; this._choiceSource = source;
-      this.state = source==='crate' ? Config.STATE.SKILL_CHOICE : Config.STATE.LEVEL_UP;
-    }
-  }
-
-  _tryShowLevelUpChoice() {
-    if (this._devPauseLevelUp) return;
-    if (this.expSystem.hasPendingLevelUp() && this.state!==Config.STATE.LEVEL_UP && this.state!==Config.STATE.SKILL_CHOICE) {
-      this.expSystem.consumeLevelUp();
-      this._addFloatingText('LEVEL UP!', this.gameWidth/2, this.gameHeight*0.4, Config.NEON_GREEN, 20);
-      this._triggerChoice('levelUp');
-    }
   }
 
   _syncLauncherStats() {
@@ -189,349 +194,385 @@ class Game {
     this.launcher.permFireRateBonus = 1 - 1 / fireRateMult + this.saveManager.getFireRateBonus();
   }
 
+  // ===== 主循环 =====
+
   update(timestamp) {
-    if (this.lastTime===0) this.lastTime=timestamp;
-    var dtMs=Math.min(timestamp-this.lastTime,50); this.lastTime=timestamp; var dt=dtMs/16.67;
+    if (this.lastTime === 0) this.lastTime = timestamp;
+    var dtMs = Math.min(timestamp - this.lastTime, 50);
+    this.lastTime = timestamp;
+    var ts = this._devTimeScale || 1;
+    dtMs *= ts;
+    var dt = dtMs / 16.67;
 
     // Dev panel 优先处理点击
-    var devTap = this.input.peekTap();
-    if (devTap) {
-      var devResult = this.devPanel.handleTap(devTap, this);
-      if (devResult && devResult.consumed) {
-        this.input.consumeTap(); // 消费掉，不传递给游戏
-        return; // 这一帧不处理游戏逻辑
+    if (this.devPanel) {
+      var devTap = this.input.peekTap();
+      if (devTap) {
+        var devResult = this.devPanel.handleTap(devTap, this);
+        if (devResult && devResult.consumed) {
+          this.input.consumeTap();
+          return;
+        }
       }
     }
 
     // 统计面板点击检测
-    if (this._statsArea && devTap) {
+    var devTap2 = this.input.peekTap();
+    if (Config.DEV_MODE && this._statsArea && devTap2) {
       const a = this._statsArea;
-      if (devTap.x >= a.x && devTap.x <= a.x + a.w && devTap.y >= a.y && devTap.y <= a.y + a.h) {
+      if (devTap2.x >= a.x && devTap2.x <= a.x + a.w && devTap2.y >= a.y && devTap2.y <= a.y + a.h) {
         this.statsExpanded = !this.statsExpanded;
         this.input.consumeTap();
         return;
       }
     }
 
-    // Dev panel 打开时暂停游戏逻辑（只处理渲染）
-    if (this.devPanel.open) {
+    if (this.devPanel && this.devPanel.open) return;
+
+    switch (this.state) {
+      case Config.STATE.LOADING:
+        this.loadTimer -= dt;
+        if (this.loadTimer <= 0) this.state = Config.STATE.TITLE;
+        break;
+      case Config.STATE.TITLE: {
+        const tap = this.input.consumeTap();
+        if (tap) {
+          // 适龄提示弹窗优先
+          if (this.renderer.handleAgeTipTap(tap)) break;
+          // 只有点击"开始游戏"按钮区域才进入
+          const btnW = 180, btnH = 48;
+          const btnX = Config.SCREEN_WIDTH / 2 - btnW / 2;
+          const btnY = Config.SCREEN_HEIGHT * 0.72;
+          if (tap.x >= btnX && tap.x <= btnX + btnW && tap.y >= btnY && tap.y <= btnY + btnH) {
+            Sound.init(); Sound.gameStart();
+            this.state = Config.STATE.CHAPTER_SELECT;
+            this.renderer._chapterScrollY = (this.saveManager.getMaxChapter() - 1) * 100;
+          }
+        }
+        break;
+      }
+      case Config.STATE.CHAPTER_SELECT: this.ui.updateChapterSelect(); break;
+      case Config.STATE.UPGRADE_SHOP: this.ui.updateUpgradeShop(); break;
+      case Config.STATE.WEAPON_SHOP: this.ui.updateWeaponShop(); break;
+      case Config.STATE.PLAYING: this._updatePlaying(dt, dtMs); break;
+      case Config.STATE.BOSS: this._updateBoss(dt, dtMs); break;
+      case Config.STATE.PAUSED: this.ui.updatePaused(); break;
+      case Config.STATE.LEVEL_UP:
+      case Config.STATE.SKILL_CHOICE:
+        this.expSystem.update(dt);
+        this._updateFloatingTexts(dt);
+        this.particles.update(dt);
+        this.ui.updateSkillChoice();
+        break;
+      case Config.STATE.CHAPTER_CLEAR: this.ui.updateChapterClear(); break;
+      case Config.STATE.GAME_OVER: this.ui.updateGameOver(); break;
+    }
+  }
+
+  // ===== 战斗更新 =====
+
+  /**
+   * 通用战斗tick — Playing 和 Boss 共享的核心循环
+   * 射击、武器、碰撞、DOT、粒子、经验、Combo
+   */
+  _tickCombatSystems(dt, dtMs) {
+    this._handleInput(dt);
+    this.launcher.update(dt, dtMs);
+
+    // 自动射击
+    if (!this._devPauseFire) {
+      this.fireTimer += dtMs;
+      if (this.fireTimer >= this.launcher.getFireInterval()) {
+        this.fireTimer -= this.launcher.getFireInterval();
+        this.combat.fireBullets();
+      }
+    }
+
+    // 砖块状态
+    this._scrollBricks(dt);
+    BrickFactory.updateSpecialBricks(this.bricks, dtMs);
+    for (var si = 0; si < this.bricks.length; si++) {
+      if (this.bricks[si].alive && this.bricks[si].updateStatus) this.bricks[si].updateStatus(dtMs);
+      // 衰减黑洞禁融合标记
+      var brick = this.bricks[si];
+      if (brick._noMerge) {
+        brick._noMergeTimer -= dtMs;
+        if (brick._noMergeTimer <= 0) { brick._noMerge = false; }
+      }
+    }
+
+    // 武器 & 碰撞 & DOT & 掉落
+    this.upgrades.updateWeapons(dtMs, this);
+    this.collision.updateBullets(dt, dtMs);
+    this.dotSystem.update(dtMs);
+    this.collision.updatePowerUps(dt);
+
+    // 粒子 & 文字 & 经验
+    this.expSystem.update(dt);
+    this.particles.update(dt);
+    this._updateFloatingTexts(dt);
+
+    // Combo 超时
+    if (this.combo > 0) {
+      this.comboTimer += dtMs;
+      if (this.comboTimer > 2000) { this.combo = 0; this.comboTimer = 0; }
+    }
+  }
+
+  _updatePlaying(dt, dtMs) {
+    var pauseTap = this.input.consumeTap();
+    if (pauseTap && this.renderer.getPauseBtnHit(pauseTap)) {
+      this._pausedFrom = Config.STATE.PLAYING;
+      this.state = Config.STATE.PAUSED;
       return;
     }
 
-    switch(this.state) {
-      case Config.STATE.LOADING: this.loadTimer-=dt; if(this.loadTimer<=0) this.state=Config.STATE.TITLE; break;
-      case Config.STATE.TITLE: if(this.input.consumeTap()){Sound.init();Sound.gameStart();this.state=Config.STATE.CHAPTER_SELECT;} break;
-      case Config.STATE.CHAPTER_SELECT: this._updateChapterSelect(); break;
-      case Config.STATE.UPGRADE_SHOP: this._updateUpgradeShop(); break;
-      case Config.STATE.PLAYING: this._updatePlaying(dt,dtMs); break;
-      case Config.STATE.BOSS: this._updateBoss(dt,dtMs); break;
-      case Config.STATE.LEVEL_UP: case Config.STATE.SKILL_CHOICE:
-        this.expSystem.update(dt); this._updateFloatingTexts(dt); this.particles.update(dt); this._updateSkillChoice(); break;
-      case Config.STATE.CHAPTER_CLEAR: this._updateChapterClear(); break;
-      case Config.STATE.GAME_OVER: this._updateGameOver(); break;
+    // 章节时间推进
+    this.elapsedMs += dtMs;
+    this.currentPhase = ChapterConfig.getPhaseAt(this.currentChapter, this.elapsedMs);
+    if (!this.bossTriggered && this.currentPhase.phase === 'boss') {
+      this.bossTriggered = true;
+      this.bossWarningTimer = Config.BOSS_WARNING_DURATION;
     }
-  }
-
-  _updateChapterSelect() {
-    // 滚动物理（惯性 + 回弹）
-    const maxChapter = this.saveManager.getMaxChapter();
-    const cols = 3, cardH = 64, gap = 10;
-    const totalRows = Math.ceil(maxChapter / cols);
-    const contentH = totalRows * (cardH + gap);
-    const viewH = Config.SCREEN_HEIGHT - Config.SAFE_TOP - 60 - 44 - Config.SAFE_BOTTOM;
-    const maxScroll = Math.max(0, contentH - viewH);
-
-    let scrollY = this.renderer._chapterScrollY || 0;
-
-    if (!this._scrolling) {
-      // 惯性减速
-      scrollY += this._scrollVelocity;
-      this._scrollVelocity *= 0.92;
-      if (Math.abs(this._scrollVelocity) < 0.3) this._scrollVelocity = 0;
-
-      // 回弹
-      if (scrollY < 0) {
-        scrollY += (0 - scrollY) * 0.2;
-        if (scrollY > -0.5) scrollY = 0;
-        this._scrollVelocity = 0;
-      } else if (scrollY > maxScroll) {
-        scrollY += (maxScroll - scrollY) * 0.2;
-        if (scrollY < maxScroll + 0.5) scrollY = maxScroll;
-        this._scrollVelocity = 0;
-      }
+    if (this.bossWarningTimer > 0) {
+      this.bossWarningTimer -= dtMs;
+      if (this.bossWarningTimer <= 0) { this._startBoss(); return; }
     }
 
-    this.renderer._chapterScrollY = scrollY;
+    // 砖块生成（仅 Playing 阶段）
+    this._updateBrickSpawn(dtMs);
 
-    var t = this.input.consumeTap();
-    if (!t) return;
-    var r = this.renderer.getChapterSelectHit(t);
-    if (r === 'upgrade') this.state = Config.STATE.UPGRADE_SHOP;
-    else if (r === 'sound') Sound.toggle();
-    else if (typeof r === 'number' && r > 0 && r <= maxChapter) { this.currentChapter = r; this._initGame(); }
-  }
-  _updateUpgradeShop() { var t=this.input.consumeTap(); if(!t) return; var r=this.renderer.getUpgradeShopHit(t); if(r==='back') this.state=Config.STATE.CHAPTER_SELECT; else if(r&&typeof r==='string'){if(this.saveManager.upgradeLevel(r)) Sound.selectSkill();} }
-  _updateChapterClear() { var t=this.input.consumeTap(); if(!t) return; var r=this.renderer.getChapterClearHit(t); if(r==='next'){this.currentChapter=Math.min(this.currentChapter+1,this.saveManager.getMaxChapter());this._initGame();}else if(r==='back') this.state=Config.STATE.CHAPTER_SELECT; }
-  _updateGameOver() { var t=this.input.consumeTap(); if(!t) return; var coins=Math.floor((this.chapterConfig?this.chapterConfig.clearReward:0)*0.3*this.saveManager.getCoinMultiplier())+Math.min(50,Math.floor(this.bricksDestroyed/100)); if(coins>0) this.saveManager.addCoins(coins); this.state=Config.STATE.CHAPTER_SELECT; }
+    // 通用战斗tick
+    this._tickCombatSystems(dt, dtMs);
 
-  _updatePlaying(dt,dtMs) {
-    this._handleInput(dt); this.launcher.update(dt,dtMs);
-    if(!this._devPauseFire){this.fireTimer+=dtMs; if(this.fireTimer>=this.launcher.getFireInterval()){this.fireTimer-=this.launcher.getFireInterval();this._fireBullets();}}
-    this.elapsedMs+=dtMs; this.currentPhase=ChapterConfig.getPhaseAt(this.currentChapter,this.elapsedMs);
-    if(!this.bossTriggered&&this.currentPhase.phase==='boss'){this.bossTriggered=true;this.bossWarningTimer=Config.BOSS_WARNING_DURATION;}
-    if(this.bossWarningTimer>0){this.bossWarningTimer-=dtMs;if(this.bossWarningTimer<=0){this._startBoss();return;}}
-    this._scrollBricks(dt); this._updateBrickSpawn(dtMs); BrickFactory.updateSpecialBricks(this.bricks,dtMs);
-    if(this._checkDangerLine()){Sound.gameOver();this.state=Config.STATE.GAME_OVER;return;}
-    this.upgrades.updateWeapons(dtMs,this); this._updateBullets(dt,dtMs); this._updateBurnDots(dtMs); this._updatePowerUps(dt);
-    this.expSystem.update(dt); this.particles.update(dt); this._updateFloatingTexts(dt);
-    if(this.combo>0){this.comboTimer+=dtMs;if(this.comboTimer>2000){this.combo=0;this.comboTimer=0;}}
+    // 危险线检测
+    if (this.collision.checkDangerLine()) { Sound.gameOver(); this.state = Config.STATE.GAME_OVER; return; }
+
     this._tryShowLevelUpChoice();
   }
 
-  _updateBoss(dt,dtMs) {
-    this._handleInput(dt); this.launcher.update(dt,dtMs);
-    if(!this._devPauseFire){this.fireTimer+=dtMs; if(this.fireTimer>=this.launcher.getFireInterval()){this.fireTimer-=this.launcher.getFireInterval();this._fireBullets();}}
-    if(this.boss&&this.boss.alive){this.boss.update(dtMs);var s=this.boss.collectSpawnedBricks();if(s.length>0) this.bricks=this.bricks.concat(s);}
-    this._scrollBricks(dt); BrickFactory.updateSpecialBricks(this.bricks,dtMs);
-    // Boss越过危险线 → Game Over
-    if(this.boss&&this.boss.alive&&this.boss.isPastDangerLine()){Sound.gameOver();this.state=Config.STATE.GAME_OVER;return;}
-    if(this._checkDangerLine()){Sound.gameOver();this.state=Config.STATE.GAME_OVER;return;}
-    this.upgrades.updateWeapons(dtMs,this); this._updateBullets(dt,dtMs); this._updateBurnDots(dtMs); this._updatePowerUps(dt);
-    this.expSystem.update(dt); this.particles.update(dt); this._updateFloatingTexts(dt);
+  _updateBoss(dt, dtMs) {
+    var pauseTap = this.input.consumeTap();
+    if (pauseTap && this.renderer.getPauseBtnHit(pauseTap)) {
+      this._pausedFrom = Config.STATE.BOSS;
+      this.state = Config.STATE.PAUSED;
+      return;
+    }
+
+    // Boss 逻辑
+    if (this.boss && this.boss.alive) {
+      this.boss.update(dtMs);
+      var s = this.boss.collectSpawnedBricks();
+      if (s.length > 0) this.bricks = this.bricks.concat(s);
+    }
+
+    // 通用战斗tick
+    this._tickCombatSystems(dt, dtMs);
+
+    // Boss/砖块越线检测
+    if (this.boss && this.boss.alive && this.boss.isPastDangerLine()) {
+      Sound.gameOver(); this.state = Config.STATE.GAME_OVER; return;
+    }
+    if (this.collision.checkDangerLine()) { Sound.gameOver(); this.state = Config.STATE.GAME_OVER; return; }
+
     this._tryShowLevelUpChoice();
-    if(this.state===Config.STATE.LEVEL_UP||this.state===Config.STATE.SKILL_CHOICE) return;
-    if(this.boss&&!this.boss.alive) {
-      Sound.bossDefeat(); this.score+=500;
-      this._addFloatingText('BOSS DEFEATED!',this.gameWidth/2,this.gameHeight/3,Config.NEON_YELLOW,22);
-      this.coinsEarned=Math.floor((this.chapterConfig?this.chapterConfig.clearReward:0)*this.saveManager.getCoinMultiplier()*(this.saveManager.isChapterCleared(this.currentChapter)?1:2));
-      this.saveManager.setChapterRecord(this.currentChapter,this.score,this.expSystem.playerLevel);
-      if(!this.saveManager.isChapterCleared(this.currentChapter)&&this.currentChapter>=this.saveManager.getMaxChapter()) this.saveManager.unlockNextChapter();
-      this.saveManager.addCoins(this.coinsEarned); this.boss=null; this.state=Config.STATE.CHAPTER_CLEAR;
+    if (this.state === Config.STATE.LEVEL_UP || this.state === Config.STATE.SKILL_CHOICE) return;
+
+    // Boss 击败
+    if (this.boss && !this.boss.alive) {
+      Sound.bossDefeat();
+      this.score += 500;
+      this._addFloatingText('BOSS DEFEATED!', this.gameWidth / 2, this.gameHeight / 3, Config.NEON_YELLOW, 22);
+      this.coinsEarned = Math.floor((this.chapterConfig ? this.chapterConfig.clearReward : 0) * this.saveManager.getCoinMultiplier() * (this.saveManager.isChapterCleared(this.currentChapter) ? 1 : 2));
+      this.saveManager.setChapterRecord(this.currentChapter, this.score, this.expSystem.playerLevel);
+      if (!this.saveManager.isChapterCleared(this.currentChapter) && this.currentChapter >= this.saveManager.getMaxChapter()) this.saveManager.unlockNextChapter();
+      this.saveManager.addCoins(this.coinsEarned);
+      this.boss = null;
+      this.state = Config.STATE.CHAPTER_CLEAR;
     }
   }
 
-  _updateSkillChoice() {
-    var t=this.input.consumeTap();
-    if(t&&this.pendingSkillChoices.length>0) {
-      for(var i=0;i<this.pendingSkillChoices.length;i++) {
-        var ch=this.pendingSkillChoices[i]; if(!ch._hitArea) continue;
-        var ha=ch._hitArea;
-        if(t.x>=ha.x&&t.x<=ha.x+ha.w&&t.y>=ha.y&&t.y<=ha.y+ha.h) {
-          Sound.selectSkill(); this.upgrades.applyChoice(ch); this._syncLauncherStats();
-          if(this._choiceSource==='levelUp'&&this.expSystem.hasPendingLevelUp()) {
-            this.expSystem.consumeLevelUp(); this.pendingSkillChoices=this.upgrades.generateChoices();
-            if(this.pendingSkillChoices.length===0){this.state=this._preChoiceState||Config.STATE.PLAYING;this._preChoiceState=null;}
-          } else { this.state=this._preChoiceState||Config.STATE.PLAYING; this._preChoiceState=null; }
-          return;
+  // ===== 砖块滚动 & 生成 =====
+
+  _scrollBricks(dt) {
+    if (!this.chapterConfig) return;
+    var bs = this.chapterConfig.scrollSpeed;
+    var ac = (this.currentPhase && this.currentPhase.scrollAccel) ? this.currentPhase.scrollAccel : 0;
+    var tip = (this.elapsedMs - (this.currentPhase ? this.currentPhase.time : 0)) / 1000;
+    var ds = Math.min(bs + ac * tip, bs * 3);
+
+    for (var i = 0; i < this.bricks.length; i++) {
+      var b = this.bricks[i];
+      if (b.alive) {
+        b.y += ds * b.speedMult * dt;
+        if (b.knockbackY && b.knockbackY < 0) {
+          b.y += b.knockbackY;
+          b.knockbackY *= 0.85;
+          if (b.knockbackY > -0.5) b.knockbackY = 0;
+          var minY = 100;
+          if (b.y < minY) b.y = minY;
         }
       }
     }
+
+    this.collision.mergeBricks();
+
+    for (var j = this.bricks.length - 1; j >= 0; j--) {
+      if (!this.bricks[j].alive || this.bricks[j].y > this.gameHeight + 50) this.bricks.splice(j, 1);
+    }
   }
 
-  _startBoss() { for(var i=0;i<this.bricks.length;i++){if(this.bricks[i].alive&&this.bricks[i].y<this.gameHeight*0.3) this.bricks[i].alive=false;} this.state=Config.STATE.BOSS; this.boss=createBoss(this.chapterConfig.bossType,this.currentChapter,this.gameWidth); Sound.bossAppear(); }
+  _spawnNewRow() {
+    if (!this.currentPhase || this.currentPhase.spawnMult <= 0) return;
+    this.bricks = this.bricks.concat(BrickFactory.generateRow(this.gameWidth, Config.BRICK_TOP_OFFSET - Config.BRICK_HEIGHT - Config.BRICK_PADDING, this.currentPhase, this.chapterConfig));
+  }
+
+  _updateBrickSpawn(dtMs) {
+    if (!this.chapterConfig || !this.currentPhase || this.currentPhase.spawnMult <= 0) return;
+    var tip = (this.elapsedMs - this.currentPhase.time) / 1000;
+    var iv = this.chapterConfig.spawnInterval / (this.currentPhase.spawnMult * (1 + Math.min(tip / 60, 0.15)));
+    this.spawnTimer += dtMs;
+    if (this.spawnTimer >= iv) { this.spawnTimer -= iv; this._spawnNewRow(); }
+  }
+
+  // ===== 输入 =====
+
+  _handleInput(dt) {
+    if (this.devPanel && this.devPanel.open) return;
+    var dx = this.input.getPaddleDeltaX();
+    if (dx !== 0) this.launcher.setX(this.launcher.getCenterX() + dx);
+  }
+
+  // ===== 升级选择 =====
+
+  _triggerChoice(source) {
+    this.pendingSkillChoices = this.upgrades.generateChoices();
+    if (this.pendingSkillChoices.length > 0) {
+      this._preChoiceState = this.state;
+      this._choiceSource = source;
+      this.state = source === 'crate' ? Config.STATE.SKILL_CHOICE : Config.STATE.LEVEL_UP;
+    }
+  }
+
+  _tryShowLevelUpChoice() {
+    if (this._devPauseLevelUp) return;
+    if (this.expSystem.hasPendingLevelUp() && this.state !== Config.STATE.LEVEL_UP && this.state !== Config.STATE.SKILL_CHOICE) {
+      this.expSystem.consumeLevelUp();
+      this._addFloatingText('LEVEL UP!', this.gameWidth / 2, this.gameHeight * 0.4, Config.NEON_GREEN, 20);
+      this._triggerChoice('levelUp');
+    }
+  }
+
+  // ===== Boss =====
+
+  _startBoss() {
+    for (var i = 0; i < this.bricks.length; i++) {
+      if (this.bricks[i].alive && this.bricks[i].y < this.gameHeight * 0.3) this.bricks[i].alive = false;
+    }
+    this.state = Config.STATE.BOSS;
+    this.boss = createBoss(this.chapterConfig.bossType, this.currentChapter, this.gameWidth);
+    Sound.bossAppear();
+  }
 
   /**
    * Boss测试场景 - 从DevPanel调用
-   * 清空砖块，直接进入指定类型/章节的Boss战
    */
   _startBossTest(bossType, chapter) {
-    // 如果不在游戏中，先初始化一局
     if (this.state !== Config.STATE.PLAYING && this.state !== Config.STATE.BOSS) {
       this.currentChapter = chapter;
       this._initGame();
     }
-
-    // 清空所有砖块
     for (var i = 0; i < this.bricks.length; i++) this.bricks[i].alive = false;
     this.bricks = [];
-
-    // 清空旧Boss
     this.boss = null;
-
-    // 重置伤害统计
     this.damageStats = {};
-
-    // 设置章节配置（用于Boss HP倍率）
     this.currentChapter = chapter;
     this.chapterConfig = ChapterConfig.get(chapter);
-
-    // 创建Boss
     this.state = Config.STATE.BOSS;
     this.boss = createBoss(bossType, chapter, this.gameWidth);
     this.bossTriggered = true;
     this.bossWarningTimer = 0;
-
-    // 停止砖块生成
     this.currentPhase = { phase: 'boss', spawnMult: 0, types: [], timeCurve: [0, 0], scrollAccel: 0 };
-
     Sound.bossAppear();
   }
 
-  _scrollBricks(dt) { if(!this.chapterConfig) return; var bs=this.chapterConfig.scrollSpeed; var ac=(this.currentPhase&&this.currentPhase.scrollAccel)?this.currentPhase.scrollAccel:0; var tip=(this.elapsedMs-(this.currentPhase?this.currentPhase.time:0))/1000; var ds=Math.min(bs+ac*tip,bs*3); for(var i=0;i<this.bricks.length;i++){if(this.bricks[i].alive) this.bricks[i].y+=ds*this.bricks[i].speedMult*dt;} for(var j=this.bricks.length-1;j>=0;j--){if(!this.bricks[j].alive||this.bricks[j].y>this.gameHeight+50) this.bricks.splice(j,1);} }
+  // ===== 通用更新 =====
 
-  _checkDangerLine() {
-    if (this._devInvincible) return false;
-    var dy=this.gameHeight*Config.BRICK_DANGER_Y;
-    for(var i=0;i<this.bricks.length;i++){
-      if(this.bricks[i].alive&&this.bricks[i].y+this.bricks[i].height>=dy) return true;
-    }
-    return false;
-  }
-
-  _updateBrickSpawn(dtMs) { if(!this.chapterConfig||!this.currentPhase||this.currentPhase.spawnMult<=0) return; var tip=(this.elapsedMs-this.currentPhase.time)/1000; var iv=this.chapterConfig.spawnInterval/(this.currentPhase.spawnMult*(1+Math.min(tip/60,0.15))); this.spawnTimer+=dtMs; if(this.spawnTimer>=iv){this.spawnTimer-=iv;this._spawnNewRow();} }
-
-  _handleInput(dt) { if (this.devPanel.open) return; var dx=this.input.getPaddleDeltaX(); if(dx!==0) this.launcher.setX(this.launcher.getCenterX()+dx); }
-
-  // ===== 元素弹效果 =====
-
-  _applyFireElement(brick, elementLv) {
-    if (!brick.alive) return;
-    var c = brick.getCenter();
-    var dotDmg = Math.max(0.1, this.getBaseAttack() * 0.3 * elementLv);
-    var duration = 1000 + elementLv * 500;
-    this.burnDots.push({
-      brickRef: brick, x: c.x, y: c.y,
-      damage: dotDmg, remaining: duration, tickMs: 500, tickTimer: 0,
-      type: 'fire',
-    });
-    this.particles.emitHitSpark(c.x, c.y, '#FF4400');
-  }
-
-  /** 通用DOT接口（供武器技能使用） */
-  addDot(brick, damage, duration, type) {
-    if (!brick || !brick.alive) return;
-    var c = brick.getCenter();
-    this.burnDots.push({
-      brickRef: brick, x: c.x, y: c.y,
-      damage: Math.max(0.1, damage), remaining: duration, tickMs: 500, tickTimer: 0,
-      type: type || 'generic',
-    });
-  }
-
-  _applyIceElement(brick, elementLv) {
-    if (!brick.alive) return;
-    brick.speedMult = Math.max(0.1, brick.speedMult * (1 - elementLv * 0.3));
-    this.particles.emitHitSpark(brick.getCenter().x, brick.getCenter().y, '#44DDFF');
-  }
-
-  _applyThunderElement(brick, elementLv, bulletDmg) {
-    if (!brick.alive) return;
-    var c = brick.getCenter();
-    var chainCount = elementLv;
-    var chainDmg = Math.max(0.1, bulletDmg * 0.5);
-    var hit = new Set();
-    var lastX = c.x, lastY = c.y;
-    for (var ch = 0; ch < chainCount; ch++) {
-      var nearest = null, nearDist = Infinity;
-      for (var j = 0; j < this.bricks.length; j++) {
-        if (!this.bricks[j].alive || hit.has(j)) continue;
-        if (this.bricks[j] === brick) continue;
-        var bc = this.bricks[j].getCenter();
-        var d = (bc.x-lastX)*(bc.x-lastX) + (bc.y-lastY)*(bc.y-lastY);
-        if (d < nearDist && d < 10000) { nearDist = d; nearest = { idx: j, brick: this.bricks[j] }; }
-      }
-      if (!nearest) break;
-      hit.add(nearest.idx);
-      var nc = nearest.brick.getCenter();
-      this.damageBrick(nearest.brick, chainDmg, 'thunder_chain');
-      this.particles.emitHitSpark(nc.x, nc.y, '#FFF050');
-      lastX = nc.x; lastY = nc.y;
-    }
-    if (chainCount > 0) Sound.lightning();
-  }
-
-  _updateBurnDots(dtMs) {
-    for (var i = this.burnDots.length - 1; i >= 0; i--) {
-      var dot = this.burnDots[i];
-      dot.remaining -= dtMs;
-      dot.tickTimer += dtMs;
-      if (dot.tickTimer >= dot.tickMs) {
-        dot.tickTimer -= dot.tickMs;
-        if (dot.brickRef && dot.brickRef.alive) {
-          this.damageBrick(dot.brickRef, dot.damage, dot.type || 'fire_dot');
-        }
-      }
-      if (dot.remaining <= 0 || !dot.brickRef || !dot.brickRef.alive) {
-        this.burnDots.splice(i, 1);
-      }
+  _updateFloatingTexts(dt) {
+    for (var i = this.floatingTexts.length - 1; i >= 0; i--) {
+      var t = this.floatingTexts[i];
+      t.y += t.vy * dt;
+      t.life -= dt;
+      t.alpha = Math.max(0, t.life / 40);
+      if (t.life <= 0) this.floatingTexts.splice(i, 1);
     }
   }
 
-  _updateBullets(dt, dtMs) {
-    var critChance = this.saveManager.getCritBonus();
-    var critMult = 2.0;
-    for(var i=this.bullets.length-1;i>=0;i--) {
-      var b=this.bullets[i]; b.update(dt);
-      if(b.isOutOfBounds(this.gameWidth,this.gameHeight)){this.bullets.splice(i,1);continue;}
-      if(this.boss&&this.boss.alive&&this.boss.type==='laser'&&this.boss.isInLaserZone&&this.boss.isInLaserZone(b.x,b.y)){this.bullets.splice(i,1);continue;}
-      var rm=false;
-      for(var j=0;j<this.bricks.length;j++) {
-        var bk=this.bricks[j]; if(!bk.alive||(bk.type==='stealth'&&!bk.visible)) continue;
-        if(b.collideBrick(bk)) {
-          var cm=(Math.random()<critChance)?critMult:1;
-          var finalDmg = Math.max(0.1, b.damage * cm);
-          this.damageBrick(bk, finalDmg, 'bullet');
-          if(cm>1){Sound.crit();this._addFloatingText('暴击!',bk.getCenter().x,bk.getCenter().y-10,Config.NEON_RED,14);}
-          if (b.element && bk.alive) {
-            switch (b.element) {
-              case 'fire': this._applyFireElement(bk, b.elementLv); break;
-              case 'ice': this._applyIceElement(bk, b.elementLv); break;
-              case 'thunder': this._applyThunderElement(bk, b.elementLv, finalDmg); break;
-            }
-          }
-          if(b.pierce>0) b.pierce--; else{this.bullets.splice(i,1);rm=true;break;}
-        }
-      }
-      if(rm) continue;
-      if(this.boss&&this.boss.alive) {
-        if(this.boss.type==='guardian'&&this.boss.hitShield&&this.boss.hitShield(b.x,b.y,b.radius)){this.bullets.splice(i,1);Sound.brickHit();continue;}
-        if(b.collideBoss(this.boss)){var bc2=(Math.random()<critChance)?critMult:1;this.damageBoss(b.damage*3*bc2, "bullet");if(bc2>1)this._addFloatingText('暴击!',b.x,this.boss.y+this.boss.height+10,Config.NEON_RED,14);this.bullets.splice(i,1);}
-      }
-    }
-  }
-
-  _updatePowerUps(dt) { for(var i=this.powerUps.length-1;i>=0;i--){var p=this.powerUps[i];p.update(dt,null);if(p.collideLauncher(this.launcher)){this._applyPowerUp(p);this.powerUps.splice(i,1);continue;}if(p.isOutOfBounds(this.gameHeight)) this.powerUps.splice(i,1);} }
-
-  _updateFloatingTexts(dt) { for(var i=this.floatingTexts.length-1;i>=0;i--){var t=this.floatingTexts[i];t.y+=t.vy*dt;t.life-=dt;t.alpha=Math.max(0,t.life/40);if(t.life<=0) this.floatingTexts.splice(i,1);} }
+  // ===== 渲染 =====
 
   render() {
     this.renderer.clear();
-    switch(this.state) {
+    switch (this.state) {
       case Config.STATE.LOADING: this.renderer.drawLoading(); break;
       case Config.STATE.TITLE: this.renderer.drawTitle(); break;
-      case Config.STATE.CHAPTER_SELECT: this.renderer.drawChapterSelect(this.saveManager.getMaxChapter(),this.saveManager.getData().chapterRecords,this.saveManager.getCoins()); break;
+      case Config.STATE.CHAPTER_SELECT:
+        this.renderer.drawChapterSelect(this.saveManager.getMaxChapter(), this.saveManager.getData().chapterRecords, this.saveManager.getCoins());
+        break;
       case Config.STATE.UPGRADE_SHOP: this.renderer.drawUpgradeShop(this.saveManager); break;
-      case Config.STATE.PLAYING: this._renderGame(); if(this.bossWarningTimer>0) this.renderer.drawBossWarning(this.chapterConfig.bossType); break;
+      case Config.STATE.WEAPON_SHOP: this.renderer.drawWeaponShop(this.saveManager); break;
+      case Config.STATE.PLAYING:
+        this._renderGame();
+        if (this.bossWarningTimer > 0) this.renderer.drawBossWarning(this.chapterConfig.bossType);
+        break;
       case Config.STATE.BOSS: this._renderGame(); break;
-      case Config.STATE.LEVEL_UP: this._renderGame(); this.renderer.drawSkillChoice(this.pendingSkillChoices,this.upgrades,'⬆ LEVEL '+this.expSystem.playerLevel); break;
-      case Config.STATE.SKILL_CHOICE: this._renderGame(); this.renderer.drawSkillChoice(this.pendingSkillChoices,this.upgrades,'📦 技能宝箱'); break;
-      case Config.STATE.CHAPTER_CLEAR: this.renderer.drawChapterClear(this.currentChapter,this.score,this.expSystem.playerLevel,this.maxCombo,this.upgrades.getOwnedWeapons(),this.coinsEarned,false); break;
-      case Config.STATE.GAME_OVER: this._renderGame(); this.renderer.drawGameOver(this.score,this.expSystem.playerLevel,this.upgrades.getOwnedWeapons()); break;
+      case Config.STATE.PAUSED: this._renderGame(); this.renderer.drawPauseDialog(); break;
+      case Config.STATE.LEVEL_UP:
+        this._renderGame();
+        this.renderer.drawSkillChoice(this.pendingSkillChoices, this.upgrades, '⬆ LEVEL ' + this.expSystem.playerLevel);
+        break;
+      case Config.STATE.SKILL_CHOICE:
+        this._renderGame();
+        this.renderer.drawSkillChoice(this.pendingSkillChoices, this.upgrades, '技能宝箱');
+        break;
+      case Config.STATE.CHAPTER_CLEAR:
+        this.renderer.drawChapterClear(this.currentChapter, this.score, this.expSystem.playerLevel, this.maxCombo, this.upgrades.getOwnedWeapons(), this.coinsEarned, false);
+        break;
+      case Config.STATE.GAME_OVER:
+        this._renderGame();
+        this.renderer.drawGameOver(this.score, this.expSystem.playerLevel, this.upgrades.getOwnedWeapons());
+        break;
     }
     // Dev panel 最后绘制（在最上层）
-    this.devPanel.draw(this.renderer.ctx, this);
+    if (this.devPanel) this.devPanel.draw(this.renderer.ctx, this);
   }
 
   _renderGame() {
     var shaking = this.screenShake > 0.5;
-    if(shaking){this.renderer.ctx.save();this.renderer.ctx.translate((Math.random()-0.5)*this.screenShake*this.renderer.dpr,(Math.random()-0.5)*this.screenShake*this.renderer.dpr);this.screenShake*=0.85;if(this.screenShake<0.5)this.screenShake=0;}
-    this.renderer.drawDangerLine(this.gameHeight*Config.BRICK_DANGER_Y);
+    if (shaking) {
+      this.renderer.ctx.save();
+      this.renderer.ctx.translate(
+        (Math.random() - 0.5) * this.screenShake * this.renderer.dpr,
+        (Math.random() - 0.5) * this.screenShake * this.renderer.dpr
+      );
+      this.screenShake *= 0.85;
+      if (this.screenShake < 0.5) this.screenShake = 0;
+    }
+    this.renderer.drawDangerLine(this.gameHeight * Config.BRICK_DANGER_Y);
     this.renderer.drawBricksBatch(this.bricks);
-    if(this.boss&&this.boss.alive) this.renderer.drawBoss(this.boss);
-    for(var j=0;j<this.powerUps.length;j++) this.renderer.drawPowerUp(this.powerUps[j]);
+    if (this.boss && this.boss.alive) this.renderer.drawBoss(this.boss);
+    for (var j = 0; j < this.powerUps.length; j++) this.renderer.drawPowerUp(this.powerUps[j]);
     this.renderer.drawExpOrbs(this.expSystem.orbs);
-    this.renderer.drawWeapons(this.upgrades.weapons,this.launcher);
-    this.renderer.drawWeaponWings(this.upgrades.weapons,this.launcher);
+    this.renderer.drawWeapons(this.upgrades.weapons, this.launcher);
+    this.renderer.drawWeaponWings(this.upgrades.weapons, this.launcher);
     this.renderer.drawBullets(this.bullets);
-    if(this.launcher) this.renderer.drawLauncher(this.launcher, this.upgrades);
+    if (this.launcher) this.renderer.drawLauncher(this.launcher, this.upgrades);
     this.renderer.drawParticles(this.particles.particles);
     this.renderer.drawFloatingTexts(this.floatingTexts);
     this.renderer.drawWeaponHUD(this.upgrades.getOwnedWeapons());
-    this.renderer.drawChapterHUD(this.currentChapter,this.score,this.combo,this.expSystem.playerLevel,this.elapsedMs,Sound.enabled);
-    this.renderer.drawExpBar(this.expSystem.exp,this.expSystem.expToNext,this.expSystem.playerLevel);
-    // 伤害统计面板
-    this._statsArea = this.renderer.drawDamageStats(this.damageStats, this.statsExpanded);
-    if(shaking) this.renderer.ctx.restore();
+    this.renderer.drawChapterHUD(this.currentChapter, this.score, this.combo, this.expSystem.playerLevel, this.elapsedMs, Sound.enabled);
+    this.renderer.drawExpBar(this.expSystem.exp, this.expSystem.expToNext, this.expSystem.playerLevel);
+    if (Config.DEV_MODE) this._statsArea = this.renderer.drawDamageStats(this.damageStats, this.statsExpanded);
+    if (shaking) this.renderer.ctx.restore();
   }
 }
 

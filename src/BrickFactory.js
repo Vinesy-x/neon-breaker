@@ -96,6 +96,7 @@ class BrickFactory {
       switch (type) {
         case 'fast':
           brick.speedMult = 2.0;
+          brick._baseSpeedMult = 2.0;
           break;
         case 'shield':
           brick.shieldHp = 1;
@@ -262,7 +263,7 @@ class BrickFactory {
     // 阵型系数
     var formMult = isFormation ? 1.3 : 1.0;
 
-    return Math.max(1, Math.ceil(base * tMult * typeMult * formMult));
+    return Math.max(1, Math.floor(base * tMult * typeMult * formMult));
   }
 
   static _pickType(types) {

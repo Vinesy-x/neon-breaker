@@ -68,6 +68,8 @@ class SpriteCache {
     this._createMissile();
     this._createBullet();
     this._createExpOrb();
+    this._createGlow();
+    this._createWeaponIcons();
   }
 
   // ===== 迫击炮弹 =====
@@ -220,6 +222,244 @@ class SpriteCache {
     this.getOrCreate('exp_orb', w, h, ox, oy, (ctx) => {
       ctx.fillStyle = '#AAFFFF';
       ctx.beginPath(); ctx.arc(5, 5, 4, 0, Math.PI * 2); ctx.fill();
+    });
+  }
+
+  // ===== Glow 发光精灵 =====
+  _createGlow() {
+    // 子弹用 Glow（小号，24x24）
+    // 用多层半透明圆模拟径向渐变，避免 createRadialGradient 性能问题
+    const colors = {
+      cyan: '#00FFFF',
+      fire: '#FF4400',
+      ice: '#44DDFF',
+      thunder: '#FFF050',
+      white: '#FFFFFF',
+    };
+
+    for (const name in colors) {
+      const color = colors[name];
+      const w = 24, h = 24, ox = 12, oy = 12;
+      this.getOrCreate('glow_' + name, w, h, ox, oy, (ctx) => {
+        const cx = 12, cy = 12;
+        const layers = [
+          { r: 11, a: 0.1 },
+          { r: 8,  a: 0.18 },
+          { r: 5,  a: 0.3 },
+          { r: 3,  a: 0.5 },
+        ];
+        for (const l of layers) {
+          ctx.globalAlpha = l.a;
+          ctx.fillStyle = color;
+          ctx.beginPath(); ctx.arc(cx, cy, l.r, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.globalAlpha = 0.6;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath(); ctx.arc(cx, cy, 2, 0, Math.PI * 2); ctx.fill();
+      });
+    }
+  }
+
+  // ===== 武器图标精灵（32×32，用于HUD和选择面板） =====
+  _createWeaponIcons() {
+    const S = 32, C = 16;
+
+    // --- 光能迫击炮：炮弹 ---
+    this.getOrCreate('wicon_kunai', S, S, C, C, (ctx) => {
+      ctx.fillStyle = '#00FFFF';
+      ctx.beginPath();
+      ctx.moveTo(C + 8, C); ctx.lineTo(C + 3, C - 6); ctx.lineTo(C - 7, C - 6);
+      ctx.lineTo(C - 7, C + 6); ctx.lineTo(C + 3, C + 6);
+      ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.arc(C + 3, C, 6, -Math.PI / 2, Math.PI / 2); ctx.fill();
+      ctx.fillStyle = '#006688';
+      ctx.beginPath(); ctx.moveTo(C - 7, C - 6); ctx.lineTo(C - 12, C - 9); ctx.lineTo(C - 10, C - 6); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(C - 7, C + 6); ctx.lineTo(C - 12, C + 9); ctx.lineTo(C - 10, C + 6); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#FFFFFF'; ctx.globalAlpha = 0.6;
+      ctx.beginPath(); ctx.arc(C + 5, C - 2, 2.5, 0, Math.PI * 2); ctx.fill();
+    });
+
+    // --- 闪电链：锯齿闪电 ---
+    this.getOrCreate('wicon_lightning', S, S, C, C, (ctx) => {
+      ctx.fillStyle = '#FFF050';
+      ctx.beginPath();
+      ctx.moveTo(C - 2, C - 12); ctx.lineTo(C + 5, C - 12); ctx.lineTo(C + 1, C - 3);
+      ctx.lineTo(C + 6, C - 3); ctx.lineTo(C - 3, C + 12); ctx.lineTo(C, C + 2);
+      ctx.lineTo(C - 5, C + 2);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#FFFFFF'; ctx.globalAlpha = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(C, C - 10); ctx.lineTo(C + 3, C - 10); ctx.lineTo(C + 1, C - 5); ctx.lineTo(C - 1, C - 5);
+      ctx.closePath(); ctx.fill();
+    });
+
+    // --- 追踪导弹：竖直导弹 ---
+    this.getOrCreate('wicon_missile', S, S, C, C, (ctx) => {
+      ctx.fillStyle = '#FF14FF';
+      ctx.beginPath();
+      ctx.moveTo(C, C - 11); ctx.lineTo(C + 4, C - 5); ctx.lineTo(C + 4, C + 5);
+      ctx.lineTo(C + 3, C + 8); ctx.lineTo(C - 3, C + 8); ctx.lineTo(C - 4, C + 5); ctx.lineTo(C - 4, C - 5);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#AA00AA';
+      ctx.beginPath(); ctx.moveTo(C - 4, C + 5); ctx.lineTo(C - 8, C + 10); ctx.lineTo(C - 4, C + 8); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(C + 4, C + 5); ctx.lineTo(C + 8, C + 10); ctx.lineTo(C + 4, C + 8); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#FF8844'; ctx.globalAlpha = 0.8;
+      ctx.beginPath(); ctx.moveTo(C - 2, C + 8); ctx.lineTo(C, C + 13); ctx.lineTo(C + 2, C + 8); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#FFFFFF'; ctx.globalAlpha = 0.5;
+      ctx.beginPath(); ctx.arc(C, C - 7, 2, 0, Math.PI * 2); ctx.fill();
+    });
+
+    // --- 天降陨石：火球 ---
+    this.getOrCreate('wicon_meteor', S, S, C, C, (ctx) => {
+      ctx.fillStyle = '#FF8800';
+      ctx.beginPath(); ctx.arc(C, C, 8, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#FFDD44';
+      ctx.beginPath(); ctx.arc(C, C, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#FFFFFF'; ctx.globalAlpha = 0.7;
+      ctx.beginPath(); ctx.arc(C - 1, C - 1, 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 0.6; ctx.fillStyle = '#FF4400';
+      ctx.beginPath(); ctx.moveTo(C + 6, C - 6); ctx.lineTo(C + 13, C - 11); ctx.lineTo(C + 8, C - 3); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(C + 4, C - 7); ctx.lineTo(C + 9, C - 13); ctx.lineTo(C + 2, C - 8); ctx.closePath(); ctx.fill();
+    });
+
+    // --- 战术无人机：菱形飞行器 ---
+    this.getOrCreate('wicon_drone', S, S, C, C, (ctx) => {
+      ctx.fillStyle = '#50FFB4';
+      ctx.beginPath();
+      ctx.moveTo(C, C - 6); ctx.lineTo(C + 7, C); ctx.lineTo(C, C + 6); ctx.lineTo(C - 7, C);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#FFFFFF'; ctx.globalAlpha = 0.8;
+      ctx.beginPath(); ctx.arc(C, C, 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 0.6; ctx.fillStyle = '#50FFB4';
+      ctx.fillRect(C - 10, C - 1.5, 4, 3);
+      ctx.fillRect(C + 6, C - 1.5, 4, 3);
+      ctx.strokeStyle = '#50FFB4'; ctx.lineWidth = 1; ctx.globalAlpha = 0.4;
+      ctx.beginPath();
+      ctx.moveTo(C - 7, C); ctx.lineTo(C - 13, C + 10);
+      ctx.moveTo(C + 7, C); ctx.lineTo(C + 13, C + 10);
+      ctx.stroke();
+    });
+
+    // --- 回旋刃：四角旋刃 ---
+    this.getOrCreate('wicon_spinBlade', S, S, C, C, (ctx) => {
+      ctx.fillStyle = '#AA44FF';
+      for (let a = 0; a < 4; a++) {
+        const angle = (Math.PI * 2 / 4) * a - Math.PI / 4;
+        ctx.save(); ctx.translate(C, C); ctx.rotate(angle);
+        ctx.beginPath();
+        ctx.moveTo(0, -2); ctx.lineTo(10, -3); ctx.lineTo(11, 0); ctx.lineTo(10, 3); ctx.lineTo(0, 2);
+        ctx.closePath(); ctx.fill();
+        ctx.restore();
+      }
+      ctx.fillStyle = '#FFFFFF'; ctx.globalAlpha = 0.7;
+      ctx.beginPath(); ctx.arc(C, C, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#AA44FF'; ctx.lineWidth = 1.5; ctx.globalAlpha = 1;
+      ctx.beginPath(); ctx.arc(C, C, 3, 0, Math.PI * 2); ctx.stroke();
+    });
+
+    // --- 冰霜发生器：横向冰晶屏障 ---
+    this.getOrCreate('wicon_frostStorm', S, S, C, C, (ctx) => {
+      // 底座横条
+      ctx.fillStyle = '#00DDFF';
+      ctx.globalAlpha = 0.8;
+      ctx.fillRect(C - 12, C + 2, 24, 6);
+      // 冰晶尖刺（5个三角形）
+      ctx.fillStyle = '#44FFFF';
+      ctx.globalAlpha = 0.9;
+      const spikes = [
+        { x: C - 9, h: 7 },
+        { x: C - 4, h: 10 },
+        { x: C, h: 12 },
+        { x: C + 4, h: 10 },
+        { x: C + 9, h: 7 }
+      ];
+      spikes.forEach(s => {
+        ctx.beginPath();
+        ctx.moveTo(s.x - 2.5, C + 2);
+        ctx.lineTo(s.x, C + 2 - s.h);
+        ctx.lineTo(s.x + 2.5, C + 2);
+        ctx.closePath();
+        ctx.fill();
+      });
+      // 霓虹辉光边缘
+      ctx.strokeStyle = '#AAFFFF';
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = 0.7;
+      ctx.strokeRect(C - 12, C + 2, 24, 6);
+      // 高光
+      ctx.fillStyle = '#FFFFFF';
+      ctx.globalAlpha = 0.5;
+      ctx.fillRect(C - 10, C + 3, 8, 2);
+    });
+
+    // --- 奇点引擎：黑洞漩涡 ---
+    this.getOrCreate('wicon_gravityWell', S, S, C, C, (ctx) => {
+      // 外环
+      ctx.strokeStyle = '#AA00FF';
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.8;
+      ctx.beginPath(); ctx.arc(C, C, 9, 0, Math.PI * 2); ctx.stroke();
+      // 内环
+      ctx.strokeStyle = '#CC66FF';
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = 0.6;
+      ctx.beginPath(); ctx.arc(C, C, 5, 0, Math.PI * 2); ctx.stroke();
+      // 中心点
+      ctx.fillStyle = '#FFFFFF';
+      ctx.globalAlpha = 0.9;
+      ctx.beginPath(); ctx.arc(C, C, 2, 0, Math.PI * 2); ctx.fill();
+      // 漩涡臂（4条弧线）
+      ctx.strokeStyle = '#BB44FF';
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.5;
+      for (var arm = 0; arm < 4; arm++) {
+        var startAngle = (Math.PI * 2 / 4) * arm;
+        ctx.beginPath();
+        ctx.arc(C, C, 7, startAngle, startAngle + Math.PI * 0.4);
+        ctx.stroke();
+      }
+      // 吸入粒子点
+      ctx.fillStyle = '#CC88FF';
+      ctx.globalAlpha = 0.7;
+      ctx.beginPath(); ctx.arc(C - 10, C - 4, 1, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(C + 8, C + 6, 1, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(C + 3, C - 9, 1, 0, Math.PI * 2); ctx.fill();
+    });
+
+    // --- 白磷弹：圆形炸弹+引线 ---
+    this.getOrCreate('wicon_blizzard', S, S, C, C, (ctx) => {
+      ctx.fillStyle = '#FF8833';
+      ctx.beginPath(); ctx.arc(C, C + 1, 7, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#FFAA44'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(C + 3, C - 6); ctx.lineTo(C + 6, C - 10); ctx.stroke();
+      ctx.fillStyle = '#FFEE88'; ctx.globalAlpha = 0.9;
+      ctx.beginPath(); ctx.arc(C + 6, C - 10, 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#FFFFFF'; ctx.globalAlpha = 0.7;
+      ctx.beginPath(); ctx.arc(C + 6, C - 10, 1.2, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 0.4; ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath(); ctx.arc(C - 2, C - 1, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#CC5500'; ctx.lineWidth = 1; ctx.globalAlpha = 0.5;
+      ctx.beginPath(); ctx.moveTo(C - 5, C + 1); ctx.lineTo(C + 5, C + 1); ctx.stroke();
+    });
+
+    // --- 离子射线：瞄准镜+射线 ---
+    this.getOrCreate('wicon_ionBeam', S, S, C, C, (ctx) => {
+      ctx.strokeStyle = '#FF4444'; ctx.lineWidth = 2;
+      // 十字准星
+      ctx.beginPath();
+      ctx.moveTo(C, C - 10); ctx.lineTo(C, C - 4);
+      ctx.moveTo(C, C + 4); ctx.lineTo(C, C + 10);
+      ctx.moveTo(C - 10, C); ctx.lineTo(C - 4, C);
+      ctx.moveTo(C + 4, C); ctx.lineTo(C + 10, C);
+      ctx.stroke();
+      // 外环
+      ctx.beginPath(); ctx.arc(C, C, 8, 0, Math.PI * 2); ctx.stroke();
+      // 中心点
+      ctx.fillStyle = '#FF4444';
+      ctx.beginPath(); ctx.arc(C, C, 2.5, 0, Math.PI * 2); ctx.fill();
+      // 高光
+      ctx.fillStyle = '#FFFFFF'; ctx.globalAlpha = 0.6;
+      ctx.beginPath(); ctx.arc(C, C, 1.2, 0, Math.PI * 2); ctx.fill();
     });
   }
 }

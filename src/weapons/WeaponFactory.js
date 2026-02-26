@@ -7,6 +7,10 @@ const MissileWeapon = require('./Missile');
 const MeteorWeapon = require('./Meteor');
 const DroneWeapon = require('./Drone');
 const SpinBlade = require('./SpinBlade');
+const BlizzardWeapon = require('./Blizzard');
+const IonBeamWeapon = require('./IonBeam');
+const FrostStormWeapon = require('./FrostStorm');
+const GravityWellWeapon = require('./GravityWell');
 
 function createWeapon(key) {
   switch (key) {
@@ -16,6 +20,10 @@ function createWeapon(key) {
     case 'meteor': return new MeteorWeapon();
     case 'drone': return new DroneWeapon();
     case 'spinBlade': return new SpinBlade();
+    case 'blizzard': return new BlizzardWeapon();
+    case 'ionBeam': return new IonBeamWeapon();
+    case 'frostStorm': return new FrostStormWeapon();
+    case 'gravityWell': return new GravityWellWeapon();
   }
   return null;
 }

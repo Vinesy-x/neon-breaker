@@ -54,12 +54,22 @@ class LightningWeapon extends Weapon {
     const hit = new Set();
     let lastX = startX, lastY = startY;
 
-    const chains = 2 + (this.branches.chains || 0); // 基础2跳
+    const chains = 3 + (this.branches.chains || 0) * 2; // 基础3跳，升级+2
     const chargeLv = this.branches.charge || 0;   // 蓄能：每跳+25%伤害
     const shockLv = this.branches.shock || 0;     // 感电：DOT
     const echoLv = this.branches.echo || 0;       // 回响：链末端再次释放
     const overloadLv = this.branches.overload || 0;
     const paralyzeLv = this.branches.paralyze || 0;
+
+    // === 奇点引擎联动：引力透镜增加跳距 ===
+    let lensJumpBonus = 0;
+    const gravityWell = ctx.upgrades && ctx.upgrades.weapons && ctx.upgrades.weapons.gravityWell;
+    if (gravityWell) {
+      const lensLv = gravityWell.getBranch('lens') || 0;
+      if (lensLv > 0) {
+        lensJumpBonus = 0.5 * lensLv; // 每级+50%跳距
+      }
+    }
 
     for (let c = 0; c < chains; c++) {
       // 蓄能：每次链跳伤害递增
@@ -68,6 +78,7 @@ class LightningWeapon extends Weapon {
 
       let nearest = null, bestScore = -Infinity;
       const dangerY = Config.SCREEN_HEIGHT * Config.BRICK_DANGER_Y;
+      const baseJumpDist = 300 * (1 + lensJumpBonus); // 引力透镜加成跳距
       for (let i = 0; i < aliveBricks.length; i++) {
         if (hit.has(i)) continue;
         const bc = aliveBricks[i].getCenter();
@@ -75,9 +86,20 @@ class LightningWeapon extends Weapon {
         const dist = Math.sqrt(dx * dx + dy * dy);
         // 越靠前(y越大)分数越高，距离远的扣分
         const frontScore = bc.y / dangerY; // 0~1，越靠前越高
-        const distPenalty = dist / 300; // 距离惩罚
+        const distPenalty = dist / baseJumpDist; // 距离惩罚（引力透镜放宽）
         const score = frontScore * 3 - distPenalty;
         if (score > bestScore) { bestScore = score; nearest = { idx: i, brick: aliveBricks[i] }; }
+      }
+      
+      // === 奇点引擎联动：检测负能量砖块并充能 ===
+      if (gravityWell && !nearest) {
+        const negaBrick = this._findNearestNegaBrick(gravityWell, lastX, lastY, 300 * (1 + lensJumpBonus));
+        if (negaBrick) {
+          points.push({ x: negaBrick.x, y: negaBrick.y });
+          gravityWell.damageNegaBrick(negaBrick, baseDamage * chainMult);
+          lastX = negaBrick.x; lastY = negaBrick.y;
+          continue; // 继续链跳
+        }
       }
 
       if (!nearest) {
@@ -93,7 +115,7 @@ class LightningWeapon extends Weapon {
       hit.add(nearest.idx);
       const bc = nearest.brick.getCenter();
       points.push({ x: bc.x, y: bc.y });
-      ctx.damageBrick(nearest.brick, damage, 'lightning');
+      ctx.damageBrick(nearest.brick, damage, 'lightning', 'energy');
 
       // 麻痹：减速
       if (paralyzeLv > 0 && nearest.brick.alive) {
@@ -102,8 +124,8 @@ class LightningWeapon extends Weapon {
 
       // 感电：DOT (通过ctx.addDot传递)
       if (shockLv > 0 && nearest.brick.alive && ctx.addDot) {
-        const dotDamage = Math.floor(baseDamage * 0.3 * shockLv);
-        ctx.addDot(nearest.brick, dotDamage, 2000, 'shock'); // 2秒DOT
+        const dotDamage = Math.floor(baseDamage * 0.2 * shockLv);
+        ctx.addDot(nearest.brick, dotDamage, 3000, 'shock'); // 3秒DOT
       }
 
       lastX = bc.x; lastY = bc.y;
@@ -134,10 +156,28 @@ class LightningWeapon extends Weapon {
       if (!brick.alive) continue;
       const bc = brick.getCenter();
       if (Math.sqrt((bc.x - cx) ** 2 + (bc.y - cy) ** 2) <= radius) {
-        ctx.damageBrick(brick, damage, 'lightning_aoe');
+        ctx.damageBrick(brick, damage, 'lightning_aoe', 'energy');
       }
     }
     if (ctx.particles) ctx.particles.emitBrickBreak(cx - 10, cy - 10, 20, 20, this.def.color);
+  }
+
+  /**
+   * 寻找最近的负能量砖块（奇点引擎联动）
+   */
+  _findNearestNegaBrick(gravityWell, fromX, fromY, maxDist) {
+    if (!gravityWell.negaBricks || gravityWell.negaBricks.length === 0) return null;
+    let best = null, bestDist = Infinity;
+    for (let i = 0; i < gravityWell.negaBricks.length; i++) {
+      const nb = gravityWell.negaBricks[i];
+      const dx = nb.x - fromX, dy = nb.y - fromY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < maxDist && dist < bestDist) {
+        bestDist = dist;
+        best = nb;
+      }
+    }
+    return best;
   }
 
   getRenderData() { return { bolts: this.bolts, explosions: this.explosions, color: this.def.color }; }

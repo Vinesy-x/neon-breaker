@@ -11,6 +11,7 @@ try { _safeTop = wx.getMenuButtonBoundingClientRect().bottom + 8; } catch (e) { 
 try { const si = wx.getSystemInfoSync(); _safeBottom = (si.screenHeight - si.safeArea.bottom) + 8; if (_safeBottom < 10) _safeBottom = 10; } catch (e) { _safeBottom = 20; }
 
 const Config = {
+  DEV_MODE: true,  // 发布时设为false，隐藏DEV按钮和面板
   SCREEN_WIDTH: windowWidth, SCREEN_HEIGHT: windowHeight,
   DPR: pixelRatio,
   CANVAS_WIDTH: windowWidth * pixelRatio, CANVAS_HEIGHT: windowHeight * pixelRatio,
@@ -29,7 +30,7 @@ const Config = {
 
   // 子弹
   BULLET_RADIUS: 4, BULLET_SPEED: 10, BULLET_MAX: 40,
-  BULLET_TRAIL_LENGTH: 3, BULLET_COLOR: '#00FFFF',
+  BULLET_TRAIL_LENGTH: 5, BULLET_COLOR: '#FFFFFF',
   BULLET_FIRE_INTERVAL: 400, BULLET_GLOW_COLOR: 'rgba(0, 255, 255, 0.4)',
 
   // 砖块
@@ -64,6 +65,20 @@ const Config = {
   // Combo
   COMBO_SCORE_BASE: 10,
 
+  // 伤害类型
+  DAMAGE_TYPES: {
+    PHYSICAL: 'physical',  // 子弹、旋刃、导弹直击、迫击炮弹体
+    FIRE: 'fire',          // 火焰弹、白磷弹、陨石、爆炸类
+    ICE: 'ice',            // 寒冰弹
+    ENERGY: 'energy',      // 雷电弹、闪电链、离子射线、无人机激光
+  },
+  DAMAGE_TYPE_COLORS: {
+    physical: '#FFFFFF',
+    fire: '#FF4400',
+    ice: '#44DDFF',
+    energy: '#FFF050',
+  },
+
   // 引用定义
   WEAPON_TREES: WEAPON_TREES,
   SHIP_TREE: SHIP_TREE,
@@ -72,7 +87,8 @@ const Config = {
   STATE: {
     LOADING: 'LOADING', TITLE: 'TITLE',
     CHAPTER_SELECT: 'CHAPTER_SELECT', UPGRADE_SHOP: 'UPGRADE_SHOP',
-    PLAYING: 'PLAYING', BOSS: 'BOSS',
+    WEAPON_SHOP: 'WEAPON_SHOP',
+    PLAYING: 'PLAYING', BOSS: 'BOSS', PAUSED: 'PAUSED',
     LEVEL_UP: 'LEVEL_UP',           // 经验升级三选一
     SKILL_CHOICE: 'SKILL_CHOICE',   // 技能宝箱三选一
     CHAPTER_CLEAR: 'CHAPTER_CLEAR', GAME_OVER: 'GAME_OVER',

@@ -170,7 +170,7 @@ class Kunai extends Weapon {
         knife.hitSet[j] = true;
 
         // 直接伤害
-        ctx.damageBrick(brick, damage, 'kunai');
+        ctx.damageBrick(brick, damage, 'kunai', 'physical');
 
         if (knife.pierce > 0) {
           knife.pierce--;
@@ -231,7 +231,7 @@ class Kunai extends Weapon {
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist <= radius) {
         const wasAlive = brick.alive;
-        ctx.damageBrick(brick, splashDmg, 'kunai_aoe');
+        ctx.damageBrick(brick, splashDmg, 'kunai_aoe', 'fire');
         if (wasAlive && !brick.alive && chainLv > 0) {
           killedBricks.push({ x: bc.x, y: bc.y });
         }
@@ -246,8 +246,8 @@ class Kunai extends Weapon {
 
     // 连锁爆炸
     if (chainLv > 0 && killedBricks.length > 0) {
-      const chainRadius = radius * (0.5 + chainLv * 0.15);
-      const chainDmg = Math.max(0.1, damage * 0.3 * chainLv);
+      const chainRadius = radius * (0.8 + chainLv * 0.3);
+      const chainDmg = Math.max(0.1, damage * (1.5 * chainLv));
       for (const kb of killedBricks) {
         this.explosions.push({
           x: kb.x, y: kb.y,
@@ -264,7 +264,7 @@ class Kunai extends Weapon {
           const bc = brick.getCenter();
           const dist = Math.sqrt((bc.x - kb.x) ** 2 + (bc.y - kb.y) ** 2);
           if (dist <= chainRadius) {
-            ctx.damageBrick(brick, chainDmg, 'kunai_chain');
+            ctx.damageBrick(brick, chainDmg, 'kunai_chain', 'fire');
           }
         }
       }
@@ -276,7 +276,7 @@ class Kunai extends Weapon {
   _getAoeRadius() {
     const baseLv = this.branches.aoe || 0;
     const isGiant = (this.branches.giant || 0) > 0;
-    let r = 35 + baseLv * 12;
+    let r = 60 + baseLv * 12;
     if (isGiant) r *= 2;
     return r;
   }

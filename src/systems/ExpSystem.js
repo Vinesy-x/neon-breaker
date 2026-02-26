@@ -42,14 +42,13 @@ class ExpSystem {
     }
   }
 
-  /** 计算砖块经验值 */
+  /** 计算砖块经验值 — 固定值，不受砖块HP影响 */
   calcBrickExp(brick) {
-    let expValue = Config.EXP_PER_BRICK + brick.maxHp * Config.EXP_PER_HP;
+    let expValue = Config.EXP_PER_BRICK;
     switch (brick.type) {
-      case 'shield':  expValue += 2; break;
-      case 'split':   expValue += 1; break;
-      case 'stealth': expValue += 3; break;
-      case 'healer':  expValue += 4; break;
+      case 'shield':  expValue += 1; break;
+      case 'stealth': expValue += 1; break;
+      case 'healer':  expValue += 2; break;
     }
     return expValue;
   }

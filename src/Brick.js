@@ -24,6 +24,72 @@ class Brick {
     this.healTimer = 0;       // 治愈砖块计时（ms）
     this.speedMult = 1.0;     // 快速砖块 = 2.0
     this.isSplitChild = false; // 是否分裂后的子砖块
+
+    // ===== 元素状态 =====
+    this.iceStacks = 0;       // 冰缓层数(0-5)，每层减速10%
+    this.iceDuration = 0;     // 冰缓剩余ms
+    this.frozen = false;      // 是否冻结
+    this.frozenTimer = 0;     // 冻结剩余ms
+    this.shockStacks = 0;     // 感电层数(0-3)
+    this.shockDuration = 0;   // 感电剩余ms
+    this._baseSpeedMult = 1.0; // 基础速度（type决定）
+  }
+
+  /** 更新元素状态 */
+  updateStatus(dtMs) {
+    // 冻结
+    if (this.frozen) {
+      this.frozenTimer -= dtMs;
+      if (this.frozenTimer <= 0) {
+        this.frozen = false;
+        this.frozenTimer = 0;
+        this.iceStacks = 0; // 冻结结束清冰缓
+        this.iceDuration = 0;
+      }
+      this.speedMult = 0;
+      return;
+    }
+    // 冰缓消退
+    if (this.iceStacks > 0) {
+      this.iceDuration -= dtMs;
+      if (this.iceDuration <= 0) {
+        this.iceStacks = Math.max(0, this.iceStacks - 1);
+        this.iceDuration = this.iceStacks > 0 ? 3000 : 0;
+      }
+    }
+    // 感电消退
+    if (this.shockStacks > 0) {
+      this.shockDuration -= dtMs;
+      if (this.shockDuration <= 0) {
+        this.shockStacks = Math.max(0, this.shockStacks - 1);
+        this.shockDuration = this.shockStacks > 0 ? 3000 : 0;
+      }
+    }
+    // 速度计算
+    this.speedMult = this._baseSpeedMult * (1.0 - this.iceStacks * 0.10);
+    // 碎甲标记倒计时
+    if (this.shatterMark > 0) {
+      this.shatterMark -= dtMs;
+      if (this.shatterMark <= 0) { this.shatterMark = 0; this.shatterBonus = 0; }
+    }
+  }
+
+  /** 冻结期间受伤倍率 */
+  getDamageMult(damageType) {
+    // 冻结增伤：只对冰属性(ice)伤害+50%
+    var iceMult = (this.frozen && damageType === 'ice') ? 1.5 : 1.0;
+    // 碎甲标记额外乘算
+    var shatterMult = (this.shatterMark > 0) ? (1 + (this.shatterBonus || 0)) : 1.0;
+    return iceMult * shatterMult;
+  }
+
+  /** 统计当前砖块身上的DOT层数（给穿甲弹烈性反应用） */
+  dotCount() {
+    let count = 0;
+    if (this.fireDuration > 0) count++;
+    if (this.shockStacks > 0) count++;
+    if (this.bleedDuration > 0) count++;
+    return count;
   }
 
   /**

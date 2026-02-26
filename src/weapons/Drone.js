@@ -109,7 +109,7 @@ class DroneWeapon extends Weapon {
             if (focusLv > 0 && brick.hp <= 3) {
               dmg = dmg * (1 + focusLv * 0.8);
             }
-            ctx.damageBrick(brick, dmg, 'drone_laser');
+            ctx.damageBrick(brick, dmg, 'drone_laser', 'energy');
             hitBricks.add(brick);
             if (Math.random() < 0.25) {
               this.laserHits.push({ x: bc.x, y: bc.y, alpha: 1.0 });
@@ -167,7 +167,7 @@ class DroneWeapon extends Weapon {
                 ctx.damageBoss(arcDmg, 'drone_arc');
                 lineHitBoss = true;
               } else {
-                ctx.damageBrick(best.brick, arcDmg, 'drone_arc');
+                ctx.damageBrick(best.brick, arcDmg, 'drone_arc', 'energy');
                 arcHit.add(best.brick);
               }
               this.laserHits.push({
@@ -190,7 +190,7 @@ class DroneWeapon extends Weapon {
           if (!brick.alive) continue;
           const bc = brick.getCenter();
           if (Math.abs(bc.x - cx) + Math.abs(bc.y - cy) < overRange) {
-            ctx.damageBrick(brick, overDmg, 'drone_cross');
+            ctx.damageBrick(brick, overDmg, 'drone_cross', 'energy');
           }
         }
         // Boss过载判定
@@ -216,7 +216,7 @@ class DroneWeapon extends Weapon {
             const bc = brick.getCenter();
             const dx = bc.x - cx, dy = bc.y - cy;
             if (Math.sqrt(dx * dx + dy * dy) < pulseRange) {
-              ctx.damageBrick(brick, pulseDmg, 'drone_pulse');
+              ctx.damageBrick(brick, pulseDmg, 'drone_pulse', 'energy');
             }
           }
           // Boss脉冲判定

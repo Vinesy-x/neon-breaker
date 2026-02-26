@@ -1,0 +1,3311 @@
+/**
+ * Renderer.js - v4.0 打飞机模式渲染
+ * 发射器 + 子弹 + 武器特效
+ */
+const Config = require('./Config');
+const SpriteCache = require('./SpriteCache');
+
+class Renderer {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.dpr = Config.DPR;
+    canvas.width = Config.CANVAS_WIDTH;
+    canvas.height = Config.CANVAS_HEIGHT;
+    this.ctx.scale(this.dpr, this.dpr);
+
+    // 精灵缓存
+    this.sprites = new SpriteCache();
+    this.sprites.warmup();
+
+    // 背景星空（预生成）
+    this.stars = [];
+    for (let i = 0; i < 35; i++) {
+      this.stars.push({
+        x: Math.random() * Config.SCREEN_WIDTH,
+        y: Math.random() * Config.SCREEN_HEIGHT,
+        size: 0.5 + Math.random() * 1.5,
+        speed: 0.1 + Math.random() * 0.3,
+        alpha: 0.2 + Math.random() * 0.5,
+        twinkle: Math.random() * Math.PI * 2,
+      });
+    }
+    this._frameCount = 0;
+
+    // 预渲染星空背景到离屏canvas（60 DC → 0 DC per frame）
+    this._starCanvas = wx.createCanvas();
+    this._starCanvas.width = Config.CANVAS_WIDTH;
+    this._starCanvas.height = Config.CANVAS_HEIGHT;
+    const starCtx = this._starCanvas.getContext('2d');
+    starCtx.scale(this.dpr, this.dpr);
+    for (let i = 0; i < this.stars.length; i++) {
+      const s = this.stars[i];
+      starCtx.globalAlpha = s.alpha;
+      starCtx.fillStyle = '#FFFFFF';
+      starCtx.fillRect(s.x, s.y, s.size, s.size);
+    }
+    this._starScrollY = 0;
+  }
+
+  clear() {
+    const ctx = this.ctx;
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.fillStyle = Config.BG_COLOR;
+    ctx.fillRect(0, 0, Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT);
+
+    // 星空背景（离屏canvas滚动，0 draw call）
+    this._starScrollY = (this._starScrollY + 0.15) % Config.SCREEN_HEIGHT;
+    const sy = this._starScrollY;
+    ctx.globalAlpha = 0.6;
+    // 画两次实现无缝滚动
+    ctx.drawImage(this._starCanvas,
+      0, 0, Config.CANVAS_WIDTH, Config.CANVAS_HEIGHT,
+      0, sy, Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT);
+    ctx.drawImage(this._starCanvas,
+      0, 0, Config.CANVAS_WIDTH, Config.CANVAS_HEIGHT,
+      0, sy - Config.SCREEN_HEIGHT, Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT);
+    ctx.globalAlpha = 1;
+  }
+
+  // ===== 子弹 =====
+  // ===== 子弹（精灵缓存优化 + Glow） =====
+  drawBullets(bullets) {
+    if (!bullets || bullets.length === 0) return;
+    const ctx = this.ctx;
+    const sprites = this.sprites;
+    const elementColors = { fire: '#FF4400', ice: '#44DDFF', thunder: '#FFF050' };
+    const glowMap = { fire: 'glow_fire', ice: 'glow_ice', thunder: 'glow_thunder' };
+
+    // Pass 1: Glow 底层
+    for (let k = 0; k < bullets.length; k++) {
+      const b = bullets[k];
+      const glowKey = b.element ? (glowMap[b.element] || 'glow_cyan') : 'glow_cyan';
+      ctx.globalAlpha = 0.8;
+      sprites.draw(ctx, glowKey, b.x, b.y, 0, 1.6);
+    }
+
+    // Pass 2: 拖尾
+    for (let k = 0; k < bullets.length; k++) {
+      const b = bullets[k];
+      const c = b.element ? (elementColors[b.element] || '#00FFFF') : '#00FFFF';
+      ctx.fillStyle = c;
+      for (let i = 0; i < b.trail.length; i++) {
+        const t = b.trail[i];
+        const ratio = (i + 1) / b.trail.length;
+        ctx.globalAlpha = ratio * 0.5;
+        const s = 1.5 + ratio * 2.5;
+        ctx.fillRect(t.x - s, t.y - s, s * 2, s * 2);
+      }
+    }
+
+    // Pass 3: 弹体（drawImage）
+    ctx.globalAlpha = 1;
+    for (let k = 0; k < bullets.length; k++) {
+      const b = bullets[k];
+      const bulletKey = b.element ? 'bullet_' + b.element : 'bullet';
+      sprites.draw(ctx, bulletKey, b.x, b.y, 0, 1);
+    }
+  }
+
+  drawBullet(bullet) {
+    const bulletKey = bullet.element ? 'bullet_' + bullet.element : 'bullet';
+    this.sprites.draw(this.ctx, bulletKey, bullet.x, bullet.y, 0, 1);
+  }
+
+  // ===== 发射器 =====
+  drawLauncher(launcher, upgrades) {
+    const ctx = this.ctx;
+    const { x, y, width, height, color, muzzleFlash } = launcher;
+    const cx = x + width / 2;
+    const spreadCount = upgrades ? upgrades.getSpreadBonus() : 0;
+    const totalGuns = 1 + spreadCount;
+    const elementType = upgrades ? upgrades.getElementType() : null;
+    const elementColors = { fire: '#FF4400', ice: '#44DDFF', thunder: '#FFF050' };
+    const elemColor = elementType ? elementColors[elementType] : null;
+
+    // 主体 - 梯形飞船
+    ctx.fillStyle = elemColor || color;
+
+    ctx.beginPath();
+    ctx.moveTo(cx - width / 2, y + height);
+    ctx.lineTo(cx - width / 3, y + 4);
+    ctx.lineTo(cx + width / 3, y + 4);
+    ctx.lineTo(cx + width / 2, y + height);
+    ctx.closePath();
+    ctx.fill();
+
+    // 炮管（根据散射数量动态增加）
+    const gunW = Config.LAUNCHER_GUN_WIDTH;
+    const gunH = Config.LAUNCHER_GUN_HEIGHT;
+    const gunGap = 10;
+    const gunsStartX = cx - ((totalGuns - 1) * gunGap) / 2;
+
+    for (let g = 0; g < totalGuns; g++) {
+      const gx = gunsStartX + g * gunGap;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.globalAlpha = 0.9;
+      ctx.fillRect(gx - gunW / 2, y - gunH + 4, gunW, gunH);
+      ctx.globalAlpha = 1;
+
+      // 炮管顶端（元素弹时用元素色）
+      ctx.fillStyle = elemColor || color;
+      ctx.beginPath();
+      ctx.arc(gx, y - gunH + 6, gunW / 2 + 1, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 发射口闪光
+      if (muzzleFlash > 0) {
+        const flashAlpha = muzzleFlash / 3;
+        ctx.globalAlpha = flashAlpha * 0.8;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(gx, y - gunH + 2, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = flashAlpha * 0.4;
+        ctx.fillStyle = elemColor || color;
+        ctx.beginPath();
+        ctx.arc(gx, y - gunH + 2, 10, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // 尾焰
+    const flameH = 6 + Math.random() * 5;
+    const flameW = width / 3;
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = elemColor || color;
+    ctx.beginPath();
+    ctx.moveTo(cx - flameW, y + height);
+    ctx.lineTo(cx, y + height + flameH);
+    ctx.lineTo(cx + flameW, y + height);
+    ctx.closePath();
+    ctx.fill();
+    // 内焰
+    const innerH = 3 + Math.random() * 3;
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.moveTo(cx - flameW * 0.4, y + height);
+    ctx.lineTo(cx, y + height + innerH);
+    ctx.lineTo(cx + flameW * 0.4, y + height);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // 元素光环
+    if (elemColor) {
+      ctx.globalAlpha = 0.15;
+      ctx.fillStyle = elemColor;
+      ctx.beginPath();
+      ctx.arc(cx, y + height / 2, width * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ===== 砖块 =====
+  drawBrick(brick) {
+    if (!brick.alive) return;
+    const ctx = this.ctx;
+    const { x, y, width, height, color, hp, maxHp } = brick;
+    const type = brick.type || 'normal';
+
+    // 隐身砖块不可见时只画鬼影
+    if (type === 'stealth' && !brick.visible) {
+      ctx.globalAlpha = 0.12;
+      ctx.fillStyle = Config.BRICK_TYPE_COLORS.stealth;
+      ctx.beginPath();
+      ctx.roundRect(x, y, width, height, 3);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      return;
+    }
+
+    // 接近危险线时变红
+    const dangerY = Config.SCREEN_HEIGHT * Config.BRICK_DANGER_Y;
+    const dangerDist = dangerY - (y + height);
+    const dangerRatio = dangerDist < 80 ? 1 - dangerDist / 80 : 0;
+
+    // 受击闪白
+    if (brick.flashTimer > 0) {
+      brick.flashTimer--;
+      ctx.fillStyle = '#FFFFFF';
+    } else if (dangerRatio > 0.5) {
+      const pulse = 0.5 + Math.sin(Date.now() * 0.01) * 0.3;
+      ctx.fillStyle = 'rgba(255, ' + Math.floor(50 * (1 - dangerRatio)) + ', ' + Math.floor(50 * (1 - dangerRatio)) + ', ' + (0.7 + pulse * 0.3) + ')';
+    } else {
+      ctx.fillStyle = color;
+    }
+
+    // 隐身砖块渐隐
+    if (type === 'stealth') {
+      ctx.globalAlpha = 0.6 + Math.sin(Date.now() * 0.003) * 0.2;
+    }
+
+    ctx.beginPath();
+    ctx.roundRect(x, y, width, height, 3);
+    ctx.fill();
+
+    // === 砖块类型特殊视觉 ===
+
+    // 快速砖块：向下速度线
+    if (type === 'fast') {
+      ctx.strokeStyle = 'rgba(255,136,0,0.5)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 2; i++) {
+        const lx = x + width * 0.3 + i * width * 0.4;
+        ctx.beginPath();
+        ctx.moveTo(lx, y - 3);
+        ctx.lineTo(lx, y + 6);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(lx - 2, y + 3);
+        ctx.lineTo(lx, y + 6);
+        ctx.lineTo(lx + 2, y + 3);
+        ctx.stroke();
+      }
+    }
+
+    // 护盾砖块：外层白色半透明框
+    if (type === 'shield' && brick.shieldHp > 0) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(x - 2, y - 2, width + 4, height + 4, 5);
+      ctx.stroke();
+    }
+
+    // 分裂砖块：X裂纹
+    if (type === 'split') {
+      ctx.strokeStyle = 'rgba(0,255,200,0.5)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x + 3, y + 3);
+      ctx.lineTo(x + width - 3, y + height - 3);
+      ctx.moveTo(x + width - 3, y + 3);
+      ctx.lineTo(x + 3, y + height - 3);
+      ctx.stroke();
+    }
+
+    // 治愈砖块：脉冲绿色光环
+    if (type === 'healer') {
+      const healPulse = (brick.healTimer || 0) / 3000;
+      if (healPulse > 0.7) {
+        const ring = (healPulse - 0.7) / 0.3;
+        ctx.globalAlpha = (1 - ring) * 0.4;
+        ctx.strokeStyle = Config.NEON_GREEN;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(x + width / 2, y + height / 2, width / 2 + ring * 12, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      // 红十字标记
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      const cx = x + width / 2;
+      const cy = y + height / 2;
+      ctx.fillRect(cx - 1, cy - 4, 2, 8);
+      ctx.fillRect(cx - 4, cy - 1, 8, 2);
+    }
+
+    ctx.globalAlpha = 1;
+
+    // 高HP砖块发光边框
+    if (maxHp >= 4) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.roundRect(x, y, width, height, 3);
+      ctx.stroke();
+    } else if (maxHp > 1 && type !== 'shield') {
+      ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(x, y, width, height, 3);
+      ctx.stroke();
+    }
+
+    // HP数字
+    if (hp > 1) {
+      ctx.fillStyle = brick.flashTimer > 0 ? '#000000' : '#FFFFFF';
+      ctx.font = 'bold 10px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(hp.toString(), x + width / 2, y + height / 2);
+    }
+  }
+
+  /** 批量渲染砖块 - 大幅减少 Draw Call */
+  drawBricksBatch(bricks) {
+    if (!bricks || bricks.length === 0) return;
+    const ctx = this.ctx;
+    const dangerY = Config.SCREEN_HEIGHT * Config.BRICK_DANGER_Y;
+    const now = Date.now();
+
+    // 按颜色分组
+    const groups = {};
+    const flashBricks = [];
+    const shieldBricks = [];
+    const hpTextBricks = [];
+
+    for (let i = 0; i < bricks.length; i++) {
+      const b = bricks[i];
+      if (!b.alive) continue;
+
+      // 处理 flashTimer
+      if (b.flashTimer > 0) {
+        b.flashTimer--;
+        flashBricks.push(b);
+        continue;
+      }
+
+      // 危险区变红
+      const dangerDist = dangerY - (b.y + b.height);
+      if (dangerDist < 40) {
+        flashBricks.push(b); // 用flashBricks数组处理危险区砖块
+        continue;
+      }
+
+      // 按颜色分组
+      const c = b.color;
+      if (!groups[c]) groups[c] = [];
+      groups[c].push(b);
+
+      // 收集需要边框的
+      if (b.type === 'shield' && b.shieldHp > 0) shieldBricks.push(b);
+      if (Math.ceil(b.hp) > 1) hpTextBricks.push(b);
+    }
+
+    // Pass 1: 批量画同色砖块主体
+    for (const color in groups) {
+      const arr = groups[color];
+      // 填充
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      for (let i = 0; i < arr.length; i++) {
+        const b = arr[i];
+        ctx.rect(b.x, b.y, b.width, b.height);
+      }
+      ctx.fill();
+    }
+
+    // Pass 2: 画闪白/危险砖块
+    if (flashBricks.length > 0) {
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      for (let i = 0; i < flashBricks.length; i++) {
+        const b = flashBricks[i];
+        ctx.rect(b.x, b.y, b.width, b.height);
+      }
+      ctx.fill();
+    }
+
+    // Pass 3: 画护盾边框
+    if (shieldBricks.length > 0) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i < shieldBricks.length; i++) {
+        const b = shieldBricks[i];
+        ctx.rect(b.x - 2, b.y - 2, b.width + 4, b.height + 4);
+      }
+      ctx.stroke();
+    }
+
+    // Pass 4: HP数字
+    if (hpTextBricks.length > 0) {
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 10px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      for (let i = 0; i < hpTextBricks.length; i++) {
+        const b = hpTextBricks[i];
+        ctx.fillText(Math.ceil(b.hp).toString(), b.x + b.width / 2, b.y + b.height / 2);
+      }
+    }
+  }
+
+  // ===== 粒子 =====
+  drawParticles(particles) {
+    if (!particles || particles.length === 0) return;
+    const ctx = this.ctx;
+    // 按颜色分组批量画，减少状态切换
+    // 简化：大部分粒子用fillRect，统一alpha
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i];
+      const a = p.getAlpha();
+      if (a < 0.05) continue;
+      ctx.globalAlpha = a;
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x - p.size * 0.5, p.y - p.size * 0.5, p.size, p.size);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // ===== 道具 =====
+  drawPowerUp(powerUp) {
+    const ctx = this.ctx;
+    const { x, y, size, color, time, type } = powerUp;
+    const pulse = 0.8 + Math.sin(time * 0.15) * 0.2;
+    const drawSize = size * pulse;
+    if (type === 'coin') {
+      ctx.fillStyle = '#FFD700';
+      ctx.beginPath(); ctx.arc(x, y, drawSize / 2, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.beginPath(); ctx.arc(x - 1, y - 1, drawSize / 4, 0, Math.PI * 2); ctx.fill();
+    } else if (type === 'skillCrate') {
+      // 发光宝箱
+      ctx.fillStyle = 'rgba(255, 20, 255, 0.15)';
+      ctx.beginPath(); ctx.arc(x, y, drawSize, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = color;
+      ctx.fillRect(x - drawSize / 2, y - drawSize / 2, drawSize, drawSize);
+      ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 1;
+      ctx.strokeRect(x - drawSize / 2, y - drawSize / 2, drawSize, drawSize);
+      ctx.fillStyle = '#FFFFFF'; ctx.font = 'bold 10px monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('?', x, y);
+    } else {
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(x, y, drawSize / 2, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  // ===== Boss =====
+  drawBoss(boss) {
+    if (!boss || !boss.alive) return;
+    const ctx = this.ctx;
+    const color = boss.getPhaseColor();
+    const parts = boss.parts || [{ ox: 0, oy: 0, w: boss.width, h: boss.height }];
+
+    if (boss.phaseChangeFlash > 0) ctx.globalAlpha = 0.3 + Math.sin(boss.phaseChangeFlash * 0.05) * 0.7;
+
+    // 绘制每个部件
+    const fillColor = boss.flashTimer > 0 ? '#FFFFFF' : color;
+    ctx.fillStyle = fillColor;
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i];
+      const px = boss.x + p.ox, py = boss.y + p.oy;
+      ctx.beginPath();
+      ctx.roundRect(px, py, p.w, p.h, 4);
+      ctx.fill();
+    }
+
+    // 部件间边缘光效
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i];
+      ctx.beginPath();
+      ctx.roundRect(boss.x + p.ox, boss.y + p.oy, p.w, p.h, 4);
+      ctx.stroke();
+    }
+
+    ctx.globalAlpha = 1;
+
+    // 血条（居中在Boss上方）
+    const barW = boss.width * 0.8, barH = 6;
+    const barX = boss.x + (boss.width - barW) / 2;
+    const barY = boss.y - 14;
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.fillRect(barX, barY, barW, barH);
+    ctx.fillStyle = color;
+    ctx.fillRect(barX, barY, barW * boss.getHpRatio(), barH);
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(barX, barY, barW, barH);
+
+    // Boss标签
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 12px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+  }
+
+  // ===== 危险线（动态呼吸） =====
+  drawDangerLine(dangerY) {
+    const ctx = this.ctx;
+    const pulse = 0.15 + Math.sin(Date.now() * 0.003) * 0.08;
+    ctx.strokeStyle = 'rgba(255, 50, 50, ' + pulse + ')';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([8, 4]);
+    ctx.beginPath();
+    ctx.moveTo(0, dangerY);
+    ctx.lineTo(Config.SCREEN_WIDTH, dangerY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // 简化警告区
+    ctx.fillStyle = 'rgba(255, 0, 0, ' + (pulse * 0.15) + ')';
+    ctx.fillRect(0, dangerY - 20, Config.SCREEN_WIDTH, 20);
+  }
+
+  // ===== 武器视觉渲染 =====
+  drawWeapons(weapons, launcher) {
+    const ctx = this.ctx;
+    const lcx = launcher.getCenterX();
+    const lcy = launcher.y;
+
+    for (const key in weapons) {
+      const weapon = weapons[key];
+      const data = weapon.getRenderData(lcx, lcy);
+      if (!data) continue;
+
+      switch (key) {
+        case 'kunai': this._drawKunai(data, ctx); break;
+        case 'lightning': this._drawLightning(data, ctx); break;
+        case 'missile': this._drawMissile(data, ctx); break;
+        case 'meteor': this._drawMeteor(data, ctx); break;
+        case 'drone': this._drawDrone(data, ctx); break;
+        case 'spinBlade': this._drawSpinBlade(data, ctx); break;
+        case 'blizzard': this._drawBlizzard(data, ctx); break;
+        case 'ionBeam': this._drawIonBeam(data, ctx); break;
+      }
+    }
+  }
+
+  drawWeaponWings(weapons, launcher) {
+    const ctx = this.ctx;
+    const lcx = launcher.getCenterX();
+    const lcy = launcher.y;
+    const keys = Object.keys(weapons);
+    for (let i = 0; i < keys.length; i++) {
+      const weapon = weapons[keys[i]];
+      const wing = weapon.getWingData(lcx, lcy);
+      if (!wing) continue;
+      const side = (i % 2 === 0) ? -1 : 1;
+      const row = Math.floor(i / 2);
+      const wx = lcx + side * (28 + row * 12);
+      const wy = lcy - 5 + row * 8;
+      ctx.globalAlpha = 0.7;
+      switch (wing.type) {
+        case 'kunai': // 迫击炮弹仓
+          ctx.fillStyle = wing.color;
+          // 小炮弹形状
+          ctx.beginPath();
+          ctx.arc(wx, wy - 3, 3, Math.PI, 0); // 圆头
+          ctx.lineTo(wx + 3, wy + 3);
+          ctx.lineTo(wx - 3, wy + 3);
+          ctx.closePath(); ctx.fill();
+          // 尾翼
+          ctx.fillStyle = '#006688';
+          ctx.fillRect(wx - 4, wy + 3, 8, 2);
+          break;
+        case 'lightning': // 电弧球
+          ctx.fillStyle = wing.color;
+          ctx.beginPath(); ctx.arc(wx, wy, 4, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.arc(wx, wy, 6, 0, Math.PI * 2); ctx.stroke(); break;
+        case 'missile': // 弹仓
+          ctx.fillStyle = wing.color;
+          ctx.fillRect(wx - 3, wy - 5, 6, 10);
+          ctx.fillStyle = '#FFFFFF'; ctx.fillRect(wx - 1, wy - 3, 2, 6); break;
+        case 'meteor': // 能量核心
+          ctx.fillStyle = wing.color;
+          ctx.beginPath(); ctx.arc(wx, wy - 10, 5, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = 'rgba(255,255,255,0.5)';
+          ctx.beginPath(); ctx.arc(wx, wy - 10, 2, 0, Math.PI * 2); ctx.fill(); break;
+        case 'drone': // 小型无人机
+          ctx.fillStyle = wing.color;
+          ctx.fillRect(wx - 4, wy - 2, 8, 4);
+          ctx.fillStyle = '#FFFFFF'; ctx.fillRect(wx - 1, wy - 1, 2, 2); break;
+        case 'spinBlade': // 微型旋刃
+          ctx.save(); ctx.translate(wx, wy);
+          ctx.rotate(Date.now() * 0.005);
+          ctx.fillStyle = wing.color;
+          ctx.beginPath();
+          ctx.moveTo(0, -5); ctx.lineTo(3, 0); ctx.lineTo(0, 5); ctx.lineTo(-3, 0);
+          ctx.closePath(); ctx.fill();
+          ctx.restore(); break;
+        case 'blizzard': // 白磷弹仓
+          ctx.fillStyle = '#FF8833';
+          // 小型炸弹形状
+          ctx.beginPath();
+          ctx.arc(wx, wy - 2, 3, Math.PI, 0);
+          ctx.lineTo(wx + 2, wy + 4);
+          ctx.lineTo(wx - 2, wy + 4);
+          ctx.closePath(); ctx.fill();
+          // 高亮核心
+          ctx.fillStyle = '#FFFFFF';
+          ctx.beginPath(); ctx.arc(wx, wy - 1, 1.5, 0, Math.PI * 2); ctx.fill();
+          break;
+        case 'ionBeam': // 离子发射器
+          ctx.fillStyle = '#FF4444';
+          ctx.fillRect(wx - 2, wy - 6, 4, 12);
+          ctx.fillStyle = '#FFFFFF'; ctx.globalAlpha = 0.7;
+          ctx.beginPath(); ctx.arc(wx, wy - 6, 2.5, 0, Math.PI * 2); ctx.fill();
+          break;
+      }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  drawWeaponHUD(weaponList) {
+    if (!weaponList || weaponList.length === 0) return;
+    const ctx = this.ctx;
+    const sprites = this.sprites;
+    const iconSize = 20;
+    const gap = 6;
+    const startX = Config.SCREEN_WIDTH - iconSize - 6;
+    const startY = Config.SAFE_TOP + 36;
+    for (let i = 0; i < weaponList.length; i++) {
+      const w = weaponList[i];
+      const y = startY + i * (iconSize + gap + 8);
+      ctx.fillStyle = 'rgba(255,255,255,0.06)';
+      ctx.beginPath(); ctx.roundRect(startX - 2, y - 2, iconSize + 4, iconSize + 4, 4); ctx.fill();
+      ctx.strokeStyle = w.color; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect(startX - 2, y - 2, iconSize + 4, iconSize + 4, 4); ctx.stroke();
+      // 用精灵图标替代emoji
+      const wiconKey = 'wicon_' + w.key;
+      if (sprites._cache[wiconKey]) {
+        ctx.globalAlpha = 1;
+        sprites.draw(ctx, wiconKey, startX + iconSize / 2, y + iconSize / 2, 0, iconSize / 32);
+      } else {
+        ctx.fillStyle = w.color; ctx.font = (iconSize - 2) + 'px monospace';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(w.icon, startX + iconSize / 2, y + iconSize / 2);
+      }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = '7px monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('Lv.' + w.totalLevel, startX + iconSize / 2, y + iconSize + 6);
+    }
+  }
+
+  _drawKunai(data, ctx) {
+    const { knives, explosions, color } = data;
+
+    // ===== 拖尾（fillRect替代arc，更快） =====
+    for (const k of knives) {
+      if (k.trail && k.trail.length > 1) {
+        const s = k.scale || 1;
+        ctx.fillStyle = color;
+        for (let t = 0; t < k.trail.length; t++) {
+          const tr = k.trail[t];
+          ctx.globalAlpha = tr.alpha * 0.35;
+          const sz = (1 + (t / k.trail.length) * 2) * s;
+          ctx.fillRect(tr.x - sz, tr.y - sz, sz * 2, sz * 2);
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // ===== 炮弹本体（精灵缓存，1次drawImage替代15+次draw） =====
+    for (const k of knives) {
+      const s = k.scale || 1;
+      const angle = Math.atan2(k.vy, k.vx);
+      this.sprites.draw(ctx, 'mortar_shell', k.x, k.y, angle, s);
+    }
+
+    // ===== 爆炸特效（性能优化版） =====
+    if (explosions) {
+      for (const e of explosions) {
+        const progress = 1 - e.life / e.maxLife;
+        const r = Math.min(e.radius, e.maxRadius);
+        const alpha = (1 - progress * progress) * 0.85;
+        if (alpha < 0.05) continue;
+
+        // 1) 冲击波环
+        ctx.globalAlpha = alpha * 0.5;
+        ctx.strokeStyle = e.isChain ? '#FF6600' : color;
+        ctx.lineWidth = Math.max(1, 3 - progress * 2.5);
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, r, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // 2) 内部填充（半透明圆替代渐变）
+        ctx.globalAlpha = alpha * 0.2;
+        ctx.fillStyle = e.isChain ? '#FF6600' : color;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, r * 0.7, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 3) 十字光芒（前60%）
+        if (progress < 0.6) {
+          const crossAlpha = (0.6 - progress) * 1.2;
+          const crossLen = r * (1 + progress * 0.4);
+          ctx.globalAlpha = crossAlpha * 0.6;
+          ctx.strokeStyle = '#FFFFFF';
+          ctx.lineWidth = Math.max(0.5, 1.5 - progress * 2);
+          ctx.beginPath();
+          ctx.moveTo(e.x - crossLen, e.y);
+          ctx.lineTo(e.x + crossLen, e.y);
+          ctx.moveTo(e.x, e.y - crossLen);
+          ctx.lineTo(e.x, e.y + crossLen);
+          ctx.stroke();
+        }
+
+        // 4) 核心闪光（前25%）
+        if (progress < 0.25) {
+          ctx.globalAlpha = (0.25 - progress) * 4;
+          ctx.fillStyle = '#FFFFFF';
+          ctx.beginPath();
+          ctx.arc(e.x, e.y, Math.max(2, r * 0.25), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  _drawOrbitBlade(data, ctx) {
+    // legacy stub - no longer used
+  }
+
+  _drawMeteor(data, ctx) {
+    const { meteors, burnZones, color } = data;
+    // 燃烧区域
+    for (const z of burnZones) {
+      const alpha = Math.min(0.3, z.life / 3000);
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = '#FF4400';
+      ctx.beginPath(); ctx.arc(z.x, z.y, z.radius, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = alpha * 0.5;
+      ctx.fillStyle = '#FFD700';
+      ctx.beginPath(); ctx.arc(z.x, z.y, z.radius * 0.5, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    // 陨石
+    for (const m of meteors) {
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(m.x, m.y, 8, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#FFD700'; ctx.globalAlpha = 0.6;
+      ctx.beginPath(); ctx.arc(m.x, m.y, 4, 0, Math.PI * 2); ctx.fill();
+      // 尾焰
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = '#FF4400';
+      ctx.beginPath(); ctx.arc(m.x, m.y - 10, 6, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+      // 落点预警
+      ctx.strokeStyle = 'rgba(255, 100, 0, 0.3)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(m.targetX - 15, m.targetY);
+      ctx.lineTo(m.targetX + 15, m.targetY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
+  _drawDrone(data, ctx) {
+    const { drones, lines, hits, color, overchargeLv, widthLv, pulseWave } = data;
+    if (!drones || drones.length === 0) return;
+
+    const beamWidth = 2; // 主激光保持细线
+
+    // === 激光连线 ===
+    if (lines && lines.length > 0) {
+      const glowW = 6 + (widthLv || 0) * 4; // 光晕宽度跟等级联动
+
+      // 第1层：宽光晕（低透明度）
+      ctx.strokeStyle = 'rgba(' + this._hexToRgb(color) + ', 0.08)';
+      ctx.lineWidth = glowW * 3;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      for (const l of lines) { ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); }
+      ctx.stroke();
+
+      // 第2层：中层光晕
+      ctx.strokeStyle = 'rgba(' + this._hexToRgb(color) + ', 0.15)';
+      ctx.lineWidth = glowW;
+      ctx.beginPath();
+      for (const l of lines) { ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); }
+      ctx.stroke();
+
+      // 第3层：主激光（细线）
+      ctx.strokeStyle = color;
+      ctx.lineWidth = beamWidth;
+      ctx.beginPath();
+      for (const l of lines) { ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); }
+      ctx.stroke();
+
+      // 第4层：白色内芯
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (const l of lines) { ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); }
+      ctx.stroke();
+      ctx.lineCap = 'butt';
+
+      // 激光上的流动光点
+      ctx.fillStyle = '#FFFFFF';
+      ctx.globalAlpha = 0.6;
+      const t = (Date.now() % 1000) / 1000;
+      for (const l of lines) {
+        const px = l.x1 + (l.x2 - l.x1) * t;
+        const py = l.y1 + (l.y2 - l.y1) * t;
+        ctx.beginPath();
+        ctx.arc(px, py, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // === 过载：阵型质心光效 ===
+    if (overchargeLv > 0 && drones.length >= 3) {
+      const cx = drones.reduce((s, d) => s + d.x, 0) / drones.length;
+      const cy = drones.reduce((s, d) => s + d.y, 0) / drones.length;
+      const pulse = 0.2 + Math.sin(Date.now() * 0.006) * 0.1;
+      ctx.fillStyle = color;
+      ctx.globalAlpha = pulse;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 25, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#FFFFFF';
+      ctx.globalAlpha = pulse * 0.8;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // === 脉冲波 ===
+    if (pulseWave) {
+      const p = pulseWave.progress;
+      const r = pulseWave.maxR * p;
+      // 多层扩散波
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 4 * (1 - p);
+      ctx.globalAlpha = (1 - p) * 0.7;
+      ctx.beginPath();
+      ctx.arc(pulseWave.x, pulseWave.y, r, 0, Math.PI * 2);
+      ctx.stroke();
+      // 内层白芯波
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 2 * (1 - p);
+      ctx.globalAlpha = (1 - p) * 0.5;
+      ctx.beginPath();
+      ctx.arc(pulseWave.x, pulseWave.y, r * 0.7, 0, Math.PI * 2);
+      ctx.stroke();
+      // 中心闪光
+      if (p < 0.3) {
+        ctx.fillStyle = '#FFFFFF';
+        ctx.globalAlpha = (0.3 - p) * 3;
+        ctx.beginPath();
+        ctx.arc(pulseWave.x, pulseWave.y, 15 * (1 - p), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // === 命中闪光 + 电弧 ===
+    if (hits.length > 0) {
+      for (const h of hits) {
+        const a = Math.min(1, h.alpha);
+        if (h.arcFrom) {
+          // 电弧：从激光线弹射到砖块的锯齿线
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 1.5;
+          ctx.globalAlpha = a * 0.7;
+          const sx = h.arcFrom.x, sy = h.arcFrom.y;
+          const mx = (sx + h.x) / 2 + (Math.random() - 0.5) * 15;
+          const my = (sy + h.y) / 2 + (Math.random() - 0.5) * 15;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(mx, my);
+          ctx.lineTo(h.x, h.y);
+          ctx.stroke();
+          // 命中点
+          ctx.fillStyle = '#FFFFFF';
+          ctx.globalAlpha = a * 0.6;
+          ctx.beginPath();
+          ctx.arc(h.x, h.y, 3, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          // 普通命中闪光
+          ctx.fillStyle = '#FFFFFF';
+          ctx.globalAlpha = a * 0.8;
+          ctx.beginPath();
+          ctx.arc(h.x, h.y, 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // === 无人机本体（矩形机身造型） ===
+    for (const d of drones) {
+      // 悬浮光环
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.25;
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, 12, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.globalAlpha = 1;
+      // 机身
+      ctx.fillStyle = color;
+      ctx.fillRect(d.x - 7, d.y - 4, 14, 8);
+      // 机翼
+      ctx.fillRect(d.x - 11, d.y - 2, 5, 4);
+      ctx.fillRect(d.x + 6, d.y - 2, 5, 4);
+      // 驾驶舱
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(d.x - 2, d.y - 2, 4, 4);
+      // 引擎光点
+      ctx.fillStyle = '#AAFFDD';
+      ctx.beginPath();
+      ctx.arc(d.x, d.y + 5, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  _drawSpinBlade(data, ctx) {
+    const { blades, color, giantLv, rampLv, superLv } = data;
+    const isSuper = superLv > 0;
+
+    for (const b of blades) {
+      const size = b.size || 14;
+
+      // === 蓄势光效 ===
+      let bladeColor = color;
+      if (rampLv > 0 && b.aliveMs > 1000) {
+        const rampT = Math.min((b.aliveMs - 1000) / 5000, 1);
+        const r = Math.floor(0xAA + (0xFF - 0xAA) * rampT);
+        const g = Math.floor(0x44 + (0xFF - 0x44) * rampT);
+        bladeColor = `rgb(${r},${g},255)`;
+      }
+
+      // === 超级旋刃：外圈旋转光环 + 粒子 ===
+      if (isSuper) {
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 1.5;
+        ctx.globalAlpha = 0.3;
+        const outerR = size + 10;
+        for (let a = 0; a < 6; a++) {
+          const startA = b.angle * -2 + a * Math.PI / 3;
+          ctx.beginPath();
+          ctx.arc(b.x, b.y, outerR, startA, startA + Math.PI / 6);
+          ctx.stroke();
+        }
+        ctx.fillStyle = bladeColor;
+        ctx.globalAlpha = 0.5;
+        for (let p = 0; p < 4; p++) {
+          const pa = b.angle * 3 + p * Math.PI / 2;
+          const pr = size + 6 + Math.sin(b.aliveMs * 0.003 + p) * 3;
+          ctx.beginPath();
+          ctx.arc(b.x + Math.cos(pa) * pr, b.y + Math.sin(pa) * pr, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // === 外层光晕 ===
+      ctx.globalAlpha = b.lingering ? 0.15 + Math.sin((b.lingerTimer || 0) * 0.008) * 0.1 : 0.25;
+      ctx.fillStyle = bladeColor;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, size + 6, 0, Math.PI * 2);
+      ctx.fill();
+
+      // === 旋刃本体 ===
+      ctx.globalAlpha = 1;
+      ctx.save();
+      ctx.translate(b.x, b.y);
+      ctx.rotate(b.angle);
+
+      const leaves = isSuper ? 6 : 4;
+      ctx.fillStyle = bladeColor;
+      for (let i = 0; i < leaves; i++) {
+        ctx.save();
+        ctx.rotate(i * Math.PI * 2 / leaves);
+        ctx.beginPath();
+        ctx.moveTo(0, -size);
+        ctx.quadraticCurveTo(size * 0.4, -size * 0.5, size * 0.3, 0);
+        ctx.quadraticCurveTo(size * 0.4, size * 0.5, 0, size * 0.3);
+        ctx.lineTo(0, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // 中心
+      ctx.fillStyle = isSuper ? bladeColor : '#FFFFFF';
+      ctx.beginPath();
+      ctx.arc(0, 0, isSuper ? size * 0.25 : size * 0.2, 0, Math.PI * 2);
+      ctx.fill();
+      if (isSuper) {
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(0, 0, size * 0.1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 巨型化光环
+      if (giantLv > 0) {
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 1;
+        ctx.globalAlpha = 0.4;
+        ctx.beginPath();
+        ctx.arc(0, 0, size * 0.6, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    // === 回旋斩刀气波 ===
+    if (data.shockwaves) {
+      for (const sw of data.shockwaves) {
+        const progress = sw.radius / sw.maxRadius;
+        const alpha = 0.6 * (1 - progress);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2.5 * (1 - progress) + 0.5;
+        ctx.globalAlpha = alpha;
+        ctx.beginPath();
+        ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        // 内圈
+        if (progress < 0.5) {
+          ctx.globalAlpha = alpha * 0.4;
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
+    ctx.globalAlpha = 1;
+  }
+
+  _drawIonBeam(data, ctx) {
+    const { beam, isFiring, chargeProgress, burstFlash, markStacks, hitSparks, superOrb, superCharging, superChargeProgress, color } = data;
+    const now = Date.now();
+
+    if (beam && isFiring) {
+      const { sx, sy, tx, ty } = beam;
+      const stacks = markStacks || 0;
+      const intensityMult = 1 + Math.min(stacks, 30) * 0.06;
+      const pulse = 1 + Math.sin(now * 0.02) * 0.15;
+
+      // 蓄能时射线收缩变细
+      let chargeShrink = 1;
+      if (superCharging && superChargeProgress > 0) {
+        chargeShrink = 1 - superChargeProgress * 0.6; // 收缩到40%
+      }
+
+      // 第1层：外层光晕
+      ctx.globalAlpha = 0.15 * intensityMult;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = (14 + stacks * 0.8) * pulse * chargeShrink;
+      ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(tx, ty); ctx.stroke();
+
+      // 第2层：主射线
+      ctx.globalAlpha = 0.7 * Math.min(intensityMult, 2.2);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = (4 + stacks * 0.25) * pulse * chargeShrink;
+      ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(tx, ty); ctx.stroke();
+
+      // 第3层：白色内芯
+      ctx.globalAlpha = 0.9;
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = (2 + stacks * 0.08) * pulse * chargeShrink;
+      ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(tx, ty); ctx.stroke();
+
+      // 蓄能时发射器处聚能效果
+      if (superCharging && superChargeProgress > 0.1) {
+        const chargeR = 5 + superChargeProgress * 15;
+        ctx.globalAlpha = 0.3 + superChargeProgress * 0.5;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath(); ctx.arc(sx, sy, chargeR, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 0.8;
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.arc(sx, sy, chargeR * 0.6, 0, Math.PI * 2); ctx.fill();
+      }
+
+      // 命中点光效
+      const hitR = (8 + stacks * 0.5) * pulse;
+      ctx.globalAlpha = 0.5 * intensityMult;
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(tx, ty, hitR, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath(); ctx.arc(tx, ty, 3.5, 0, Math.PI * 2); ctx.fill();
+
+      // 充能爆发闪光
+      if (burstFlash > 0) {
+        const flashAlpha = burstFlash / 400;
+        ctx.globalAlpha = flashAlpha * 0.6;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath(); ctx.arc(tx, ty, 25 * flashAlpha, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = flashAlpha * 0.8;
+        const crossLen = 20 * flashAlpha;
+        ctx.beginPath();
+        ctx.moveTo(tx - crossLen, ty); ctx.lineTo(tx + crossLen, ty);
+        ctx.moveTo(tx, ty - crossLen); ctx.lineTo(tx, ty + crossLen);
+        ctx.stroke();
+      }
+    }
+
+    // ===== 超级离子球 =====
+    if (superOrb) {
+      const p = superOrb.progress;
+      const x = superOrb.sx + (superOrb.tx - superOrb.sx) * p;
+      const y = superOrb.sy + (superOrb.ty - superOrb.sy) * p;
+      const sz = superOrb.size;
+
+      // 拖尾
+      for (let i = 1; i <= 4; i++) {
+        const trailP = Math.max(0, p - i * 0.08);
+        const trailX = superOrb.sx + (superOrb.tx - superOrb.sx) * trailP;
+        const trailY = superOrb.sy + (superOrb.ty - superOrb.sy) * trailP;
+        ctx.globalAlpha = 0.15 * (5 - i) / 4;
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.arc(trailX, trailY, sz * (0.8 - i * 0.1), 0, Math.PI * 2); ctx.fill();
+      }
+
+      // 外层光晕
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(x, y, sz * 2.5, 0, Math.PI * 2); ctx.fill();
+
+      // 中层
+      ctx.globalAlpha = 0.7;
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(x, y, sz * 1.5, 0, Math.PI * 2); ctx.fill();
+
+      // 能量球本体
+      ctx.globalAlpha = 0.95;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath(); ctx.arc(x, y, sz, 0, Math.PI * 2); ctx.fill();
+
+      // 白色核心
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath(); ctx.arc(x, y, sz * 0.5, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // 命中火花粒子
+    if (hitSparks) {
+      for (const s of hitSparks) {
+        ctx.globalAlpha = s.alpha;
+        ctx.fillStyle = color;
+        ctx.fillRect(s.x - s.size * 0.5, s.y - s.size * 0.5, s.size, s.size);
+      }
+    }
+
+    // 充能指示
+    if (!isFiring && chargeProgress > 0.3) {
+      const chargePulse = 0.5 + Math.sin(now * 0.015) * 0.5;
+      ctx.globalAlpha = (chargeProgress - 0.3) * 1.4 * chargePulse;
+      ctx.fillStyle = color;
+    }
+
+    ctx.globalAlpha = 1;
+    ctx.lineCap = 'butt';
+  }
+
+  _drawBlizzard(data, ctx) {
+    const { bombs, fireZones, sparks } = data;
+    const now = Date.now();
+
+    // ===== 燃烧区域 =====
+    for (const z of fireZones) {
+      const lifeRatio = Math.max(0, z.life / z.maxLife);
+      const r = z.radius;
+
+      // 底层焦灼痕迹
+      ctx.globalAlpha = 0.2 * Math.min(lifeRatio * 3, 1);
+      ctx.fillStyle = '#331100';
+      ctx.beginPath(); ctx.arc(z.x, z.y, r * 0.85, 0, Math.PI * 2); ctx.fill();
+
+      // 火苗柱（3根，低DC）
+      const cols = 3;
+      const colW = (r * 1.2) / cols;
+      const baseX = z.x - r * 0.6;
+      for (let c = 0; c < cols; c++) {
+        const n1 = Math.sin(now * 0.013 + c * 7.7) * 0.5 + 0.5;
+        const n2 = Math.sin(now * 0.019 + c * 13.3) * 0.5 + 0.5;
+        const flameH = r * (0.5 + n1 * 0.7) * lifeRatio;
+        const cx = baseX + c * colW + colW * 0.5 + (n2 - 0.5) * 5;
+        const bottomY = z.y + r * 0.15;
+
+        // 底部（白/亮黄 — 最热）
+        ctx.globalAlpha = 0.55 * lifeRatio;
+        ctx.fillStyle = '#FFEE88';
+        ctx.fillRect(cx - colW * 0.35, bottomY - flameH * 0.3, colW * 0.7, flameH * 0.3);
+
+        // 中部（橙色）
+        ctx.globalAlpha = 0.4 * lifeRatio;
+        ctx.fillStyle = '#FF8833';
+        ctx.fillRect(cx - colW * 0.3, bottomY - flameH * 0.65, colW * 0.6, flameH * 0.35);
+
+        // 顶部（暗红，尖头）
+        ctx.globalAlpha = 0.2 * lifeRatio;
+        ctx.fillStyle = '#CC3300';
+        const tipW = colW * 0.15 + n2 * colW * 0.15;
+        ctx.fillRect(cx - tipW, bottomY - flameH, tipW * 2, flameH * 0.2);
+      }
+
+      // 核心炽白点
+      ctx.globalAlpha = 0.5 * lifeRatio;
+      ctx.fillStyle = '#FFFFFF';
+      const px = z.x + Math.sin(now * 0.015) * r * 0.2;
+      const py = z.y + Math.cos(now * 0.011) * r * 0.1;
+      ctx.fillRect(px - 2, py - 2, 4, 4);
+    }
+
+    // ===== 下落的白磷弹 =====
+    for (const b of bombs) {
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(b.x - 3, b.y - 5, 6, 10);
+      ctx.beginPath();
+      ctx.moveTo(b.x - 3, b.y - 5);
+      ctx.lineTo(b.x, b.y - 10);
+      ctx.lineTo(b.x + 3, b.y - 5);
+      ctx.closePath(); ctx.fill();
+
+      // 光晕
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = '#FFAA44';
+      ctx.beginPath(); ctx.arc(b.x, b.y, 9, 0, Math.PI * 2); ctx.fill();
+
+      // 拖尾
+      ctx.strokeStyle = '#FFAA44';
+      ctx.lineWidth = 2;
+      for (let t = 1; t <= 3; t++) {
+        ctx.globalAlpha = 0.4 - t * 0.12;
+        const ty = b.y + t * 7;
+        ctx.beginPath();
+        ctx.moveTo(b.x, ty);
+        ctx.lineTo(b.x, ty + 5);
+        ctx.stroke();
+      }
+    }
+
+    // ===== 火花粒子 =====
+    for (const s of sparks) {
+      ctx.globalAlpha = s.alpha;
+      ctx.fillStyle = s.color;
+      const sz = s.size;
+      ctx.fillRect(s.x - sz * 0.5, s.y - sz * 0.5, sz, sz);
+    }
+
+    ctx.globalAlpha = 1;
+  }
+
+  _drawLightning(data, ctx) {
+    const { bolts, color } = data;
+
+    for (const bolt of bolts) {
+      const pts = bolt.points;
+      if (pts.length < 2) continue;
+      ctx.globalAlpha = bolt.alpha;
+
+      // 生成锯齿路径（在每段之间插入多个偏移点）
+      const zigzagPoints = this._generateZigzag(pts);
+
+      // === 第1层：外层大光晕 ===
+      ctx.strokeStyle = 'rgba(' + this._hexToRgb(color) + ', 0.12)';
+      ctx.lineWidth = 14;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(zigzagPoints[0].x, zigzagPoints[0].y);
+      for (let i = 1; i < zigzagPoints.length; i++) {
+        ctx.lineTo(zigzagPoints[i].x, zigzagPoints[i].y);
+      }
+      ctx.stroke();
+
+      // === 第2层：主闪电体（锯齿状） ===
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(zigzagPoints[0].x, zigzagPoints[0].y);
+      for (let i = 1; i < zigzagPoints.length; i++) {
+        ctx.lineTo(zigzagPoints[i].x, zigzagPoints[i].y);
+      }
+      ctx.stroke();
+
+      // === 第3层：白色内芯 ===
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(zigzagPoints[0].x, zigzagPoints[0].y);
+      for (let i = 1; i < zigzagPoints.length; i++) {
+        ctx.lineTo(zigzagPoints[i].x, zigzagPoints[i].y);
+      }
+      ctx.stroke();
+
+      // === 分支闪电（从每个节点随机分出小分支） ===
+      ctx.strokeStyle = 'rgba(' + this._hexToRgb(color) + ', 0.5)';
+      ctx.lineWidth = 1.5;
+      for (let i = 1; i < pts.length - 1; i++) {
+        if (Math.random() > 0.6) continue; // 60%概率出分支
+        const p = pts[i];
+        const angle = Math.random() * Math.PI * 2;
+        const len = 15 + Math.random() * 20;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        const midX = p.x + Math.cos(angle) * len * 0.5 + (Math.random() - 0.5) * 8;
+        const midY = p.y + Math.sin(angle) * len * 0.5 + (Math.random() - 0.5) * 8;
+        const endX = p.x + Math.cos(angle) * len;
+        const endY = p.y + Math.sin(angle) * len;
+        ctx.lineTo(midX, midY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+      }
+
+      // === 命中点光效 ===
+      for (let i = 1; i < pts.length; i++) {
+        const p = pts[i];
+        // 外层光晕
+        ctx.globalAlpha = bolt.alpha * 0.3;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 12, 0, Math.PI * 2);
+        ctx.fill();
+        // 中层
+        ctx.globalAlpha = bolt.alpha * 0.6;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+        // 白色核心
+        ctx.globalAlpha = bolt.alpha;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // === 链间电弧（在相邻命中点之间画额外小闪电） ===
+      if (pts.length > 2) {
+        ctx.strokeStyle = 'rgba(' + this._hexToRgb(color) + ', 0.3)';
+        ctx.lineWidth = 1;
+        for (let i = 1; i < pts.length - 1; i++) {
+          const p1 = pts[i], p2 = pts[i + 1];
+          const midX = (p1.x + p2.x) / 2 + (Math.random() - 0.5) * 20;
+          const midY = (p1.y + p2.y) / 2 + (Math.random() - 0.5) * 15;
+          ctx.beginPath();
+          ctx.moveTo(p1.x + (Math.random() - 0.5) * 10, p1.y + (Math.random() - 0.5) * 10);
+          ctx.lineTo(midX, midY);
+          ctx.lineTo(p2.x + (Math.random() - 0.5) * 10, p2.y + (Math.random() - 0.5) * 10);
+          ctx.stroke();
+        }
+      }
+    }
+    ctx.globalAlpha = 1;
+    ctx.lineCap = 'butt';
+    ctx.lineJoin = 'miter';
+
+    // 超载爆炸
+    const explosions = data.explosions || [];
+    for (const e of explosions) {
+      ctx.globalAlpha = e.alpha * 0.6;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.radius * e.alpha, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = e.alpha * 0.2;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.radius * e.alpha * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // 生成自然闪电路径（分形算法）
+  _generateZigzag(points) {
+    if (points.length < 2) return points;
+    const result = [];
+
+    for (let i = 0; i < points.length - 1; i++) {
+      const p1 = points[i], p2 = points[i + 1];
+      // 递归分形生成
+      const segment = this._fractalLightning(p1.x, p1.y, p2.x, p2.y, 0);
+      if (i === 0) {
+        result.push(...segment);
+      } else {
+        result.push(...segment.slice(1)); // 跳过重复起点
+      }
+    }
+    return result;
+  }
+
+  // 分形闪电：中点偏移递归
+  _fractalLightning(x1, y1, x2, y2, depth) {
+    const maxDepth = 3;
+    const dx = x2 - x1, dy = y2 - y1;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    // 太短或递归太深，直接连
+    if (dist < 20 || depth >= maxDepth) {
+      return [{ x: x1, y: y1 }, { x: x2, y: y2 }];
+    }
+
+    // 中点 + 随机偏移
+    const midX = (x1 + x2) / 2;
+    const midY = (y1 + y2) / 2;
+
+    // 垂直方向偏移（偏移量随深度减小）
+    const perpX = -dy / dist, perpY = dx / dist;
+    const maxOffset = dist * 0.25 * Math.pow(0.6, depth); // 深度越深偏移越小
+    const offset = (Math.random() - 0.5) * 2 * maxOffset;
+
+    const newX = midX + perpX * offset;
+    const newY = midY + perpY * offset;
+
+    // 递归左右两段
+    const left = this._fractalLightning(x1, y1, newX, newY, depth + 1);
+    const right = this._fractalLightning(newX, newY, x2, y2, depth + 1);
+
+    // 合并（去重中间点）
+    return [...left.slice(0, -1), ...right];
+  }
+
+  _drawMissile(data, ctx) {
+    const { missiles, explosions, color } = data;
+    const sprites = this.sprites;
+
+    // 拖尾（fillRect替代arc）
+    ctx.fillStyle = Config.NEON_ORANGE;
+    for (const m of missiles) {
+      for (let i = 0; i < m.trail.length; i++) {
+        const t = m.trail[i];
+        const size = 1 + (i / m.trail.length) * 2;
+        ctx.globalAlpha = (i + 1) / m.trail.length * 0.4;
+        ctx.fillRect(t.x - size, t.y - size, size * 2, size * 2);
+      }
+    }
+
+    // 弹体（精灵缓存，1次drawImage替代4次draw）
+    ctx.globalAlpha = 1;
+    for (const m of missiles) {
+      sprites.draw(ctx, 'missile', m.x, m.y, 0, 1);
+    }
+
+    // 爆炸（精简：冲击环+核心闪光）
+    for (const e of explosions) {
+      if (e.alpha < 0.05) continue;
+      const r = e.radius * (1.2 - e.alpha * 0.5);
+      ctx.globalAlpha = e.alpha * 0.35;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(e.x, e.y, r, 0, Math.PI * 2); ctx.stroke();
+      if (e.alpha > 0.5) {
+        ctx.globalAlpha = e.alpha * 0.6;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath(); ctx.arc(e.x, e.y, 4 * e.alpha, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // legacy laser/ice removed - replaced by meteor/drone/spinBlade
+
+  _hexToRgb(hex) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return r + ',' + g + ',' + b;
+  }
+
+  // ===== 被动技能图标栏 =====
+  drawPassiveBar(ownedList) {
+    if (!ownedList || ownedList.length === 0) return;
+    const ctx = this.ctx;
+    const iconSize = 16;
+    const gap = 4;
+    const startX = Config.SCREEN_WIDTH - iconSize - 4;
+    const startY = Config.SAFE_TOP + 36;
+
+    for (let i = 0; i < ownedList.length && i < 12; i++) {
+      const p = ownedList[i];
+      const y = startY + i * (iconSize + gap);
+      ctx.fillStyle = 'rgba(255,255,255,0.06)';
+      ctx.beginPath();
+      ctx.arc(startX + iconSize / 2, y + iconSize / 2, iconSize / 2 + 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = p.color;
+      ctx.font = (iconSize - 2) + 'px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(p.icon, startX + iconSize / 2, y + iconSize / 2);
+      if (p.level !== 'MAX' && p.level > 1) {
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.font = '7px monospace';
+        ctx.fillText(p.level.toString(), startX + iconSize / 2, y + iconSize + 3);
+      }
+      if (p.level === 'MAX') {
+        ctx.fillStyle = Config.NEON_YELLOW;
+        ctx.font = '6px monospace';
+        ctx.fillText('MAX', startX + iconSize / 2, y + iconSize + 3);
+      }
+    }
+  }
+
+  // ===== HUD =====
+  drawHUD(score, combo, playerLevel, difficulty, soundEnabled) {
+    const ctx = this.ctx;
+    const top = Config.SAFE_TOP;
+
+    ctx.fillStyle = Config.NEON_CYAN;
+    ctx.font = 'bold 14px monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('SCORE:' + score, 10, top);
+    ctx.fillStyle = Config.NEON_GREEN;
+    ctx.textAlign = 'center';
+    ctx.fillText('Lv.' + playerLevel, Config.SCREEN_WIDTH / 2, top);
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText('WAVE ' + (difficulty + 1), Config.SCREEN_WIDTH - 8, top);
+    if (combo > 1) {
+      ctx.fillStyle = Config.NEON_YELLOW;
+      ctx.font = 'bold 13px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText('COMBO x' + combo, 10, top + 18);
+    }
+    ctx.fillStyle = soundEnabled ? 'rgba(255,255,255,0.5)' : 'rgba(255,50,50,0.5)';
+    ctx.font = '14px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(soundEnabled ? '♪' : '♪̶', 10, Config.SCREEN_HEIGHT - Config.SAFE_BOTTOM - 48);
+  }
+
+  drawFloatingTexts(texts) {
+    const ctx = this.ctx;
+    for (let i = 0; i < texts.length; i++) {
+      const t = texts[i];
+      ctx.globalAlpha = t.alpha;
+      ctx.fillStyle = t.color;
+      ctx.font = 'bold ' + t.size + 'px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(t.text, t.x, t.y);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // ===== 标题 =====
+  drawTitle() {
+    const ctx = this.ctx;
+    const cx = Config.SCREEN_WIDTH / 2;
+    const cy = Config.SCREEN_HEIGHT / 2;
+    ctx.fillStyle = Config.NEON_CYAN;
+    ctx.font = 'bold 32px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('NEON', cx, cy - 60);
+    ctx.fillStyle = Config.NEON_PINK;
+    ctx.fillText('BREAKER', cx, cy - 20);
+    ctx.fillStyle = Config.NEON_GREEN;
+    ctx.font = '14px monospace';
+    ctx.fillText('霓虹碎核', cx, cy + 20);
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = '11px monospace';
+    ctx.fillText('无限射击 · 弹幕清砖 · 满屏特效', cx, cy + 45);
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.font = '16px monospace';
+    ctx.fillText('点击屏幕开始', cx, cy + 90);
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '10px monospace';
+    ctx.fillText('v5.0.0', cx, Config.SCREEN_HEIGHT - 30);
+  }
+
+  // ===== 经验球 =====
+  drawExpOrbs(orbs) {
+    if (!orbs || orbs.length === 0) return;
+    const ctx = this.ctx;
+    for (let i = 0; i < orbs.length; i++) {
+      const o = orbs[i];
+      this.sprites.draw(ctx, 'exp_orb', o.x, o.y, 0, 1);
+    }
+  }
+
+  // ===== 经验条 =====
+  drawExpBar(exp, expToNext, playerLevel) {
+    const ctx = this.ctx;
+    const barH = Config.EXP_BAR_HEIGHT;
+    const barY = Config.SCREEN_HEIGHT - Config.EXP_BAR_Y_OFFSET;
+    const margin = 40;
+    const barW = Config.SCREEN_WIDTH - margin * 2;
+    const barX = margin;
+    const ratio = Math.min(1, exp / expToNext);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.beginPath();
+    ctx.roundRect(barX, barY, barW, barH, barH / 2);
+    ctx.fill();
+
+    if (ratio > 0) {
+      ctx.fillStyle = Config.NEON_CYAN;
+      ctx.beginPath();
+      ctx.roundRect(barX, barY, barW * ratio, barH, barH / 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      ctx.arc(barX + barW * ratio, barY + barH / 2, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.fillStyle = Config.NEON_CYAN;
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Lv.' + playerLevel, barX - 4, barY + barH / 2);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(Math.floor(ratio * 100) + '%', barX + barW + 4, barY + barH / 2);
+  }
+
+  /** 伤害统计面板 - 返回点击区域 */
+  drawDamageStats(stats, expanded) {
+    const ctx = this.ctx;
+    // 中文名称映射
+    const nameMap = {
+      'bullet': '飞机子弹',
+      'kunai': '迫击炮',
+      'kunai_aoe': '迫击炮AOE',
+      'kunai_chain': '迫击连锁',
+      'missile': '追踪导弹',
+      'lightning': '闪电链',
+      'lightning_aoe': '闪电爆炸',
+      'meteor': '陨石',
+      'drone_laser': '无人机阵',
+      'drone_arc': '无人机电弧',
+      'drone_cross': '无人机过载',
+      'drone_pulse': '无人机脉冲',
+      'fire_dot': '燃烧',
+      'thunder_chain': '雷击',
+      'shock': '感电',
+      'spinBlade': '等离子旋刃',
+      'spinBlade_sw': '回旋斩',
+      'bleed': '撕裂DOT',
+      'blizzard': '白磷弹',
+      'blizzard_shatter': '白磷爆燃',
+      'frostbite': '腐蚀DOT',
+      'ionBeam': '离子射线',
+      'ionBeam_pierce': '射线穿透',
+      'ionBeam_overload': '射线过载',
+      'ionBeam_split': '射线溅射',
+      'ionBeam_super': '超级离子球',
+      'ionBeam_splash': '离子球溅射',
+      'ionBeam_path': '离子球沿途',
+      'ionBeam_burn': '离子灼烧',
+      'fire': '火焰弹',
+    };
+    const entries = Object.entries(stats || {}).sort((a, b) => b[1] - a[1]);
+    const totalDmg = entries.reduce((sum, e) => sum + e[1], 0);
+
+    // 位置：左上角，武器图标下方
+    const px = 8, py = Config.SAFE_TOP + 75;
+    const btnW = 28, btnH = 28;
+
+    // 收缩按钮
+    ctx.fillStyle = totalDmg > 0 ? 'rgba(255,100,100,0.3)' : 'rgba(255,255,255,0.1)';
+    ctx.beginPath();
+    ctx.arc(px + btnW / 2, py + btnH / 2, btnW / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = totalDmg > 0 ? '#FF6666' : 'rgba(255,255,255,0.3)';
+    ctx.font = '14px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('📊', px + btnW / 2, py + btnH / 2);
+
+    const hitArea = { x: px, y: py, w: btnW, h: btnH };
+
+    if (!expanded || totalDmg === 0) return hitArea;
+
+    // 展开面板
+    const panelW = 140;
+    const lineH = 14;
+    const maxLines = Math.min(entries.length, 8);
+    const panelH = 24 + maxLines * lineH;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.beginPath();
+    ctx.roundRect(px, py + btnH + 4, panelW, panelH, 6);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,100,100,0.5)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(px, py + btnH + 4, panelW, panelH, 6);
+    ctx.stroke();
+
+    // 标题
+    ctx.fillStyle = '#FF6666';
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('伤害: ' + this._formatNum(totalDmg), px + 6, py + btnH + 8);
+
+    // 列表
+    let ly = py + btnH + 22;
+    ctx.font = '9px monospace';
+    for (let i = 0; i < maxLines; i++) {
+      const [src, dmg] = entries[i];
+      const pct = ((dmg / totalDmg) * 100).toFixed(0);
+      const barW = (dmg / totalDmg) * 60;
+
+      // 进度条
+      ctx.fillStyle = 'rgba(255,100,100,0.4)';
+      ctx.fillRect(px + 6, ly + 2, barW, 8);
+
+      // 来源名（中文）
+      const displayName = nameMap[src] || src;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.textAlign = 'left';
+      ctx.fillText(displayName.substring(0, 6), px + 6, ly);
+
+      // 百分比
+      ctx.textAlign = 'right';
+      ctx.fillText(pct + '%', px + panelW - 6, ly);
+
+      ly += lineH;
+    }
+
+    // 扩大点击区域包含整个面板
+    hitArea.h = btnH + 4 + panelH;
+    return hitArea;
+  }
+
+  _formatNum(n) {
+    n = Math.ceil(n);
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+    return n.toString();
+  }
+
+  // ===== 升级选择（居中并列3列卡片） =====
+  drawSkillChoice(choices, upgrades, title) {
+    const ctx = this.ctx;
+    const sw = Config.SCREEN_WIDTH;
+    const sh = Config.SCREEN_HEIGHT;
+    const cx = sw / 2;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.fillRect(0, 0, sw, sh);
+
+    const isLevelUp = (title || '').indexOf('LEVEL') >= 0;
+    ctx.fillStyle = isLevelUp ? Config.NEON_GREEN : Config.NEON_PINK;
+    ctx.font = 'bold 22px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(title || '选择强化', cx, sh * 0.16);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = '13px monospace';
+    ctx.fillText('选择一项强化', cx, sh * 0.16 + 26);
+
+    const count = choices.length;
+    if (count === 0) return;
+    const gap = 8;
+    const totalW = sw - 20;
+    const cardW = Math.floor((totalW - gap * (count - 1)) / count);
+    const cardH = sh * 0.52;
+    const startX = (sw - (cardW * count + gap * (count - 1))) / 2;
+    const startY = sh * 0.24;
+
+    for (let i = 0; i < count; i++) {
+      const c = choices[i];
+      const cardX = startX + i * (cardW + gap);
+      const cardY = startY;
+      const isNew = c.type === 'newWeapon';
+
+      ctx.fillStyle = 'rgba(8, 2, 32, 0.92)';
+      ctx.beginPath(); ctx.roundRect(cardX, cardY, cardW, cardH, 10); ctx.fill();
+      ctx.strokeStyle = c.color;
+      ctx.lineWidth = isNew ? 1.5 : 1;
+      ctx.beginPath(); ctx.roundRect(cardX, cardY, cardW, cardH, 10); ctx.stroke();
+
+      const rgb = this._hexToRgb(c.color);
+      ctx.fillStyle = 'rgba(' + rgb + ', 0.3)';
+      ctx.beginPath(); ctx.roundRect(cardX + 1, cardY + 1, cardW - 2, 3, [2, 2, 0, 0]); ctx.fill();
+
+      const ccx = cardX + cardW / 2;
+
+      // 类型标签
+      var typeLabel = '强化';
+      if (c.type === 'newWeapon') typeLabel = '新武器';
+      else if (c.type === 'weaponBranch') typeLabel = '武器';
+      else if (c.type === 'shipBranch') typeLabel = '飞机';
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.font = 'bold 12px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(typeLabel, ccx, cardY + 20);
+
+      if (isNew) {
+        ctx.fillStyle = Config.NEON_YELLOW;
+        ctx.font = 'bold 12px monospace';
+        ctx.fillText('NEW!', ccx, cardY + 36);
+      }
+
+      // 图标（精灵替代emoji）
+      const wiconKey = 'wicon_' + (c.key || c.weaponKey || '');
+      if (this.sprites._cache[wiconKey]) {
+        ctx.globalAlpha = 1;
+        this.sprites.draw(ctx, wiconKey, ccx, cardY + cardH * 0.28, 0, 40 / 32);
+      } else {
+        ctx.fillStyle = c.color;
+        ctx.font = '40px monospace';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(c.icon, ccx, cardY + cardH * 0.28);
+      }
+
+      // 名称
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 14px monospace';
+      ctx.textBaseline = 'middle';
+      this._drawTextWrap(ctx, c.name, ccx, cardY + cardH * 0.48, cardW - 8, 16);
+
+      // 描述
+      ctx.fillStyle = 'rgba(255,255,255,0.65)';
+      ctx.font = '12px monospace';
+      this._drawTextWrap(ctx, c.desc, ccx, cardY + cardH * 0.62, cardW - 8, 14);
+
+      // 等级指示器
+      if (c.level && c.maxLevel) {
+        this._drawLevelDots(ctx, ccx, cardY + cardH * 0.82, c.level - 1, c.maxLevel, c.color, cardW);
+      }
+
+      c._hitArea = { x: cardX, y: cardY, w: cardW, h: cardH };
+    }
+  }
+  _drawTextWrap(ctx, text, cx, y, maxW, lineH) {
+    if (!text) return;
+    ctx.textAlign = 'center';
+
+    // 逐字符测量分行
+    const lines = [];
+    let line = '';
+    for (let i = 0; i < text.length; i++) {
+      const test = line + text[i];
+      if (ctx.measureText(test).width > maxW && line.length > 0) {
+        lines.push(line);
+        line = text[i];
+      } else {
+        line = test;
+      }
+    }
+    if (line) lines.push(line);
+
+    // 居中绘制（多行时整体上移，保持中心对齐）
+    const offsetY = -((lines.length - 1) * lineH) / 2;
+    for (let i = 0; i < lines.length; i++) {
+      ctx.fillText(lines[i], cx, y + offsetY + i * lineH);
+    }
+  }
+
+  _drawLevelDots(ctx, cx, y, curLv, maxLv, color, cardW) {
+    const dotSize = 9;
+    const dotGap = 5;
+    const totalW = maxLv * dotSize + (maxLv - 1) * dotGap;
+    const startX = cx - totalW / 2;
+
+    for (let i = 0; i < maxLv; i++) {
+      const dx = startX + i * (dotSize + dotGap);
+      if (i < curLv) {
+        ctx.fillStyle = color;
+      } else if (i === curLv) {
+        ctx.fillStyle = 'rgba(255,255,255,' + (0.4 + Math.sin(Date.now() * 0.008) * 0.4) + ')';
+      } else {
+        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      }
+      ctx.fillRect(dx, y - dotSize / 2, dotSize, dotSize);
+    }
+  }
+
+  // ===== Game Over =====
+  drawGameOver(score, playerLevel, ownedList) {
+    const ctx = this.ctx;
+    const cx = Config.SCREEN_WIDTH / 2;
+    const cy = Config.SCREEN_HEIGHT / 2;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+    ctx.fillRect(0, 0, Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT);
+
+    ctx.fillStyle = Config.NEON_PINK;
+    ctx.font = 'bold 28px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('GAME OVER', cx, cy - 100);
+
+    ctx.fillStyle = Config.NEON_CYAN;
+    ctx.font = '16px monospace';
+    ctx.fillText('得分: ' + score, cx, cy - 60);
+
+    if (ownedList && ownedList.length > 0) {
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.font = '11px monospace';
+      ctx.fillText('你的武器:', cx, cy - 25);
+
+      const perRow = 4, icoSz = 24, icoGap = 8;
+      const totalW = Math.min(ownedList.length, perRow) * (icoSz + icoGap) - icoGap;
+      const startX = cx - totalW / 2;
+      for (let i = 0; i < ownedList.length; i++) {
+        const p = ownedList[i];
+        const col = i % perRow;
+        const row = Math.floor(i / perRow);
+        const px = startX + col * (icoSz + icoGap) + icoSz / 2;
+        const py = cy + row * (icoSz + 12);
+        ctx.fillStyle = p.color;
+        ctx.font = (icoSz - 4) + 'px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(p.icon, px, py);
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.font = '7px monospace';
+        ctx.fillText('Lv.' + p.totalLevel, px, py + 14);
+      }
+    }
+
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.font = '14px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('点击屏幕重新开始', cx, cy + 110);
+  }
+
+  // evolve notification removed in v6.0
+
+  drawLoading() {
+    const ctx = this.ctx;
+    const cx = Config.SCREEN_WIDTH / 2;
+    const cy = Config.SCREEN_HEIGHT / 2;
+    ctx.fillStyle = Config.NEON_CYAN;
+    ctx.font = 'bold 20px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('LOADING...', cx, cy);
+  }
+
+  // ===== v5.0 章节选择界面 =====
+  drawChapterSelect(maxChapter, records, coins) {
+    const ctx = this.ctx;
+    const sw = Config.SCREEN_WIDTH;
+    const sh = Config.SCREEN_HEIGHT;
+    const top = Config.SAFE_TOP;
+    const WEAPON_TREES = require('./config/WeaponDefs');
+
+    // 武器解锁章节映射（迫击炮和闪电链默认拥有）
+    const weaponUnlocks = {
+      3:  'missile',    // 追踪导弹
+      6:  'meteor',     // 天降陨石
+      10: 'drone',      // 战术无人机
+      15: 'spinBlade',  // 等离子旋刃
+      25: 'blizzard',   // 白磷弹
+      40: 'ionBeam',    // 离子射线
+    };
+
+    // 背景
+    ctx.fillStyle = 'rgba(5,3,20,1)';
+    ctx.fillRect(0, 0, sw, sh);
+
+    // 顶部栏
+    ctx.fillStyle = Config.NEON_YELLOW;
+    ctx.font = 'bold 15px monospace';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText('💰 ' + coins, 14, top + 4);
+
+    const tabH = 44;
+    const pathTop = top + 32;
+    const pathBottom = sh - Config.SAFE_BOTTOM - tabH - 10;
+    const pathH = pathBottom - pathTop;
+
+    // 节点参数
+    const nodeSpacing = 100;       // 节点间距
+    const nodeR = 28;              // 六边形半径
+    const cx = sw / 2;             // 路径中心x
+    const scrollY = this._chapterScrollY || 0;
+
+    // 显示的总关卡数
+    const totalChapters = 100;
+    const contentH = totalChapters * nodeSpacing + 100;
+
+    this._chapterHitAreas = [];
+    this._chapterContentH = contentH;
+    this._chapterViewH = pathH;
+
+    // 裁剪滚动区域
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, pathTop, sw, pathH);
+    ctx.clip();
+
+    // 绘制路径线（从底部到顶部）
+    for (let i = 0; i < totalChapters; i++) {
+      const chapter = i + 1;
+      // 从底部往上排列，chapter 1 在最底部
+      const nodeY = pathBottom - 60 + scrollY - i * nodeSpacing;
+
+      if (nodeY < pathTop - 60 || nodeY > pathBottom + 60) continue;
+
+      const nextY = nodeY - nodeSpacing;
+      const unlocked = chapter <= maxChapter;
+      const cleared = records[chapter] && records[chapter].cleared;
+      const isCurrent = chapter === maxChapter;
+
+      // 连接线
+      if (i < totalChapters - 1) {
+        ctx.strokeStyle = cleared ? Config.NEON_CYAN + '55' : 'rgba(255,255,255,0.08)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(cx, nodeY);
+        ctx.lineTo(cx, Math.max(nextY, pathTop - 60));
+        ctx.stroke();
+
+        // 已通关的线加发光
+        if (cleared) {
+          ctx.strokeStyle = Config.NEON_CYAN + '20';
+          ctx.lineWidth = 8;
+          ctx.beginPath();
+          ctx.moveTo(cx, nodeY);
+          ctx.lineTo(cx, Math.max(nextY, pathTop - 60));
+          ctx.stroke();
+        }
+      }
+
+      // 六边形节点
+      ctx.beginPath();
+      for (let v = 0; v < 6; v++) {
+        const angle = Math.PI / 6 + v * Math.PI / 3;
+        const hx = cx + nodeR * Math.cos(angle);
+        const hy = nodeY + nodeR * Math.sin(angle);
+        if (v === 0) ctx.moveTo(hx, hy); else ctx.lineTo(hx, hy);
+      }
+      ctx.closePath();
+
+      if (!unlocked) {
+        ctx.fillStyle = 'rgba(30,25,50,0.7)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(100,100,100,0.2)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // 锁图标
+        ctx.fillStyle = 'rgba(150,150,150,0.3)';
+        ctx.font = '18px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('🔒', cx, nodeY);
+      } else if (isCurrent) {
+        // 当前关卡 - 加强显示：更大六边形 + 双层光环 + 脉冲
+        const bigR = nodeR + 4;
+
+        // 外层发光（大范围柔光）
+        const pulse = 0.4 + Math.sin(Date.now() * 0.003) * 0.3;
+        ctx.globalAlpha = pulse * 0.3;
+        ctx.fillStyle = Config.NEON_CYAN;
+        ctx.beginPath();
+        for (let v = 0; v < 6; v++) {
+          const angle = Math.PI / 6 + v * Math.PI / 3;
+          const hx = cx + (bigR + 14) * Math.cos(angle);
+          const hy = nodeY + (bigR + 14) * Math.sin(angle);
+          if (v === 0) ctx.moveTo(hx, hy); else ctx.lineTo(hx, hy);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // 主体填充
+        ctx.beginPath();
+        for (let v = 0; v < 6; v++) {
+          const angle = Math.PI / 6 + v * Math.PI / 3;
+          const hx = cx + bigR * Math.cos(angle);
+          const hy = nodeY + bigR * Math.sin(angle);
+          if (v === 0) ctx.moveTo(hx, hy); else ctx.lineTo(hx, hy);
+        }
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(0,180,255,0.35)';
+        ctx.fill();
+        ctx.strokeStyle = Config.NEON_CYAN;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // 脉冲光环
+        ctx.globalAlpha = pulse;
+        ctx.strokeStyle = Config.NEON_CYAN;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let v = 0; v < 6; v++) {
+          const angle = Math.PI / 6 + v * Math.PI / 3;
+          const hx = cx + (bigR + 8) * Math.cos(angle);
+          const hy = nodeY + (bigR + 8) * Math.sin(angle);
+          if (v === 0) ctx.moveTo(hx, hy); else ctx.lineTo(hx, hy);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+
+        // 章节号（更大字体）
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 20px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('' + chapter, cx, nodeY);
+
+        // 左右箭头指示（呼吸动画）
+        const arrowOff = 4 + Math.sin(Date.now() * 0.005) * 3;
+        ctx.fillStyle = Config.NEON_CYAN;
+        ctx.font = '16px monospace';
+        ctx.fillText('▸', cx + bigR + 8 + arrowOff, nodeY);
+        ctx.fillText('◂', cx - bigR - 8 - arrowOff, nodeY);
+
+        // 当前关卡也可点击
+        this._chapterHitAreas.push({ chapter: chapter, x: cx - bigR, y: nodeY - bigR, w: bigR * 2, h: bigR * 2 });
+      } else if (cleared) {
+        ctx.fillStyle = 'rgba(0,60,40,0.6)';
+        ctx.fill();
+        ctx.strokeStyle = Config.NEON_GREEN + '88';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // 章节号
+        ctx.fillStyle = Config.NEON_GREEN;
+        ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('' + chapter, cx, nodeY - 2);
+
+        // 通关标记
+        ctx.fillStyle = Config.NEON_GREEN;
+        ctx.font = '10px monospace';
+        ctx.fillText('✓', cx, nodeY + 14);
+      } else {
+        // 已解锁未通关
+        ctx.fillStyle = 'rgba(20,10,60,0.8)';
+        ctx.fill();
+        ctx.strokeStyle = Config.NEON_CYAN + '55';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('' + chapter, cx, nodeY);
+      }
+
+      // 可点击区域（已解锁+已通关的节点，当前关卡在上面单独处理了）
+      if (unlocked && !isCurrent) {
+        this._chapterHitAreas.push({ chapter: chapter, x: cx - nodeR, y: nodeY - nodeR, w: nodeR * 2, h: nodeR * 2 });
+      }
+
+      // 武器解锁标记（节点右侧或左侧）
+      const wk = weaponUnlocks[chapter];
+      if (wk && WEAPON_TREES[wk]) {
+        const wDef = WEAPON_TREES[wk];
+        const isLeft = (chapter % 2 === 0);
+        const badgeW = 64, badgeH = 52;
+        const badgeX = isLeft ? cx - nodeR - badgeW - 12 : cx + nodeR + 12;
+
+        const wUnlocked = chapter <= maxChapter;
+
+        // 武器徽章
+        ctx.fillStyle = wUnlocked ? 'rgba(20,15,50,0.9)' : 'rgba(30,25,50,0.5)';
+        ctx.beginPath(); ctx.roundRect(badgeX, nodeY - badgeH / 2, badgeW, badgeH, 10); ctx.fill();
+        ctx.strokeStyle = wUnlocked ? wDef.color + '88' : 'rgba(100,100,100,0.2)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.roundRect(badgeX, nodeY - badgeH / 2, badgeW, badgeH, 10); ctx.stroke();
+
+        // 武器图标
+        ctx.globalAlpha = wUnlocked ? 1 : 0.3;
+        ctx.font = '22px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = wDef.color;
+        ctx.fillText(wDef.icon, badgeX + badgeW / 2, nodeY - 4);
+
+        // 武器名称
+        ctx.fillStyle = wUnlocked ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.25)';
+        ctx.font = '8px monospace';
+        var shortName = wDef.name.length > 5 ? wDef.name.substring(0, 5) : wDef.name;
+        ctx.fillText(shortName, badgeX + badgeW / 2, nodeY + 18);
+        ctx.globalAlpha = 1;
+
+        // 连接虚线到节点
+        ctx.strokeStyle = wUnlocked ? wDef.color + '44' : 'rgba(100,100,100,0.15)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(isLeft ? badgeX + badgeW : badgeX, nodeY);
+        ctx.lineTo(isLeft ? cx - nodeR : cx + nodeR, nodeY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+
+    ctx.restore();
+
+    // 顶部渐隐
+    const grdTop = ctx.createLinearGradient(0, pathTop, 0, pathTop + 30);
+    grdTop.addColorStop(0, 'rgba(5,3,20,1)');
+    grdTop.addColorStop(1, 'rgba(5,3,20,0)');
+    ctx.fillStyle = grdTop;
+    ctx.fillRect(0, pathTop, sw, 30);
+
+    // 底部渐隐
+    const grdBot = ctx.createLinearGradient(0, pathBottom - 30, 0, pathBottom);
+    grdBot.addColorStop(0, 'rgba(5,3,20,0)');
+    grdBot.addColorStop(1, 'rgba(5,3,20,1)');
+    ctx.fillStyle = grdBot;
+    ctx.fillRect(0, pathBottom - 30, sw, 30);
+
+    // 底部Tab
+    this._drawLobbyTabs(ctx, sw, sh, 0);
+  }
+
+  // ===== 升级商店 =====
+  drawUpgradeShop(saveManager) {
+    const ctx = this.ctx;
+    const sw = Config.SCREEN_WIDTH;
+    const sh = Config.SCREEN_HEIGHT;
+    const top = Config.SAFE_TOP;
+
+    ctx.fillStyle = 'rgba(5,3,20,1)';
+    ctx.fillRect(0, 0, sw, sh);
+
+    // 顶部金币
+    ctx.fillStyle = Config.NEON_YELLOW;
+    ctx.font = 'bold 15px monospace';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText('💰 ' + saveManager.getCoins(), 14, top + 4);
+
+    // 标题：飞机改造
+    ctx.fillStyle = Config.NEON_CYAN;
+    ctx.font = 'bold 18px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('✈ 飞机改造', sw / 2, top + 4);
+
+    const margin = 14;
+    const contentW = sw - margin * 2;
+
+    // 飞机部件升级项（删除经验加成）
+    const upgrades = [
+      { key: 'attack',     name: '弹药强化', desc: '子弹伤害+1', icon: '💥', color: '#FF6644' },
+      { key: 'fireRate',   name: '引擎改造', desc: '射击间隔-2%', icon: '⚙', color: '#44BBFF' },
+      { key: 'crit',       name: '瞄准系统', desc: '暴击率+1%', icon: '🎯', color: '#FFAA00' },
+      { key: 'startLevel', name: '科技预载', desc: '开局自带等级', icon: '📡', color: '#AA66FF' },
+      { key: 'coinBonus',  name: '回收模块', desc: '金币收益+5%', icon: '💎', color: '#44FF88' },
+    ];
+
+    const itemH = 80;
+    const itemGap = 10;
+    const startY = top + 36;
+
+    this._shopUpgradeAreas = [];
+    const SaveManagerClass = require('./systems/SaveManager');
+
+    for (let i = 0; i < upgrades.length; i++) {
+      const u = upgrades[i];
+      const y = startY + i * (itemH + itemGap);
+      const lv = saveManager.getUpgrade(u.key);
+      const maxLvl = SaveManagerClass.UPGRADE_CONFIG[u.key] ? SaveManagerClass.UPGRADE_CONFIG[u.key].maxLevel : 1;
+      const maxed = saveManager.isUpgradeMaxed(u.key);
+      const cost = saveManager.getUpgradeCost(u.key);
+      const canAfford = saveManager.getCoins() >= cost;
+
+      // 卡片背景
+      ctx.fillStyle = 'rgba(15,10,40,0.9)';
+      ctx.beginPath(); ctx.roundRect(margin, y, contentW, itemH, 12); ctx.fill();
+      ctx.strokeStyle = u.color + '33'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect(margin, y, contentW, itemH, 12); ctx.stroke();
+
+      // 图标
+      ctx.font = '28px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = u.color;
+      ctx.fillText(u.icon, margin + 28, y + itemH / 2 - 4);
+
+      // 名称
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 16px monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      ctx.fillText(u.name, margin + 54, y + 10);
+
+      // 描述
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.font = '12px monospace';
+      ctx.fillText(u.desc, margin + 54, y + 32);
+
+      // 等级 + 进度条
+      const barX = margin + 54, barY = y + 52, barW = contentW - 54 - 90, barH = 8;
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx.beginPath(); ctx.roundRect(barX, barY, barW, barH, 4); ctx.fill();
+      ctx.fillStyle = u.color + 'AA';
+      const fillW = barW * (lv / maxLvl);
+      if (fillW > 0) {
+        ctx.beginPath(); ctx.roundRect(barX, barY, fillW, barH, 4); ctx.fill();
+      }
+
+      ctx.fillStyle = u.color;
+      ctx.font = 'bold 12px monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      ctx.fillText('Lv.' + lv + '/' + maxLvl, barX, y + 64);
+
+      // 升级按钮
+      const btnW = 72, btnH = 36;
+      const btnX = sw - margin - btnW - 6, btnY = y + (itemH - btnH) / 2;
+
+      if (maxed) {
+        ctx.fillStyle = 'rgba(80,255,80,0.12)';
+        ctx.beginPath(); ctx.roundRect(btnX, btnY, btnW, btnH, 8); ctx.fill();
+        ctx.fillStyle = Config.NEON_GREEN;
+        ctx.font = 'bold 14px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('MAX', btnX + btnW / 2, btnY + btnH / 2);
+      } else {
+        ctx.fillStyle = canAfford ? 'rgba(0,200,255,0.15)' : 'rgba(100,100,100,0.08)';
+        ctx.beginPath(); ctx.roundRect(btnX, btnY, btnW, btnH, 8); ctx.fill();
+        ctx.strokeStyle = canAfford ? Config.NEON_CYAN : 'rgba(100,100,100,0.2)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.roundRect(btnX, btnY, btnW, btnH, 8); ctx.stroke();
+        ctx.fillStyle = canAfford ? '#FFFFFF' : 'rgba(150,150,150,0.4)';
+        ctx.font = 'bold 13px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('💰 ' + cost, btnX + btnW / 2, btnY + btnH / 2);
+
+        this._shopUpgradeAreas.push({ key: u.key, x: btnX, y: btnY, w: btnW, h: btnH });
+      }
+    }
+
+    // 底部Tab栏（飞机选中 = idx 1）
+    this._drawLobbyTabs(ctx, sw, sh, 1);
+  }
+
+  // ===== 武器商店 =====
+  drawWeaponShop(saveManager) {
+    const ctx = this.ctx;
+    const sw = Config.SCREEN_WIDTH;
+    const sh = Config.SCREEN_HEIGHT;
+    const top = Config.SAFE_TOP;
+    const WEAPON_TREES = require('./config/WeaponDefs');
+    const SaveManagerClass = require('./systems/SaveManager');
+
+    this._weaponHitAreas = [];
+
+    ctx.fillStyle = 'rgba(0,0,0,0.95)';
+    ctx.fillRect(0, 0, sw, sh);
+
+    // 顶部
+    ctx.fillStyle = Config.NEON_YELLOW;
+    ctx.font = 'bold 14px monospace';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText('💰 ' + saveManager.getCoins(), 12, top);
+
+    // 暴击伤害加成
+    const critBonus = saveManager.getWeaponCritDamageBonus();
+    ctx.fillStyle = Config.NEON_ORANGE;
+    ctx.font = '11px monospace'; ctx.textAlign = 'right';
+    ctx.fillText('总暴击伤害+' + (critBonus * 100).toFixed(0) + '%', sw - 12, top);
+
+    ctx.fillStyle = Config.NEON_PINK;
+    ctx.font = 'bold 16px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('武器强化', sw / 2, top + 28);
+
+    // 武器详情弹窗模式
+    if (this._weaponDetailKey) {
+      this._drawWeaponDetail(ctx, sw, sh, top, saveManager, this._weaponDetailKey);
+      this._drawLobbyTabs(ctx, sw, sh, 2);
+      return;
+    }
+
+    // 武器列表
+    const keys = Object.keys(WEAPON_TREES);
+    const itemH = 72;
+    const itemGap = 8;
+    const margin = 12;
+    const startY = top + 52;
+
+    for (let i = 0; i < keys.length; i++) {
+      const wk = keys[i];
+      const wDef = WEAPON_TREES[wk];
+      const lv = saveManager.getWeaponLevel(wk);
+      const maxLv = saveManager.getWeaponMaxLevel();
+      const y = startY + i * (itemH + itemGap);
+
+      if (y + itemH < 0 || y > sh) continue;
+
+      // 卡片背景
+      ctx.fillStyle = 'rgba(20,15,50,0.85)';
+      ctx.beginPath(); ctx.roundRect(margin, y, sw - margin * 2, itemH, 10); ctx.fill();
+      ctx.strokeStyle = wDef.color + '66';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect(margin, y, sw - margin * 2, itemH, 10); ctx.stroke();
+
+      // 图标
+      ctx.font = '28px monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = wDef.color;
+      ctx.fillText(wDef.icon, margin + 30, y + itemH / 2);
+
+      // 名称
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 13px monospace';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      ctx.fillText(wDef.name, margin + 56, y + 10);
+
+      // 等级
+      ctx.fillStyle = wDef.color;
+      ctx.font = 'bold 11px monospace';
+      ctx.fillText('Lv.' + lv + '/' + maxLv, margin + 56, y + 28);
+
+      // 等级进度条
+      const barX = margin + 56, barY = y + 44, barW = sw - margin * 2 - 56 - 80, barH = 6;
+      ctx.fillStyle = 'rgba(255,255,255,0.1)';
+      ctx.fillRect(barX, barY, barW, barH);
+      ctx.fillStyle = wDef.color;
+      ctx.fillRect(barX, barY, barW * (lv / maxLv), barH);
+
+      // 暴击加成标注
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.font = '9px monospace';
+      ctx.fillText('暴伤+' + (lv * 2) + '%', barX, y + 54);
+
+      // 详情按钮
+      const btnW = 60, btnH = 32;
+      const btnX = sw - margin - btnW - 8, btnY = y + (itemH - btnH) / 2;
+      ctx.fillStyle = 'rgba(0,200,255,0.15)';
+      ctx.beginPath(); ctx.roundRect(btnX, btnY, btnW, btnH, 6); ctx.fill();
+      ctx.strokeStyle = Config.NEON_CYAN;
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect(btnX, btnY, btnW, btnH, 6); ctx.stroke();
+      ctx.fillStyle = Config.NEON_CYAN;
+      ctx.font = 'bold 11px monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('详情', btnX + btnW / 2, btnY + btnH / 2);
+
+      this._weaponHitAreas.push({ key: wk, x: margin, y: y, w: sw - margin * 2, h: itemH });
+    }
+
+    this._drawLobbyTabs(ctx, sw, sh, 2);
+  }
+
+  // ===== 武器详情弹窗 =====
+  _drawWeaponDetail(ctx, sw, sh, top, saveManager, weaponKey) {
+    const WEAPON_TREES = require('./config/WeaponDefs');
+    const SaveManagerClass = require('./systems/SaveManager');
+    const wDef = WEAPON_TREES[weaponKey];
+    if (!wDef) return;
+
+    const lv = saveManager.getWeaponLevel(weaponKey);
+    const maxLv = saveManager.getWeaponMaxLevel();
+    const cost = saveManager.getWeaponUpgradeCost(weaponKey);
+    const canAfford = saveManager.getCoins() >= cost.coins;
+    const maxed = saveManager.isWeaponMaxed(weaponKey);
+
+    this._weaponDetailHitAreas = [];
+
+    // 半透明遮罩
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0, 0, sw, sh);
+
+    // 弹窗居中
+    const popW = sw - 40;
+    const popH = sh * 0.75;
+    const popX = 20;
+    const popY = (sh - popH) / 2;
+    const cx = sw / 2;
+    const pad = 16;
+    const innerX = popX + pad;
+    const innerW = popW - pad * 2;
+
+    // 弹窗背景
+    ctx.fillStyle = 'rgba(15,10,40,0.97)';
+    ctx.beginPath(); ctx.roundRect(popX, popY, popW, popH, 16); ctx.fill();
+    ctx.strokeStyle = wDef.color + '66'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(popX, popY, popW, popH, 16); ctx.stroke();
+
+    // 保存弹窗区域用于点击判定
+    this._weaponPopupRect = { x: popX, y: popY, w: popW, h: popH };
+
+    // 关闭按钮
+    const closeS = 34;
+    const closeX = popX + popW - closeS - 8, closeY2 = popY + 8;
+    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+    ctx.beginPath(); ctx.roundRect(closeX, closeY2, closeS, closeS, 8); ctx.fill();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 18px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('✕', closeX + closeS / 2, closeY2 + closeS / 2);
+    this._weaponDetailHitAreas.push({ action: 'close', x: closeX, y: closeY2, w: closeS, h: closeS });
+
+    let cy = popY + 18;
+
+    // ===== 头部：图标 + 名称 + 等级 =====
+    ctx.font = '34px monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillStyle = wDef.color;
+    ctx.fillText(wDef.icon, innerX, cy);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 18px monospace';
+    ctx.fillText(wDef.name, innerX + 44, cy + 2);
+
+    ctx.fillStyle = wDef.color;
+    ctx.font = 'bold 16px monospace';
+    ctx.fillText(lv + '级', innerX + 44, cy + 24);
+
+    cy += 50;
+
+    // 描述
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.font = '13px monospace'; ctx.textAlign = 'left';
+    ctx.fillText(wDef.desc, innerX, cy);
+    cy += 26;
+
+    // ===== 技能属性 =====
+    const interval = (wDef.interval / 1000).toFixed(1);
+    const branchCount = Object.keys(wDef.branches).length;
+
+    ctx.fillStyle = 'rgba(255,255,255,0.05)';
+    ctx.beginPath(); ctx.roundRect(innerX, cy, innerW, 76, 8); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.roundRect(innerX, cy, innerW, 76, 8); ctx.stroke();
+
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = 'bold 14px monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText('◉ 技能属性', innerX + 10, cy + 8);
+
+    const rowH = 22;
+    const aY = cy + 32;
+    const labelX = innerX + 14;
+    const valRight = innerX + innerW - 14;
+
+    const attrs = [
+      { label: '伤害系数', value: (wDef.basePct * 100).toFixed(0) + '%' },
+      { label: '冷却时间', value: interval + 's' },
+    ];
+    ctx.font = '14px monospace';
+    for (let i = 0; i < attrs.length; i++) {
+      ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.textAlign = 'left';
+      ctx.fillText(attrs[i].label, labelX, aY + i * rowH);
+      ctx.fillStyle = '#FFFFFF'; ctx.textAlign = 'right';
+      ctx.fillText(attrs[i].value, valRight, aY + i * rowH);
+    }
+
+    cy += 84;
+
+    // ===== 升级效果 =====
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = 'bold 14px monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText('◉ 升级效果', innerX + 4, cy);
+    cy += 24;
+
+    const unlocks = SaveManagerClass.getWeaponUnlocks(weaponKey);
+    const cardGap = 6;
+    const upgradeAreaH = 90;
+    const maxCardY = popY + popH - upgradeAreaH - 8;
+
+    for (let i = 0; i < unlocks.length; i++) {
+      const u = unlocks[i];
+      const unlocked = lv >= u.level;
+      const cardH = 52;
+
+      if (cy + cardH > maxCardY) break;
+
+      ctx.fillStyle = unlocked ? 'rgba(0,255,100,0.06)' : 'rgba(255,255,255,0.03)';
+      ctx.beginPath(); ctx.roundRect(innerX, cy, innerW, cardH, 8); ctx.fill();
+      ctx.strokeStyle = unlocked ? 'rgba(0,255,100,0.15)' : 'rgba(255,255,255,0.06)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect(innerX, cy, innerW, cardH, 8); ctx.stroke();
+
+      // 等级标签
+      const tagW = 42, tagH = 26;
+      const tagX2 = innerX + 8, tagY = cy + (cardH - tagH) / 2;
+      ctx.fillStyle = unlocked ? 'rgba(0,255,100,0.15)' : 'rgba(255,255,255,0.06)';
+      ctx.beginPath(); ctx.roundRect(tagX2, tagY, tagW, tagH, 6); ctx.fill();
+      ctx.fillStyle = unlocked ? Config.NEON_GREEN : 'rgba(255,255,255,0.35)';
+      ctx.font = 'bold 14px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(u.level + '级', tagX2 + tagW / 2, tagY + tagH / 2);
+
+      // 分支名 + 描述
+      const txX = innerX + 58;
+      ctx.fillStyle = unlocked ? '#FFFFFF' : 'rgba(255,255,255,0.5)';
+      ctx.font = 'bold 13px monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      ctx.fillText('解锁 ' + u.branchName, txX, cy + 8);
+
+      ctx.fillStyle = unlocked ? 'rgba(255,255,255,0.65)' : 'rgba(255,255,255,0.3)';
+      ctx.font = '12px monospace';
+      ctx.fillText(u.desc, txX, cy + 28);
+
+      if (unlocked) {
+        ctx.fillStyle = Config.NEON_GREEN;
+        ctx.font = 'bold 14px monospace'; ctx.textAlign = 'right';
+        ctx.fillText('✓', innerX + innerW - 10, cy + cardH / 2 - 7);
+      }
+
+      cy += cardH + cardGap;
+    }
+
+    // ===== 底部升级区域（弹窗内底部） =====
+    const btmY = popY + popH - upgradeAreaH;
+
+    // 分隔线
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(innerX, btmY); ctx.lineTo(innerX + innerW, btmY); ctx.stroke();
+
+    if (maxed) {
+      ctx.fillStyle = Config.NEON_GREEN;
+      ctx.font = 'bold 18px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('✦ 已满级 ✦', cx, btmY + 40);
+    } else {
+      // 费用
+      ctx.fillStyle = canAfford ? Config.NEON_YELLOW : '#FF5555';
+      ctx.font = 'bold 15px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillText('💰 ' + cost.coins, cx, btmY + 8);
+
+      // 升级按钮
+      const btnW = 150, btnH = 38;
+      const btnX = cx - btnW / 2, btnY = btmY + 32;
+      ctx.fillStyle = canAfford ? 'rgba(0,200,100,0.25)' : 'rgba(100,100,100,0.12)';
+      ctx.beginPath(); ctx.roundRect(btnX, btnY, btnW, btnH, 10); ctx.fill();
+      ctx.strokeStyle = canAfford ? Config.NEON_GREEN : 'rgba(100,100,100,0.3)';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.roundRect(btnX, btnY, btnW, btnH, 10); ctx.stroke();
+      ctx.fillStyle = canAfford ? '#FFFFFF' : 'rgba(255,255,255,0.3)';
+      ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('升  级', cx, btnY + btnH / 2);
+      this._weaponDetailHitAreas.push({ action: 'upgrade', key: weaponKey, x: btnX, y: btnY, w: btnW, h: btnH });
+
+      // 奖励提示
+      ctx.fillStyle = Config.NEON_ORANGE;
+      ctx.font = '12px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillText('升级奖励：暴击伤害+2.0%', cx, btnY + btnH + 4);
+    }
+  }
+
+  // ===== 通用底部3Tab =====
+  _drawLobbyTabs(ctx, sw, sh, activeIdx) {
+    const tabH = 44;
+    const tabY = sh - Config.SAFE_BOTTOM - tabH;
+    const tabW = sw / 3;
+    const labels = ['⚔ 关卡', '✈ 飞机', '🔪 武器'];
+
+    ctx.fillStyle = 'rgba(10, 10, 30, 0.95)';
+    ctx.fillRect(0, tabY, sw, tabH + Config.SAFE_BOTTOM);
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, tabY); ctx.lineTo(sw, tabY); ctx.stroke();
+
+    for (let i = 0; i < 3; i++) {
+      const tx = tabW * i;
+      if (i === activeIdx) {
+        ctx.fillStyle = Config.NEON_CYAN;
+        ctx.fillRect(tx, tabY, tabW, 2);
+        ctx.font = 'bold 13px monospace';
+      } else {
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.font = '13px monospace';
+      }
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(labels[i], tx + tabW / 2, tabY + tabH / 2);
+
+      if (i < 2) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+        ctx.beginPath();
+        ctx.moveTo(tx + tabW, tabY + 8);
+        ctx.lineTo(tx + tabW, tabY + tabH - 8);
+        ctx.stroke();
+      }
+    }
+
+    this._chapterTabAreas = {
+      battle: { x: 0, y: tabY, w: tabW, h: tabH },
+      upgrade: { x: tabW, y: tabY, w: tabW, h: tabH },
+      weapon: { x: tabW * 2, y: tabY, w: tabW, h: tabH },
+    };
+  }
+
+  getWeaponShopHit(tap) {
+    // 武器详情弹窗
+    if (this._weaponDetailKey && this._weaponDetailHitAreas) {
+      // 先检查弹窗内按钮
+      for (const a of this._weaponDetailHitAreas) {
+        if (tap.x >= a.x && tap.x <= a.x + a.w && tap.y >= a.y && tap.y <= a.y + a.h) {
+          return a;
+        }
+      }
+      // 判断是否点在弹窗内部
+      const pr = this._weaponPopupRect;
+      if (pr && tap.x >= pr.x && tap.x <= pr.x + pr.w && tap.y >= pr.y && tap.y <= pr.y + pr.h) {
+        return { action: 'noop' };  // 弹窗内部空白区，吞掉
+      }
+      // 点击弹窗外 = 关闭
+      return { action: 'close' };
+    }
+    // Tab栏
+    if (this._chapterTabAreas) {
+      for (const k in this._chapterTabAreas) {
+        const a = this._chapterTabAreas[k];
+        if (tap.x >= a.x && tap.x <= a.x + a.w && tap.y >= a.y && tap.y <= a.y + a.h) {
+          return { action: 'tab', tab: k };
+        }
+      }
+    }
+    // 武器卡片
+    if (this._weaponHitAreas) {
+      for (const a of this._weaponHitAreas) {
+        if (tap.x >= a.x && tap.x <= a.x + a.w && tap.y >= a.y && tap.y <= a.y + a.h) {
+          return { action: 'detail', key: a.key };
+        }
+      }
+    }
+    return null;
+  }
+
+  // ===== 章节通关结算 =====
+  drawChapterClear(chapter, score, playerLevel, maxCombo, ownedList, coinsEarned, isFirstClear) {
+    const ctx = this.ctx;
+    const sw = Config.SCREEN_WIDTH;
+    const sh = Config.SCREEN_HEIGHT;
+    const cx = sw / 2;
+
+    ctx.fillStyle = 'rgba(0,0,0,0.9)';
+    ctx.fillRect(0, 0, sw, sh);
+
+    // 标题
+    const pulse = 0.8 + Math.sin(Date.now() * 0.005) * 0.2;
+    ctx.globalAlpha = pulse;
+    ctx.fillStyle = Config.NEON_YELLOW;
+    ctx.font = 'bold 22px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('✨ CHAPTER ' + chapter + ' CLEAR ✨', cx, sh * 0.15);
+    ctx.globalAlpha = 1;
+
+    // 数据
+    ctx.fillStyle = Config.NEON_CYAN;
+    ctx.font = '14px monospace';
+    ctx.fillText('得分: ' + score, cx, sh * 0.26);
+    ctx.fillStyle = Config.NEON_GREEN;
+    ctx.fillText('等级: Lv.' + playerLevel, cx, sh * 0.32);
+    ctx.fillStyle = Config.NEON_PINK;
+    ctx.fillText('最高Combo: ' + maxCombo, cx, sh * 0.38);
+
+    // Build
+    if (ownedList && ownedList.length > 0) {
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.font = '11px monospace';
+      ctx.fillText('你的 Build:', cx, sh * 0.46);
+
+      const perRow = 6;
+      const icoSz = 22;
+      const icoGap = 6;
+      const totalW = Math.min(ownedList.length, perRow) * (icoSz + icoGap) - icoGap;
+      const startX = cx - totalW / 2;
+      for (let i = 0; i < ownedList.length; i++) {
+        const p = ownedList[i];
+        const row = Math.floor(i / perRow);
+        const col = i % perRow;
+        const px = startX + col * (icoSz + icoGap) + icoSz / 2;
+        const py = sh * 0.52 + row * (icoSz + icoGap + 4);
+        ctx.fillStyle = p.color;
+        ctx.font = (icoSz - 4) + 'px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(p.icon, px, py);
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.font = '7px monospace';
+        ctx.fillText(typeof p.level === 'number' ? 'Lv.' + p.level : p.level, px, py + 12);
+      }
+    }
+
+    // 金币
+    ctx.fillStyle = Config.NEON_YELLOW;
+    ctx.font = 'bold 16px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('💰 +' + coinsEarned + ' 金币', cx, sh * 0.68);
+    if (isFirstClear) {
+      ctx.fillStyle = Config.NEON_ORANGE;
+      ctx.font = '12px monospace';
+      ctx.fillText('(首通 ×2!)', cx, sh * 0.73);
+    }
+
+    // 按钮
+    const btnW = 100;
+    const btnH = 36;
+    const btnGap = 16;
+
+    // 下一章
+    const nextX = cx - btnW - btnGap / 2;
+    const nextY = sh * 0.80;
+    ctx.fillStyle = 'rgba(0,200,100,0.2)';
+    ctx.beginPath();
+    ctx.roundRect(nextX, nextY, btnW, btnH, 8);
+    ctx.fill();
+    ctx.strokeStyle = Config.NEON_GREEN;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(nextX, nextY, btnW, btnH, 8);
+    ctx.stroke();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 13px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('下一章', nextX + btnW / 2, nextY + btnH / 2);
+
+    // 返回
+    const backX = cx + btnGap / 2;
+    const backY = sh * 0.80;
+    ctx.fillStyle = 'rgba(100,100,100,0.2)';
+    ctx.beginPath();
+    ctx.roundRect(backX, backY, btnW, btnH, 8);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(backX, backY, btnW, btnH, 8);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.font = 'bold 13px monospace';
+    ctx.fillText('返回', backX + btnW / 2, backY + btnH / 2);
+
+    this._clearNextArea = { x: nextX, y: nextY, w: btnW, h: btnH };
+    this._clearBackArea = { x: backX, y: backY, w: btnW, h: btnH };
+  }
+
+  // ===== Boss警告 =====
+  drawBossWarning(bossType) {
+    const ctx = this.ctx;
+    const sw = Config.SCREEN_WIDTH;
+    const sh = Config.SCREEN_HEIGHT;
+    const cx = sw / 2;
+
+    const flash = Math.sin(Date.now() * 0.01) > 0 ? 0.6 : 0.3;
+    ctx.fillStyle = 'rgba(255,0,0,' + (flash * 0.15) + ')';
+    ctx.fillRect(0, 0, sw, sh);
+
+    ctx.fillStyle = 'rgba(255,50,50,' + flash + ')';
+    ctx.font = 'bold 28px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('⚠ WARNING ⚠', cx, sh * 0.4);
+
+    const bossNames = {
+      charger: '冲锋者',
+      guardian: '护盾卫士',
+      summoner: '召唤师',
+      laser: '激光炮台',
+      phantom: '幽影刺客',
+    };
+    const bossIcons = {
+      charger: '🔴',
+      guardian: '🔵',
+      summoner: '🟣',
+      laser: '🟡',
+      phantom: '⚪',
+    };
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.globalAlpha = flash;
+    ctx.font = 'bold 16px monospace';
+    ctx.fillText(bossIcons[bossType] + ' ' + (bossNames[bossType] || 'BOSS') + ' 来袭!', cx, sh * 0.5);
+    ctx.globalAlpha = 1;
+  }
+
+  // ===== 章节内HUD =====
+  drawChapterHUD(chapter, score, combo, playerLevel, elapsedMs, soundEnabled) {
+    const ctx = this.ctx;
+    const top = Config.SAFE_TOP;
+
+    // 暂停按钮（左上角）
+    const pauseSize = 30;
+    const pauseX = 8, pauseY = top;
+    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+    ctx.beginPath(); ctx.roundRect(pauseX, pauseY, pauseSize, pauseSize, 6); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    // 双竖线暂停图标
+    ctx.fillRect(pauseX + 9, pauseY + 7, 4, 16);
+    ctx.fillRect(pauseX + 17, pauseY + 7, 4, 16);
+    this._pauseBtnArea = { x: pauseX, y: pauseY, w: pauseSize, h: pauseSize };
+
+    // 分数
+    ctx.fillStyle = Config.NEON_CYAN;
+    ctx.font = 'bold 16px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('' + score, Config.SCREEN_WIDTH / 2, top);
+
+    // 等级
+    ctx.fillStyle = Config.NEON_GREEN;
+    ctx.font = 'bold 13px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText('Lv.' + playerLevel, Config.SCREEN_WIDTH - 8, top);
+
+    // 时间
+    const sec = Math.floor(elapsedMs / 1000);
+    const min = Math.floor(sec / 60);
+    const s = sec % 60;
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = '12px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(min + ':' + (s < 10 ? '0' : '') + s, Config.SCREEN_WIDTH - 8, top + 16);
+
+    // Combo
+    if (combo > 1) {
+      ctx.fillStyle = Config.NEON_YELLOW;
+      ctx.font = 'bold 14px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText('COMBO x' + combo, 10, top + 18);
+    }
+
+    // 音效
+    ctx.fillStyle = soundEnabled ? 'rgba(255,255,255,0.5)' : 'rgba(255,50,50,0.5)';
+    ctx.font = '14px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(soundEnabled ? '♪' : '♪̶', 10, Config.SCREEN_HEIGHT - Config.SAFE_BOTTOM - 48);
+  }
+
+  // 暂停弹窗
+  drawPauseDialog() {
+    const ctx = this.ctx;
+    const sw = Config.SCREEN_WIDTH;
+    const sh = Config.SCREEN_HEIGHT;
+
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(0, 0, sw, sh);
+
+    const popW = 240, popH = 180;
+    const popX = (sw - popW) / 2, popY = (sh - popH) / 2;
+    ctx.fillStyle = 'rgba(15,10,40,0.97)';
+    ctx.beginPath(); ctx.roundRect(popX, popY, popW, popH, 16); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(popX, popY, popW, popH, 16); ctx.stroke();
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 18px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('游戏暂停', sw / 2, popY + 36);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = '13px monospace';
+    ctx.fillText('确认退出关卡？', sw / 2, popY + 66);
+
+    const btnW = 100, btnH = 38, btnGap = 12;
+    const btnY = popY + popH - 56;
+    const contX = sw / 2 - btnW - btnGap / 2;
+    const quitX = sw / 2 + btnGap / 2;
+
+    ctx.fillStyle = 'rgba(0,200,100,0.25)';
+    ctx.beginPath(); ctx.roundRect(contX, btnY, btnW, btnH, 10); ctx.fill();
+    ctx.strokeStyle = Config.NEON_GREEN; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(contX, btnY, btnW, btnH, 10); ctx.stroke();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 15px monospace';
+    ctx.fillText('继续', contX + btnW / 2, btnY + btnH / 2);
+
+    ctx.fillStyle = 'rgba(255,50,50,0.2)';
+    ctx.beginPath(); ctx.roundRect(quitX, btnY, btnW, btnH, 10); ctx.fill();
+    ctx.strokeStyle = Config.NEON_RED; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(quitX, btnY, btnW, btnH, 10); ctx.stroke();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText('退出', quitX + btnW / 2, btnY + btnH / 2);
+
+    this._pauseDialogAreas = {
+      resume: { x: contX, y: btnY, w: btnW, h: btnH },
+      quit: { x: quitX, y: btnY, w: btnW, h: btnH },
+    };
+  }
+
+  getPauseDialogHit(tap) {
+    if (!this._pauseDialogAreas) return null;
+    const r = this._pauseDialogAreas.resume;
+    if (tap.x >= r.x && tap.x <= r.x + r.w && tap.y >= r.y && tap.y <= r.y + r.h) return 'resume';
+    const q = this._pauseDialogAreas.quit;
+    if (tap.x >= q.x && tap.x <= q.x + q.w && tap.y >= q.y && tap.y <= q.y + q.h) return 'quit';
+    return 'noop';
+  }
+
+  getPauseBtnHit(tap) {
+    const a = this._pauseBtnArea;
+    if (!a) return false;
+    return tap.x >= a.x && tap.x <= a.x + a.w && tap.y >= a.y && tap.y <= a.y + a.h;
+  }
+
+  // ===== 新Boss渲染 =====
+  drawBoss(boss) {
+    if (!boss || !boss.alive) return;
+    const ctx = this.ctx;
+    const { x, y, width, height, type } = boss;
+
+    switch (type) {
+      case 'charger': this._drawChargerBoss(boss, ctx); break;
+      case 'guardian': this._drawGuardianBoss(boss, ctx); break;
+      case 'summoner': this._drawSummonerBoss(boss, ctx); break;
+      case 'laser': this._drawLaserBoss(boss, ctx); break;
+      case 'phantom': this._drawPhantomBoss(boss, ctx); break;
+      default: this._drawDefaultBoss(boss, ctx); break;
+    }
+
+    // HP条（所有Boss通用）
+    const barW = boss.width * 0.8;
+    const barH = 6;
+    const barX = boss.x + (boss.width - boss.width * 0.8) / 2;
+    const barY = boss.y - 14;
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.fillRect(barX, barY, barW, barH);
+    const hpRatio = boss.hp / boss.maxHp;
+    const hpColor = hpRatio > 0.5 ? Config.NEON_CYAN : hpRatio > 0.25 ? Config.NEON_YELLOW : Config.NEON_RED;
+    ctx.fillStyle = hpColor;
+    ctx.fillRect(barX, barY, barW * hpRatio, barH);
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(barX, barY, barW, barH);
+  }
+
+  // 通用Boss部件绘制
+  _drawBossParts(boss, ctx, fillColor) {
+    const parts = boss.parts || [{ ox: 0, oy: 0, w: boss.width, h: boss.height }];
+    ctx.fillStyle = fillColor;
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i];
+      ctx.beginPath();
+      ctx.roundRect(boss.x + p.ox, boss.y + p.oy, p.w, p.h, 4);
+      ctx.fill();
+    }
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i];
+      ctx.beginPath();
+      ctx.roundRect(boss.x + p.ox, boss.y + p.oy, p.w, p.h, 4);
+      ctx.stroke();
+    }
+  }
+
+  _drawChargerBoss(boss, ctx) {
+    const { x, y, width, height } = boss;
+    const isCharging = boss.state === 'charging' || boss.state === 'dashing';
+
+    // 闪烁警告
+    if (boss.state === 'charging') {
+      const flash = Math.sin(Date.now() * 0.02) > 0;
+      ctx.globalAlpha = flash ? 1 : 0.4;
+    }
+
+    // 主体（红色宽体）
+    this._drawBossParts(boss, ctx, isCharging ? '#FF4444' : '#CC2222');
+
+    // 受击闪白
+    if (boss.flashTimer > 0) {
+      ctx.globalAlpha = 0.6; this._drawBossParts(boss, ctx, '#FFFFFF');
+    }
+
+    // 冲锋时火焰拖影
+    if (boss.state === 'dashing') {
+      for (let i = 0; i < 3; i++) {
+        ctx.globalAlpha = 0.2 - i * 0.06;
+        ctx.fillStyle = Config.NEON_ORANGE;
+        ctx.fillRect(x + 10 + i * 8, y - 10 - i * 6, width - 20 - i * 16, 4);
+      }
+    }
+
+    ctx.globalAlpha = 1;
+
+    // Boss名
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+  }
+
+  _drawGuardianBoss(boss, ctx) {
+    const { x, y, width, height } = boss;
+
+    // 主体（蓝色方块）
+    this._drawBossParts(boss, ctx, boss.flashTimer > 0 ? '#FFFFFF' : '#2244CC');
+
+    // 旋转护盾
+    if (boss.shields) {
+      const cx = x + width / 2;
+      const cy = y + height / 2;
+      const shieldR = Math.max(width, height) / 2 + 12;
+      for (let i = 0; i < boss.shields.length; i++) {
+        const s = boss.shields[i];
+        if (s.hp <= 0) continue;
+        const angle = (boss.shieldAngle || 0) + (Math.PI * 2 / boss.shields.length) * i;
+        const sx = cx + Math.cos(angle) * shieldR;
+        const sy = cy + Math.sin(angle) * shieldR;
+
+        ctx.globalAlpha = 0.6;
+        ctx.fillStyle = '#6688FF';
+        ctx.beginPath();
+        ctx.arc(sx, sy, 10, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 0.3;
+        ctx.strokeStyle = '#AACCFF';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 13, angle - 0.5, angle + 0.5);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+  }
+
+  _drawSummonerBoss(boss, ctx) {
+    const { x, y, width, height } = boss;
+
+    // 紫色核心
+    this._drawBossParts(boss, ctx, boss.flashTimer > 0 ? '#FFFFFF' : '#8822CC');
+
+    // 召唤状态光环
+    if (boss.state === 'summoning') {
+      ctx.globalAlpha = 0.4;
+      ctx.strokeStyle = Config.NEON_PINK;
+      ctx.lineWidth = 2;
+      const pulse = 15 + Math.sin(Date.now() * 0.01) * 5;
+      ctx.beginPath();
+      ctx.arc(x + width / 2, y + height / 2, pulse + width / 2, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    // 无敌标记
+    if (boss.state === 'summoning') {
+      ctx.globalAlpha = 0.3; this._drawBossParts(boss, ctx, '#FFFFFF'); ctx.globalAlpha = 1;
+    }
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+  }
+
+  _drawLaserBoss(boss, ctx) {
+    const { x, y, width, height } = boss;
+
+    // 黄色三角体
+    this._drawBossParts(boss, ctx, boss.flashTimer > 0 ? '#FFFFFF' : '#CCAA00');
+    const cx = boss.getCenterX();
+
+    // 充能核心
+    if (boss.state === 'charging') {
+      const chargeProgress = boss.stateTimer / 2000;
+      const coreR = 4 + chargeProgress * 8;
+      ctx.fillStyle = Config.NEON_YELLOW;
+      ctx.globalAlpha = 0.5 + chargeProgress * 0.5;
+      ctx.beginPath();
+      ctx.arc(cx, y + height * 0.4, coreR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // 激光发射
+    if (boss.state === 'firing' && boss.laserX !== undefined) {
+      const lx = boss.laserX;
+      const lw = boss.laserWidth || 8;
+      ctx.globalAlpha = 0.8;
+      ctx.fillStyle = 'rgba(255,50,50,0.1)';
+      ctx.fillRect(lx - lw * 3, y + height, lw * 6, Config.SCREEN_HEIGHT);
+      ctx.fillStyle = 'rgba(255,80,80,0.3)';
+      ctx.fillRect(lx - lw * 1.5, y + height, lw * 3, Config.SCREEN_HEIGHT);
+      ctx.fillStyle = Config.NEON_YELLOW;
+      ctx.fillRect(lx - lw / 2, y + height, lw, Config.SCREEN_HEIGHT);
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.fillRect(lx - 1, y + height, 2, Config.SCREEN_HEIGHT);
+      ctx.globalAlpha = 1;
+    }
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+  }
+
+  _drawPhantomBoss(boss, ctx) {
+    const { x, y, width, height } = boss;
+
+    // 瞬移消失时半透明
+    if (boss.state === 'blinking') {
+      ctx.globalAlpha = 0.15;
+    } else if (boss.state === 'appearing') {
+      ctx.globalAlpha = 0.5 + Math.sin(Date.now() * 0.02) * 0.3;
+    }
+
+    // 白色半透明体
+    this._drawBossParts(boss, ctx, boss.flashTimer > 0 ? '#FFFFFF' : 'rgba(200,200,220,0.8)');
+
+    // 残影
+    if (boss.afterImages) {
+      for (let i = 0; i < boss.afterImages.length; i++) {
+        const img = boss.afterImages[i];
+        ctx.globalAlpha = img.alpha * 0.3;
+        ctx.fillStyle = 'rgba(200,200,220,0.5)';
+        var parts = boss.parts || [{ox:0,oy:0,w:boss.width,h:boss.height}];
+        for (var pi=0;pi<parts.length;pi++) { var p=parts[pi]; ctx.beginPath(); ctx.roundRect(img.x+p.ox,img.y+p.oy,p.w,p.h,4); ctx.fill(); }
+      }
+    }
+
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+  }
+
+  _drawDefaultBoss(boss, ctx) {
+    const { x, y, width, height } = boss;
+    const color = Config.NEON_CYAN;
+    this._drawBossParts(boss, ctx, boss.flashTimer > 0 ? '#FFFFFF' : color);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 12px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+  }
+
+  // ===== 点击判定方法 =====
+
+  getChapterSelectHit(tap) {
+    // Tab栏
+    if (this._chapterTabAreas) {
+      const u = this._chapterTabAreas.upgrade;
+      if (u && tap.x >= u.x && tap.x <= u.x + u.w && tap.y >= u.y && tap.y <= u.y + u.h) {
+        return 'upgrade';
+      }
+      const w = this._chapterTabAreas.weapon;
+      if (w && tap.x >= w.x && tap.x <= w.x + w.w && tap.y >= w.y && tap.y <= w.y + w.h) {
+        return 'weapon';
+      }
+    }
+    // 升级按钮（顶部）
+    if (this._upgradeButtonArea) {
+      const a = this._upgradeButtonArea;
+      if (tap.x >= a.x && tap.x <= a.x + a.w && tap.y >= a.y && tap.y <= a.y + a.h) {
+        return 'upgrade';
+      }
+    }
+    // 章节卡片
+    if (this._chapterHitAreas) {
+      for (let i = 0; i < this._chapterHitAreas.length; i++) {
+        const a = this._chapterHitAreas[i];
+        if (tap.x >= a.x && tap.x <= a.x + a.w && tap.y >= a.y && tap.y <= a.y + a.h) {
+          return a.chapter;
+        }
+      }
+    }
+    return null;
+  }
+
+  getUpgradeShopHit(tap) {
+    // 返回按钮
+    if (this._shopBackArea) {
+      const a = this._shopBackArea;
+      if (tap.x >= a.x && tap.x <= a.x + a.w && tap.y >= a.y && tap.y <= a.y + a.h) {
+        return 'back';
+      }
+    }
+    // 升级按钮
+    if (this._shopUpgradeAreas) {
+      for (let i = 0; i < this._shopUpgradeAreas.length; i++) {
+        const a = this._shopUpgradeAreas[i];
+        if (tap.x >= a.x && tap.x <= a.x + a.w && tap.y >= a.y && tap.y <= a.y + a.h) {
+          return a.key;
+        }
+      }
+    }
+    return null;
+  }
+
+  getChapterClearHit(tap) {
+    if (this._clearNextArea) {
+      const a = this._clearNextArea;
+      if (tap.x >= a.x && tap.x <= a.x + a.w && tap.y >= a.y && tap.y <= a.y + a.h) {
+        return 'next';
+      }
+    }
+    if (this._clearBackArea) {
+      const a = this._clearBackArea;
+      if (tap.x >= a.x && tap.x <= a.x + a.w && tap.y >= a.y && tap.y <= a.y + a.h) {
+        return 'back';
+      }
+    }
+    return null;
+  }
+}
+
+module.exports = Renderer;

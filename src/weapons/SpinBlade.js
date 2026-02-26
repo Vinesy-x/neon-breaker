@@ -1,5 +1,5 @@
 /**
- * SpinBlade.js - 等离子旋刃 v3.1
+ * SpinBlade.js - 回旋刃 v3.1
  * 定位：后排清扫器 — 单个大旋刃智能追踪高密度区域
  * 横向滑动为主，持续时间结束后才进入冷却
  */
@@ -163,7 +163,7 @@ class SpinBlade extends Weapon {
           const bc = brick.getCenter();
           if (Math.abs(b.x - bc.x) < brick.width / 2 + hitRadius &&
               Math.abs(b.y - bc.y) < brick.height / 2 + hitRadius) {
-            ctx.damageBrick(brick, tickDmg * pierceDmgMult, 'spinBlade');
+            ctx.damageBrick(brick, tickDmg * pierceDmgMult, 'spinBlade', 'physical');
             // 撕裂DOT
             if (bleedLv > 0 && brick.alive) {
               const dotDmg = damage * 0.15 * bleedLv;
@@ -191,7 +191,7 @@ class SpinBlade extends Weapon {
           if (!brick.alive) continue;
           const bc = brick.getCenter();
           if (Math.sqrt((bc.x - sw.x) ** 2 + (bc.y - sw.y) ** 2) <= sw.maxRadius) {
-            ctx.damageBrick(brick, sw.damage, 'spinBlade_sw');
+            ctx.damageBrick(brick, sw.damage, 'spinBlade_sw', 'physical');
           }
         }
         if (ctx.boss && ctx.boss.alive) {

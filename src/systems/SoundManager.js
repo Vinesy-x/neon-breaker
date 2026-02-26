@@ -2,6 +2,7 @@
  * SoundManager.js - 合成音效系统（零资源，纯WebAudio）
  * 赛博朋克电子音风格，所有音效用代码生成
  */
+const Config = require('../Config');
 
 class SoundManager {
   constructor() {
@@ -13,6 +14,11 @@ class SoundManager {
 
   /** 必须在用户交互后调用（微信要求） */
   init() {
+    // DEV模式默认静音
+    if (Config.DEV_MODE) {
+      this.enabled = false;
+    }
+
     if (this.ctx) return;
     if (this._initAttempted) return;
     this._initAttempted = true;
@@ -373,6 +379,51 @@ class SoundManager {
     this._osc('sine', 330, 0.08, t, 0.15);
     this._osc('sine', 440, 0.08, t + 0.08, 0.15);
     this._osc('sine', 660, 0.15, t + 0.16, 0.2);
+  }
+
+  /** 白磷弹发射 - 下坠呼啸 */
+  blizzard() {
+    if (!this.ctx || !this.enabled) return;
+    const t = this.ctx.currentTime;
+    // 下降呼啸
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(800, t);
+    osc.frequency.exponentialRampToValueAtTime(200, t + 0.25);
+    gain.gain.setValueAtTime(0.12, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+    osc.connect(gain); gain.connect(this.masterGain);
+    osc.start(t); osc.stop(t + 0.3);
+  }
+
+  /** 白磷弹爆炸/爆燃 */
+  blizzardShatter() {
+    if (!this.ctx || !this.enabled) return;
+    const t = this.ctx.currentTime;
+    this._noise(0.2, t, 0.2);
+    this._osc('sine', 150, 0.15, t, 0.15);
+    this._osc('square', 400, 0.06, t + 0.02, 0.08);
+    this._osc('triangle', 1200, 0.05, t + 0.04, 0.05);
+  }
+
+  /** 离子射线开始 */
+  ionBeamStart() {
+    if (!this.ctx || !this.enabled) return;
+    const t = this.ctx.currentTime;
+    // 上升电子音
+    this._osc('sawtooth', 300, 0.15, t, 0.08);
+    this._osc('sawtooth', 500, 0.15, t + 0.05, 0.06);
+    this._osc('sine', 800, 0.2, t + 0.08, 0.05);
+  }
+
+  /** 离子射线过载爆发 */
+  ionBeamBurst() {
+    if (!this.ctx || !this.enabled) return;
+    const t = this.ctx.currentTime;
+    this._noise(0.12, t, 0.15);
+    this._osc('square', 500, 0.08, t, 0.1);
+    this._osc('sine', 200, 0.1, t + 0.03, 0.12);
   }
 }
 

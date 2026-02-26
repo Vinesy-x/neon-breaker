@@ -8,7 +8,7 @@ class Weapon {
   constructor(key) {
     this.key = key;
     this.def = Config.WEAPON_TREES[key];
-    this.timer = 0;
+    this.timer = this.def.interval; // 累加式武器：初始=interval，第一帧即触发
     this.branches = {};
     for (const bk in this.def.branches) this.branches[bk] = 0;
   }
