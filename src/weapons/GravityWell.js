@@ -13,7 +13,7 @@ var BASE_PULL = 0.4;         // 基础吸力 px/帧（0.3→0.4）
 var TICK_INTERVAL = 400;     // 伤害tick间隔（500→400，更频繁）
 var NEGA_BASE_RATE = 0.2;    // 负能量基础转化率（0.4→0.2 nerf）
 var NEGA_LIFETIME = 15000;   // 负能量砖块存活时间
-var PCT_HP_CAP_MULT = 20;    // %HP伤害上限 = baseAttack × 20（15→20）
+var PCT_HP_CAP_MULT = 10;    // %HP伤害上限 = baseAttack × 10（20→10 nerf）
 var NEGA_BRICK_SIZE = 1.5;   // 负能量砖块大小倍率
 
 class GravityWellWeapon extends Weapon {

@@ -147,7 +147,7 @@ const WEAPON_TREES = {
   },
   gravityWell: {
     name: '奇点引擎', desc: '生成黑洞吸引砖块，累积能量伤害生成负能量砖块触发湮灭',
-    icon: '🕳', color: '#AA00FF', basePct: 40.0, interval: 10000,
+    icon: '🕳', color: '#AA00FF', basePct: 20.0, interval: 10000,  // 40→20 nerf
     branches: {
       // 吞噬线
       damage:      { name: '引力强化', desc: '吸力+20%/级，范围+12px/级', max: 5, requires: null },
