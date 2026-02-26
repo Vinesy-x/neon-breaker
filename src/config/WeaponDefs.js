@@ -21,7 +21,7 @@ const WEAPON_TREES = {
   },
   lightning: {
     name: '闪电链', desc: '自动锁定砖块释放闪电',
-    icon: '⚡', color: '#FFF050', basePct: 1.2, interval: 3000,  // 1.5→1.2 nerf
+    icon: '⚡', color: '#FFF050', basePct: 1.0, interval: 3000,  // 1.2→1.0 nerf
     branches: {
       damage:   { name: '伤害', desc: '+50%基础伤害', max: 5, requires: null },
       chains:   { name: '链数', desc: '+1跳跃目标', max: 4, requires: null },
@@ -68,7 +68,7 @@ const WEAPON_TREES = {
   },
   drone: {
     name: '战术无人机', desc: '无人机布阵，激光网切割砖块',
-    icon: '🤖', color: '#50FFB4', basePct: 1.8, interval: 450,  // 1.2→1.8 buff
+    icon: '🤖', color: '#50FFB4', basePct: 2.2, interval: 450,  // 1.8→2.2 buff
     branches: {
       damage:     { name: '伤害', desc: '+50%激光伤害', max: 5, requires: null },
       count:      { name: '阵列', desc: '+1台(2→3△→4◇→5★)', max: 3, requires: null },
@@ -114,7 +114,7 @@ const WEAPON_TREES = {
   },
   ionBeam: {
     name: '离子射线', desc: '锁定最强目标持续射击，标记叠加增伤',
-    icon: '⊕', color: '#FF4444', basePct: 3.5, interval: 4500,  // 2.5→3.5 buff
+    icon: '⊕', color: '#FF4444', basePct: 4.5, interval: 4500,  // 3.5→4.5 buff
     branches: {
       damage:   { name: '伤害', desc: '+50%射线伤害', max: 5, requires: null },
       duration: { name: '持续', desc: '+1秒射击时间', max: 3, requires: null },
@@ -147,7 +147,7 @@ const WEAPON_TREES = {
   },
   gravityWell: {
     name: '奇点引擎', desc: '生成黑洞吸引砖块，累积能量伤害生成负能量砖块触发湮灭',
-    icon: '🕳', color: '#AA00FF', basePct: 15.0, interval: 10000,  // 20→15 nerf
+    icon: '🕳', color: '#AA00FF', basePct: 10.0, interval: 10000,  // 15→10 nerf
     branches: {
       // 吞噬线
       damage:      { name: '引力强化', desc: '吸力+20%/级，范围+12px/级', max: 5, requires: null },
