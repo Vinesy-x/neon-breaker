@@ -42,10 +42,10 @@ class CombatSystem {
       shockBonus = damage * 0.15 * brick.shockStacks;
     }
     var finalDmg = damage * mult + shockBonus;
-    // 感电触发电弧（20%概率，防重入）— 从30%降到20%
-    if (brick.shockStacks > 0 && !brick._shockArcLock && Math.random() < 0.2) {
+    // 感电触发电弧（15%概率，防重入）— 从20%降到15%
+    if (brick.shockStacks > 0 && !brick._shockArcLock && Math.random() < 0.15) {
       brick._shockArcLock = true;
-      this.game.elementSystem.triggerShockArc(brick, finalDmg * 0.15 * brick.shockStacks);  // 0.25→0.15
+      this.game.elementSystem.triggerShockArc(brick, finalDmg * 0.1 * brick.shockStacks);  // 0.15→0.1
       brick._shockArcLock = false;
     }
     // 记录伤害统计

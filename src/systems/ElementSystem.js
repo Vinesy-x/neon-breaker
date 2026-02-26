@@ -62,7 +62,7 @@ class ElementSystem {
     // 立即电弧（温和版：最多2跳）
     var c = brick.getCenter();
     var chainCount = Math.min(elementLv, 2);
-    var chainDmg = Math.max(0.1, bulletDmg * 0.3);
+    var chainDmg = Math.max(0.1, bulletDmg * 0.2);  // 0.3→0.2 雷电链弧削弱
     var hit = new Set();
     var lastX = c.x, lastY = c.y;
     for (var ch = 0; ch < chainCount; ch++) {
