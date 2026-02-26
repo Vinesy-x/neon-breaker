@@ -309,15 +309,20 @@ class DevPanel {
         this.gotoChapter = 70;
         game.currentChapter = 70;
         
-        // 清空现有武器
-        game.upgrades.reset();
+        // 更新存档
+        if (game.saveManager && game.saveManager._data) {
+          game.saveManager._data.maxChapter = Math.max(game.saveManager._data.maxChapter || 1, 70);
+          game.saveManager.save();
+        }
         
-        // 添加四个测试武器并满级
+        // 先初始化游戏（会reset武器）
+        game._initGame();
+        
+        // 然后清空并添加测试武器
+        game.upgrades.weapons = {};
         const testWeapons = ['lightning', 'drone', 'ionBeam', 'gravityWell'];
         for (const wk of testWeapons) {
-          if (!game.upgrades.hasWeapon(wk)) {
-            game.upgrades.addWeapon(wk);
-          }
+          game.upgrades.addWeapon(wk);
           const weapon = game.upgrades.weapons[wk];
           const tree = Config.WEAPON_TREES[wk];
           if (weapon && tree) {
@@ -328,7 +333,7 @@ class DevPanel {
         }
         
         // 飞机升级：雷弹满级 + 输出满级
-        const shipUpgrades = ['thunder', 'damage', 'fireRate'];  // 雷弹 + 伤害 + 射速
+        const shipUpgrades = ['thunder', 'damage', 'fireRate'];
         for (const sk of shipUpgrades) {
           const def = Config.SHIP_TREE[sk];
           if (def) {
@@ -339,14 +344,8 @@ class DevPanel {
         // 清统计
         game.damageStats = {};
         
-        // 更新存档
-        if (game.saveManager && game.saveManager._data) {
-          game.saveManager._data.maxChapter = Math.max(game.saveManager._data.maxChapter || 1, 70);
-          game.saveManager.save();
-        }
-        
+        // 同步状态
         game._syncLauncherStats();
-        game._initGame();
         this.open = false;
         break;
     }
