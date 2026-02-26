@@ -10,6 +10,7 @@ const DAMAGE_NAMES = {
   'drone_cross': '无人机过载', 'drone_pulse': '无人机脉冲',
   'fire': '火焰弹', 'fire_dot': '燃烧', 'fire_explosion': '余烬爆破',
   'thunder_chain': '雷击', 'shock': '感电', 'shock_arc': '感电电弧', 'shock_chain': '雷电链弧',
+  'shock_field': '感电力场',
   'spinBlade': '回旋刃', 'spinBlade_sw': '回旋斩',
   'bleed': '撕裂DOT',
   'blizzard': '白磷弹', 'blizzard_shatter': '白磷爆燃', 'frostbite': '腐蚀DOT',
