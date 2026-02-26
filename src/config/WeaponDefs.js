@@ -114,7 +114,7 @@ const WEAPON_TREES = {
   },
   ionBeam: {
     name: '离子射线', desc: '锁定最强目标持续射击，标记叠加增伤',
-    icon: '⊕', color: '#FF4444', basePct: 2.5, interval: 4500,  // 恢复原值
+    icon: '⊕', color: '#FF4444', basePct: 3.2, interval: 4500,  // 2.5→3.2 buff
     branches: {
       damage:   { name: '伤害', desc: '+50%射线伤害', max: 5, requires: null },
       duration: { name: '持续', desc: '+1秒射击时间', max: 3, requires: null },

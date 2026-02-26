@@ -11,7 +11,7 @@ var BASE_RADIUS = 120;       // 基础吸引半径（100→120）
 var BASE_DURATION = 5000;    // 基础持续时间 5s（4→5）
 var BASE_PULL = 0.4;         // 基础吸力 px/帧（0.3→0.4）
 var TICK_INTERVAL = 400;     // 伤害tick间隔（500→400，更频繁）
-var NEGA_BASE_RATE = 0.06;    // 负能量基础转化率（0.08→0.06 nerf）
+var NEGA_BASE_RATE = 0.04;    // 负能量基础转化率（0.06→0.04 nerf）
 var NEGA_LIFETIME = 15000;   // 负能量砖块存活时间
 var PCT_HP_CAP_MULT = 8;    // %HP伤害上限 = baseAttack × 8（10→8 nerf）
 var NEGA_BRICK_SIZE = 1.5;   // 负能量砖块大小倍率
@@ -320,11 +320,11 @@ class GravityWellWeapon extends Weapon {
 
   _annihilate(negaBrick, brick, ctx, annihilateLv) {
     var absNega = Math.abs(negaBrick.hp);
-    var dmg = Math.min(absNega, brick.hp) * 0.7;  // 湮灭伤害打 0.7 折
+    var dmg = Math.min(absNega, brick.hp) * 0.5;  // 湮灭伤害打 0.5 折（0.7→0.5 nerf）
 
     // 扣血
     ctx.damageBrick(brick, dmg, 'negaBrick', 'energy');
-    negaBrick.hp += dmg / 0.7; // 负值趋近0（保持原消耗量）
+    negaBrick.hp += dmg / 0.5; // 负值趋近0（保持原消耗量）
 
     // 湮灭闪光粒子
     for (var p = 0; p < 12; p++) {
