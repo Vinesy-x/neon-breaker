@@ -304,6 +304,51 @@ class DevPanel {
         game.saveManager._data.maxChapter = 100;
         game.saveManager.save();
         break;
+      case 'balanceTest':
+        // 平衡测试：70关，闪电链/无人机/离子射线/奇点引擎满级，飞机雷弹+输出满级
+        this.gotoChapter = 70;
+        game.currentChapter = 70;
+        
+        // 清空现有武器
+        game.upgrades.reset();
+        
+        // 添加四个测试武器并满级
+        const testWeapons = ['lightning', 'drone', 'ionBeam', 'gravityWell'];
+        for (const wk of testWeapons) {
+          if (!game.upgrades.hasWeapon(wk)) {
+            game.upgrades.addWeapon(wk);
+          }
+          const weapon = game.upgrades.weapons[wk];
+          const tree = Config.WEAPON_TREES[wk];
+          if (weapon && tree) {
+            for (const bk in tree.branches) {
+              weapon.branches[bk] = tree.branches[bk].max;
+            }
+          }
+        }
+        
+        // 飞机升级：雷弹满级 + 输出满级
+        const shipUpgrades = ['thunder', 'damage', 'fireRate'];  // 雷弹 + 伤害 + 射速
+        for (const sk of shipUpgrades) {
+          const def = Config.SHIP_TREE[sk];
+          if (def) {
+            game.upgrades.shipTree[sk] = def.max;
+          }
+        }
+        
+        // 清统计
+        game.damageStats = {};
+        
+        // 更新存档
+        if (game.saveManager && game.saveManager._data) {
+          game.saveManager._data.maxChapter = Math.max(game.saveManager._data.maxChapter || 1, 70);
+          game.saveManager.save();
+        }
+        
+        game._syncLauncherStats();
+        game._initGame();
+        this.open = false;
+        break;
     }
   }
 
@@ -503,6 +548,7 @@ class DevPanel {
       { label: '📊 清统计', action: 'resetStats', color: '#888888' },
       { label: `⏩ 速度 ×${game._devTimeScale || 1}`, action: 'cycleSpeed', color: (game._devTimeScale || 1) > 1 ? Config.NEON_YELLOW : '#888888' },
       { label: '🔓 解锁全关', action: 'unlockAllChapters', color: '#FFD700' },
+      { label: '⚖ 平衡测试', action: 'balanceTest', color: '#FF00FF' },
     ];
 
     let col = 0, rowY = y;
