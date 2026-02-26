@@ -266,59 +266,37 @@ class DroneWeapon extends Weapon {
       return;
     }
 
-    // 计算砖块权重：越靠近危险线(y越大) → 权重越高
-    const dangerY = Config.SCREEN_HEIGHT * Config.BRICK_DANGER_Y;
-    const scored = [];
-    for (const brick of bricks) {
-      if (!brick.alive) continue;
-      const bc = brick.getCenter();
-      // y位置权重：越靠下(接近危险线)越危险
-      const yRatio = bc.y / dangerY; // 0~1，越接近1越危险
-      const proximityScore = yRatio * yRatio; // 平方加强前方优先级
-      // HP权重
-      const hpScore = Math.min(brick.hp / 20, 1);
-      const weight = proximityScore * 4 + hpScore;
-      scored.push({ brick, weight, x: bc.x, y: bc.y });
-    }
-
-    // 按权重排序
-    scored.sort((a, b) => b.weight - a.weight);
-
-    // 为每台无人机分配不同目标（欧氏距离分散）
-    const used = new Set();
-    const spread = 60 + deployLv * 25; // 最小欧氏间距
-
-    for (const d of this.drones) {
-      let best = null;
-      for (const s of scored) {
-        if (used.has(s.brick)) continue;
-        // 检查和已分配的无人机距离
-        let tooClose = false;
-        for (const other of this.drones) {
-          if (other === d || !other.targetBrick || !other.targetBrick.alive) continue;
-          const obc = other.targetBrick.getCenter();
-          const edist = Math.sqrt((s.x - obc.x) ** 2 + (s.y - obc.y) ** 2);
-          if (edist < spread) {
-            tooClose = true;
-            break;
-          }
+    // === 分区域分配：把屏幕分成N个区域，每台无人机负责一个区域 ===
+    const aliveBricks = bricks.filter(b => b.alive);
+    const numDrones = this.drones.length;
+    
+    // 把砖块按x坐标排序，然后均分给各个无人机
+    const sortedByX = [...aliveBricks].sort((a, b) => a.getCenter().x - b.getCenter().x);
+    const bricksPerDrone = Math.ceil(sortedByX.length / numDrones);
+    
+    for (let i = 0; i < numDrones; i++) {
+      const d = this.drones[i];
+      const startIdx = i * bricksPerDrone;
+      const endIdx = Math.min(startIdx + bricksPerDrone, sortedByX.length);
+      const regionBricks = sortedByX.slice(startIdx, endIdx);
+      
+      if (regionBricks.length === 0) {
+        // 这个区域没砖块了，找最近的
+        let best = null, bestDist = Infinity;
+        for (const brick of aliveBricks) {
+          const bc = brick.getCenter();
+          const dist = Math.sqrt((bc.x - d.x) ** 2 + (bc.y - d.y) ** 2);
+          if (dist < bestDist) { bestDist = dist; best = brick; }
         }
-        if (!tooClose) {
-          best = s;
-          break;
+        d.targetBrick = best;
+      } else {
+        // 在区域内选最危险的（最靠下）
+        let best = null, bestY = -Infinity;
+        for (const brick of regionBricks) {
+          const bc = brick.getCenter();
+          if (bc.y > bestY) { bestY = bc.y; best = brick; }
         }
-      }
-
-      // 如果没找到不扎堆的，就取权重最高的
-      if (!best && scored.length > 0) {
-        for (const s of scored) {
-          if (!used.has(s.brick)) { best = s; break; }
-        }
-      }
-
-      if (best) {
-        d.targetBrick = best.brick;
-        used.add(best.brick);
+        d.targetBrick = best;
       }
     }
   }
