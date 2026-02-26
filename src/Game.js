@@ -345,8 +345,8 @@ class Game {
     // 通用战斗tick
     this._tickCombatSystems(dt, dtMs);
 
-    // 危险线检测
-    if (this.collision.checkDangerLine()) { Sound.gameOver(); this.state = Config.STATE.GAME_OVER; return; }
+    // 危险线检测（无敌模式跳过）
+    if (!this._devInvincible && this.collision.checkDangerLine()) { Sound.gameOver(); this.state = Config.STATE.GAME_OVER; return; }
 
     this._tryShowLevelUpChoice();
   }
@@ -369,11 +369,11 @@ class Game {
     // 通用战斗tick
     this._tickCombatSystems(dt, dtMs);
 
-    // Boss/砖块越线检测
-    if (this.boss && this.boss.alive && this.boss.isPastDangerLine()) {
+    // Boss/砖块越线检测（无敌模式跳过）
+    if (!this._devInvincible && this.boss && this.boss.alive && this.boss.isPastDangerLine()) {
       Sound.gameOver(); this.state = Config.STATE.GAME_OVER; return;
     }
-    if (this.collision.checkDangerLine()) { Sound.gameOver(); this.state = Config.STATE.GAME_OVER; return; }
+    if (!this._devInvincible && this.collision.checkDangerLine()) { Sound.gameOver(); this.state = Config.STATE.GAME_OVER; return; }
 
     this._tryShowLevelUpChoice();
     if (this.state === Config.STATE.LEVEL_UP || this.state === Config.STATE.SKILL_CHOICE) return;

@@ -305,7 +305,7 @@ class DevPanel {
         game.saveManager.save();
         break;
       case 'balanceTest':
-        // 平衡测试：70关，闪电链/无人机/离子射线/奇点引擎满级，飞机雷弹+输出满级
+        // 平衡测试：70关，闪电链/无人机/离子射线/奇点引擎满级，飞机全满级，关闭升级，无敌
         this.gotoChapter = 70;
         game.currentChapter = 70;
         
@@ -332,17 +332,35 @@ class DevPanel {
           }
         }
         
-        // 飞机升级：雷弹满级 + 输出满级
-        const shipUpgrades = ['thunder', 'damage', 'fireRate'];
-        for (const sk of shipUpgrades) {
+        // 飞机全升级满级（雷电系满级，其他基础也满级）
+        for (const sk in Config.SHIP_TREE) {
           const def = Config.SHIP_TREE[sk];
-          if (def) {
-            game.upgrades.shipTree[sk] = def.max;
+          // 跳过互斥组里的火/冰（只要雷电）
+          if (def.exclusiveGroup === 'element' && !sk.includes('thunder') && !sk.includes('shock')) {
+            continue;
           }
+          // 检查前置条件
+          if (def.requires) {
+            let canUpgrade = true;
+            for (const req in def.requires) {
+              if ((game.upgrades.shipTree[req] || 0) < def.requires[req]) {
+                canUpgrade = false;
+                break;
+              }
+            }
+            if (!canUpgrade) continue;
+          }
+          game.upgrades.shipTree[sk] = def.max;
         }
         
         // 清统计
         game.damageStats = {};
+        
+        // 关闭升级（不弹升级面板）
+        game._devPauseLevelUp = true;
+        
+        // 开启无敌
+        game._devInvincible = true;
         
         // 同步状态
         game._syncLauncherStats();
