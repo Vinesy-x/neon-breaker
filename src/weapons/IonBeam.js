@@ -141,7 +141,7 @@ class IonBeamWeapon extends Weapon {
 
           // 标记增伤
           if (markLv > 0 && this.markStacks > 0) {
-            dmg *= (1 + this.markStacks * 0.08 * markLv);
+            dmg *= (1 + this.markStacks * 0.12 * markLv);  // 0.08→0.12 buff
           }
 
           // 造成伤害
@@ -191,7 +191,7 @@ class IonBeamWeapon extends Weapon {
             this._overloadPulseTimer += 100; // 每tick +100ms
             if (this._overloadPulseTimer >= 800) {
               this._overloadPulseTimer = 0;
-              this._overloadBurst(tx, ty, tickDamage * (3 + overloadLv * 2), ctx);
+              this._overloadBurst(tx, ty, tickDamage * (4 + overloadLv * 3), ctx);  // (3+2x)→(4+3x) buff
             }
           }
 
@@ -242,7 +242,7 @@ class IonBeamWeapon extends Weapon {
         this.beam = null;
 
         if (overloadLv > 0 && lastTarget) {
-          this._overloadBurst(lastTarget.x, lastTarget.y, tickDamage * (5 + overloadLv * 4), ctx);
+          this._overloadBurst(lastTarget.x, lastTarget.y, tickDamage * (6 + overloadLv * 5), ctx);  // (5+4x)→(6+5x) buff
         }
 
         this.markStacks = 0;
