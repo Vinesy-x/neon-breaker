@@ -20,8 +20,7 @@ class MeteorWeapon extends Weapon {
   update(dtMs, ctx) {
     const dt = dtMs / 16.67;
     this.timer += dtMs;
-    const freqLv = this.branches.freq || 0;
-    const interval = this.def.interval * Math.pow(0.85, freqLv);
+    const interval = this.def.interval; // CD由外部养成控制
 
     if (this.timer >= interval) {
       this.timer = 0;
@@ -29,7 +28,7 @@ class MeteorWeapon extends Weapon {
     }
 
     const baseAttack = ctx.getBaseAttack ? ctx.getBaseAttack() : 1;
-    const bombDmg = this.getDamage(baseAttack);
+    const bombDmg = this.getDamage(baseAttack, ctx);
     const baseRadius = 28 * (1 + (this.branches.radius || 0) * 0.25);
     const napalmLv = this.branches.napalm || 0;
     const incendiaryLv = this.branches.incendiary || 0;
@@ -54,6 +53,7 @@ class MeteorWeapon extends Weapon {
         this.bombs.push({
           x: bombX, y: bombY, vy: 1.5, startY: bombY, targetY: bomber.targetY,
           damage: bombDmg * (b52Lv > 0 ? 1.5 : 1),
+          isLast: bomber.bombsDropped === bomber.totalBombs - 1,
           radius: baseRadius * (b52Lv > 0 ? 1.5 : 1),
           isMain: !bomber.isEscort,
         });
@@ -96,13 +96,32 @@ class MeteorWeapon extends Weapon {
       // 炸弹到达目标y或飞出屏幕
       if (b.y >= b.targetY || b.y > Config.SCREEN_HEIGHT + 20) {
         // 爆炸
-        this._explodeArea(b.x, b.targetY, b.radius, b.damage, ctx);
+        var isNuke = false;
+        var nukeDmg = b.damage, nukeRadius = b.radius;
+        if (ctx.saveManager && ctx.saveManager.hasWeaponPassive('meteor', 'nuke') && b.isLast) {
+          isNuke = true; nukeDmg = b.damage * 5; nukeRadius = b.radius * 3;
+        }
+        this._explodeArea(b.x, b.targetY, isNuke ? nukeRadius : b.radius, isNuke ? nukeDmg : b.damage, ctx);
         this.explosions.push({ x: b.x, y: b.targetY, radius: b.radius * 0.6, alpha: 0.8, maxAlpha: 0.8 });
         if (this.explosions.length > 5) this.explosions.shift();
         Sound.missileExplode();
 
-        if (b52Lv > 0) ctx.screenShake = Math.min((ctx.screenShake || 0) + 2, 5);
-        else ctx.screenShake = Math.min((ctx.screenShake || 0) + 0.8, 3);
+        if (b52Lv > 0) if (!ctx.shakeCooldown) { ctx.screenShake = Math.min((ctx.screenShake || 0) + 2 * 0.5, 6); ctx.shakeCooldown = 10; }
+        else if (!ctx.shakeCooldown) { ctx.screenShake = Math.min((ctx.screenShake || 0) + 0.8 * 0.5, 6); ctx.shakeCooldown = 10; }
+
+        // fireBomb被动：所有炸弹留小火区2秒
+        if (ctx.saveManager && ctx.saveManager.hasWeaponPassive('meteor', 'fireBomb')) {
+          var fbLife = 2000;
+          // scorchEarth被动：×3
+          if (ctx.saveManager.hasWeaponPassive('meteor', 'scorchEarth')) fbLife *= 3;
+          if (this.fireZones.length < 12) {
+            this.fireZones.push({
+              x: b.x, y: b.targetY, radius: b.radius * 0.6,
+              life: fbLife, maxLife: fbLife, tickTimer: 0,
+              damage: b.damage * 0.2, isStrip: false,
+            });
+          }
+        }
 
         // 凝固汽油 — 主轰炸机创建/扩展火焰带
         if (napalmLv > 0 && b.isMain) {
@@ -121,7 +140,9 @@ class MeteorWeapon extends Weapon {
             // 清理快过期的火焰带，给新的腾位置
             const activeStrips = this.fireZones.filter(z => z.isStrip && z.life > 500);
             if (activeStrips.length < 4) {
-              const life = 3000 + (napalmLv - 1) * 1500;
+              var baseLife = 3000 + (napalmLv - 1) * 1500;
+              var scorchMult = (ctx.saveManager && ctx.saveManager.hasWeaponPassive('meteor', 'scorchEarth')) ? 3 : 1;
+              const life = baseLife * scorchMult;
               this.fireZones.push({
                 isStrip: true,
                 leftX: b.x - 15, rightX: b.x + 15,
@@ -174,13 +195,21 @@ class MeteorWeapon extends Weapon {
   }
 
   _launchBomber(ctx) {
-    // 找砖块最密集的y行作为轰炸目标
-    const targetY = this._findBestRow(ctx);
+    // 找砖块最密集的y行作为轰炸目标（限制最低高度，避免太高漏伤害）
+    const minBombY = Config.SCREEN_HEIGHT * 0.25;
+    const targetY = Math.max(this._findBestRow(ctx), minBombY);
     const fromLeft = Math.random() > 0.5;
     const escortLv = this.branches.escort || 0;
     const b52Lv = this.branches.b52 || 0;
     const bombsLv = this.branches.bombs || 0;
-    const totalBombs = Math.min((this.def.baseBombs + bombsLv * 2) * (b52Lv > 0 ? 2 : 1), 12);
+    // 基础投弹数由外部养成爽点控制
+    var baseBombs = this.def.baseBombs;
+    if (ctx && ctx.saveManager) {
+      var ss = ctx.saveManager.getWeaponSweetSpot('meteor');
+      if (ss !== null) baseBombs = ss;
+    }
+    var doubleMult = (ctx && ctx.saveManager && ctx.saveManager.hasWeaponPassive('meteor', 'doublePass')) ? 2 : 1;
+    const totalBombs = Math.min((baseBombs + bombsLv * 2) * (b52Lv > 0 ? 2 : 1) * doubleMult, 30);
 
     // 轰炸机固定在目标行上方60px飞行
     const flyY = Math.max(targetY - 60, 40);

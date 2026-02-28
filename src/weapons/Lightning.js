@@ -13,14 +13,31 @@ class LightningWeapon extends Weapon {
   }
 
   /** 闪电伤害 = baseAttack × basePct × (1 + damageLv × 0.5) */
-  getDamage(baseAttack) {
-    return Math.max(0.1, baseAttack * this.def.basePct * (1 + (this.branches.damage || 0) * 0.5));
+  getDamage(baseAttack, ctx) {
+    var shopMult = 1.0;
+    if (ctx && ctx.saveManager) shopMult = ctx.saveManager.getWeaponDmgMultiplier('lightning');
+    return Math.max(0.1, baseAttack * this.def.basePct * shopMult * (1 + (this.branches.damage || 0) * 0.5));
   }
 
   update(dtMs, ctx) {
+    // thorGod被动：每30秒全屏闪电
+    if (ctx && ctx.saveManager && ctx.saveManager.hasWeaponPassive('lightning', 'thorGod')) {
+      this._thorTimer = (this._thorTimer || 0) + dtMs;
+      if (this._thorTimer >= 30000) {
+        this._thorTimer = 0;
+        // 全屏闪电：对所有砖块造成1次伤害
+        var thorDmg = this.getDamage(ctx.getBaseAttack(), ctx) * 2;
+        for (var ti = 0; ti < ctx.bricks.length; ti++) {
+          if (ctx.bricks[ti].alive) ctx.damageBrick(ctx.bricks[ti], thorDmg, 'lightning_thor', 'energy');
+        }
+        // 全屏闪光效果
+        this.bolts.push({ points: [{x:0,y:0},{x:ctx.gameWidth,y:ctx.gameHeight}], alpha: 2.0, isThor: true });
+      }
+    }
     const dt = dtMs / 16.67;
     this.timer += dtMs;
-    const interval = this.def.interval * Math.pow(0.8, this.branches.freq || 0);
+    // CD由外部养成控制
+    const interval = this._getInterval(ctx);
 
     if (this.timer >= interval) {
       this.timer = 0;
@@ -45,7 +62,7 @@ class LightningWeapon extends Weapon {
     if (echoDepth > 3) return; // 防止无限回响
 
     const baseAttack = ctx.getBaseAttack ? ctx.getBaseAttack() : 1;
-    const baseDamage = this.getDamage(baseAttack);
+    const baseDamage = this.getDamage(baseAttack, ctx);
     const aliveBricks = ctx.bricks.filter(b => b.alive);
     if (aliveBricks.length === 0 && !(ctx.boss && ctx.boss.alive)) return;
 
@@ -54,7 +71,9 @@ class LightningWeapon extends Weapon {
     const hit = new Set();
     let lastX = startX, lastY = startY;
 
-    const chains = 3 + (this.branches.chains || 0) * 2; // 基础3跳，升级+2
+    // 基础链数由外部养成爽点控制，战斗分支额外+2/级
+    const baseChains = this._getBaseChains(ctx);
+    const chains = baseChains + (this.branches.chains || 0) * 2;
     const chargeLv = this.branches.charge || 0;   // 蓄能：每跳+25%伤害
     const shockLv = this.branches.shock || 0;     // 感电：DOT
     const echoLv = this.branches.echo || 0;       // 回响：链末端再次释放
@@ -115,6 +134,10 @@ class LightningWeapon extends Weapon {
       hit.add(nearest.idx);
       const bc = nearest.brick.getCenter();
       points.push({ x: bc.x, y: bc.y });
+      // shockMark被动：受伤+15%
+      if (ctx.saveManager && ctx.saveManager.hasWeaponPassive('lightning', 'shockMark') && nearest.brick.alive) {
+        nearest.brick._shockMark = Date.now() + 3000; // 标记3秒
+      }
       ctx.damageBrick(nearest.brick, damage, 'lightning', 'energy');
 
       // 麻痹：减速
@@ -132,6 +155,16 @@ class LightningWeapon extends Weapon {
 
       // 链末端特效
       if (c === chains - 1) {
+        // residualField被动：留电场持续伤害2秒
+        if (ctx.saveManager && ctx.saveManager.hasWeaponPassive('lightning', 'residualField') && ctx.addDot) {
+          // 电场对附近砖块持续伤
+          for (let ei = 0; ei < aliveBricks.length; ei++) {
+            var ebc = aliveBricks[ei].getCenter();
+            if (Math.sqrt((ebc.x - bc.x) ** 2 + (ebc.y - bc.y) ** 2) <= 60) {
+              ctx.addDot(aliveBricks[ei], Math.floor(baseDamage * 0.15), 2000, 'electric_field');
+            }
+          }
+        }
         // 超载：爆炸AOE
         if (overloadLv > 0) {
           this._explodeAt(bc.x, bc.y, 45, damage * 0.6, ctx);
@@ -146,6 +179,15 @@ class LightningWeapon extends Weapon {
     if (points.length > 1) {
       this.bolts.push({ points: points, alpha: 1.0 });
       Sound.lightning();
+    }
+
+    // dualChain被动：第2道闪电
+    if (echoDepth === 0 && ctx.saveManager && ctx.saveManager.hasWeaponPassive('lightning', 'dualChain')) {
+      if (!this._dualFired) {
+        this._dualFired = true;
+        this._fire(ctx, 1); // depth=1 防止无限
+        this._dualFired = false;
+      }
     }
   }
 
@@ -178,6 +220,23 @@ class LightningWeapon extends Weapon {
       }
     }
     return best;
+  }
+
+  _getInterval(ctx) {
+    if (ctx.saveManager) {
+      // 闪电链没有CD爽点，用默认interval
+      // CD由外部养成的其他途径（如被动）控制
+    }
+    return this.def.interval;
+  }
+
+  _getBaseChains(ctx) {
+    // 爽点属性：链数，基础3，每5级+1
+    if (ctx.saveManager) {
+      var ss = ctx.saveManager.getWeaponSweetSpot('lightning');
+      if (ss !== null) return ss;
+    }
+    return 3;
   }
 
   getRenderData() { return { bolts: this.bolts, explosions: this.explosions, color: this.def.color }; }

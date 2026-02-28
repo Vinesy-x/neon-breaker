@@ -21,8 +21,7 @@ class MissileWeapon extends Weapon {
   update(dtMs, ctx) {
     const dt = dtMs / 16.67;
     this.timer += dtMs;
-    const freqLv = this.branches.freq || 0;
-    const interval = this.def.interval * Math.pow(0.8, freqLv);
+    const interval = this._getInterval(ctx);
 
     // 触发发射
     if (this.timer >= interval) {
@@ -41,10 +40,17 @@ class MissileWeapon extends Weapon {
 
     // 更新飞行中弹体
     const baseAttack = ctx.getBaseAttack ? ctx.getBaseAttack() : 1;
-    const baseDmg = this.getDamage(baseAttack);
+    const baseDmg = this.getDamage(baseAttack, ctx);
     const pierceLv = this.branches.pierce || 0;
     const decayRate = Math.max(0, this.def.decayRate - pierceLv * 0.15);
-    const maxPierce = this.def.basePierce + (this.branches.deepPierce || 0) * 3;
+    // 基础穿透由外部养成爽点控制
+    var basePierce = this.def.basePierce;
+    if (ctx && ctx.saveManager) {
+      var ss = ctx.saveManager.getWeaponSweetSpot('missile');
+      if (ss !== null) basePierce = ss;
+    }
+    var extraPierce = (ctx && ctx.saveManager && ctx.saveManager.hasWeaponPassive('missile', 'pierceBonus')) ? 3 : 0;
+    const maxPierce = basePierce + (this.branches.deepPierce || 0) * 3 + extraPierce;
     const hyperLv = this.branches.hyperVelocity || 0;
     const dotExploitLv = this.branches.dotExploit || 0;
     const shockwaveLv = this.branches.shockwave || 0;
@@ -70,7 +76,8 @@ class MissileWeapon extends Weapon {
           if (hyperLv > 0) {
             dmg *= Math.pow(1.2, sh.hitCount - 1); // 越打越疼
           } else {
-            dmg *= Math.pow(1 - decayRate, sh.hitCount - 1);
+            if (!(ctx.saveManager && ctx.saveManager.hasWeaponPassive('missile', 'pierceNoDecay')))
+              dmg *= Math.pow(1 - decayRate, sh.hitCount - 1);
           }
           // 烈性反应：DOT加成
           if (dotExploitLv > 0 && brick.dotCount) {
@@ -78,6 +85,10 @@ class MissileWeapon extends Weapon {
             dmg *= (1 + dots * dotExploitLv * 0.2);
           }
 
+          // armorBreak被动：降防标记
+          if (ctx.saveManager && ctx.saveManager.hasWeaponPassive('missile', 'armorBreak') && brick.alive) {
+            brick._armorBreak = Date.now() + 3000;
+          }
           ctx.damageBrick(brick, dmg, 'armorPiercing', 'physical');
 
           // 碎甲标记
@@ -88,11 +99,21 @@ class MissileWeapon extends Weapon {
 
           // 冲击波：向两侧溅射
           if (shockwaveLv > 0) {
-            this._triggerShockwave(brick, dmg * 0.3, ctx);
+            var splashPct = (ctx.saveManager && ctx.saveManager.hasWeaponPassive('missile', 'shockwaveUp')) ? 1.0 : 0.3;
+            this._triggerShockwave(brick, dmg * splashPct, ctx);
           }
 
           // 穿透上限
           if (sh.hitCount >= maxPierce) {
+            // doomPierce被动：穿透满后全列爆炸
+            if (sh.hitCount >= 10 && ctx.saveManager && ctx.saveManager.hasWeaponPassive('missile', 'doomPierce')) {
+              for (var di = 0; di < ctx.bricks.length; di++) {
+                var db = ctx.bricks[di];
+                if (db.alive && Math.abs(db.getCenter().x - sh.x) < db.width) {
+                  ctx.damageBrick(db, dmg * 2, 'missile_doom', 'fire');
+                }
+              }
+            }
             this.shells.splice(i, 1);
             break;
           }
@@ -106,7 +127,8 @@ class MissileWeapon extends Weapon {
             sh.y >= boss.y && sh.y <= boss.y + boss.height) {
           let dmg = baseDmg;
           if (hyperLv > 0) dmg *= Math.pow(1.2, sh.hitCount);
-          else dmg *= Math.pow(1 - decayRate, sh.hitCount);
+          else if (!(ctx.saveManager && ctx.saveManager.hasWeaponPassive('missile', 'pierceNoDecay')))
+            dmg *= Math.pow(1 - decayRate, sh.hitCount);
           ctx.damageBoss(dmg, 'armorPiercing');
           sh.hitCount++;
           // 不移除，穿透Boss继续
@@ -135,10 +157,11 @@ class MissileWeapon extends Weapon {
     const salvoLv = this.branches.salvo || 0;
     const totalShots = 1 + salvoLv;
 
-    // 副翼位置：左侧始终有，右侧需要双管炮
+    // 发射位置：单管从中心，双管从两侧
     const offset = 20 + twinLv * 4;
-    const sides = twinLv > 0 ? ['left', 'right'] : ['left'];
+    const sides = twinLv > 0 ? ['left', 'right'] : ['center'];
     const sideOffsets = {
+      center: lcx,
       left: lcx - launcherW / 2 - offset,
       right: lcx + launcherW / 2 + offset,
     };
@@ -207,6 +230,14 @@ class MissileWeapon extends Weapon {
       shockwaves: this.shockwaves,
       color: this.def.color,
     };
+  }
+
+  _getInterval(ctx) {
+    if (ctx && ctx.saveManager) {
+      var ss = ctx.saveManager.getWeaponSweetSpot('missile');
+      if (ss !== null) return this.def.interval; // missile sweetspot is pierce, not CD
+    }
+    return this.def.interval;
   }
 
   getWingData(lcx, lcy) {

@@ -61,6 +61,7 @@ class Renderer {
 
     // 暂停按钮区域
     this._pauseBtnArea = null;
+    this._speedBtnArea = null;
     // 暂停对话框区域
     this._pauseDialogAreas = null;
   }
@@ -98,16 +99,18 @@ class Renderer {
 
   drawDamageStats(stats, expanded) { return HUD.drawDamageStats(this.ctx, stats, expanded); }
 
-  drawChapterHUD(chapter, score, combo, playerLevel, elapsedMs, soundEnabled) {
-    this._pauseBtnArea = HUD.drawChapterHUD(this.ctx, chapter, score, combo, playerLevel, elapsedMs, soundEnabled);
+  drawChapterHUD(chapter, score, combo, playerLevel, elapsedMs, soundEnabled, timeScale) {
+    var areas = HUD.drawChapterHUD(this.ctx, chapter, score, combo, playerLevel, elapsedMs, soundEnabled, timeScale);
+    this._pauseBtnArea = areas.pauseBtn;
+    this._speedBtnArea = areas.speedBtn;
   }
 
   // ===== UI 界面 =====
   drawTitle() { UI.drawTitle(this.ctx); }
   handleAgeTipTap(tap) { return UI.handleAgeTipTap(tap); }
   drawLoading() { UI.drawLoading(this.ctx); }
-  drawSkillChoice(choices, upgrades, title) { UI.drawSkillChoice(this.ctx, this.sprites, choices, upgrades, title); }
-  drawGameOver(score, playerLevel, ownedList) { UI.drawGameOver(this.ctx, score, playerLevel, ownedList); }
+  drawSkillChoice(choices, upgrades, title, game) { UI.drawSkillChoice(this.ctx, this.sprites, choices, upgrades, title, game); }
+  drawGameOver(data) { UI.drawGameOver(this.ctx, data); }
   drawBossWarning(bossType) { UI.drawBossWarning(this.ctx, bossType); }
 
   drawPauseDialog() {
@@ -130,9 +133,17 @@ class Renderer {
   set _weaponDetailTab(v) { this.chapter._weaponDetailTab = v; }
   get _skillTreeScrollY() { return this.chapter._skillTreeScrollY; }
   set _skillTreeScrollY(v) { this.chapter._skillTreeScrollY = v; }
+  get _attrScrollY() { return this.chapter._attrScrollY; }
+  set _attrScrollY(v) { this.chapter._attrScrollY = v; }
+  get _attrMaxScroll() { return this.chapter._attrMaxScroll; }
+  get _skillTreeMaxScroll() { return this.chapter._skillTreeMaxScroll; }
+  get _weaponListScrollY() { return this.chapter._weaponListScrollY; }
+  set _weaponListScrollY(v) { this.chapter._weaponListScrollY = v; }
+  get _weaponListMaxScroll() { return this.chapter._weaponListMaxScroll; }
 
   drawChapterSelect(maxChapter, records, coins) { this.chapter.drawChapterSelect(this.ctx, maxChapter, records, coins); }
   drawUpgradeShop(saveManager) { this.chapter.drawUpgradeShop(this.ctx, saveManager); }
+  triggerUpgradeEffect(key) { this.chapter.triggerUpgradeEffect(key); }
   drawWeaponShop(saveManager) { this.chapter.drawWeaponShop(this.ctx, saveManager); }
 
   getChapterSelectHit(tap) { return this.chapter.getChapterSelectHit(tap); }
@@ -151,6 +162,12 @@ class Renderer {
 
   getPauseBtnHit(tap) {
     const a = this._pauseBtnArea;
+    if (!a) return false;
+    return tap.x >= a.x && tap.x <= a.x + a.w && tap.y >= a.y && tap.y <= a.y + a.h;
+  }
+
+  getSpeedBtnHit(tap) {
+    const a = this._speedBtnArea;
     if (!a) return false;
     return tap.x >= a.x && tap.x <= a.x + a.w && tap.y >= a.y && tap.y <= a.y + a.h;
   }

@@ -18,9 +18,9 @@ const DAMAGE_NAMES = {
   'ionBeam_overload': '射线过载', 'ionBeam_split': '射线溅射',
   'ionBeam_super': '超级离子球', 'ionBeam_splash': '离子球溅射',
   'ionBeam_path': '离子球沿途', 'ionBeam_burn': '离子灼烧',
-  'frostStorm': '冰霜发生器', 'frostStorm_splash': '冰霜溅射', 'frostStorm_shatter': '碎冰爆炸',
-  'frost': '冰霜DOT', 'ice_shatter': '碎冰迸射',
-  'kunai': '光能迫击炮', 'kunai_aoe': '迫击炮爆炸', 'kunai_chain': '迫击炮连锁',
+  'frostStorm': '寒冰发生器', 'frostStorm_splash': '寒冰溅射', 'frostStorm_shatter': '碎冰爆炸',
+  'frost': '寒冰DOT', 'ice_shatter': '碎冰迸射',
+  'kunai': '寒冰弹', 'kunai_aoe': '寒冰爆炸', 'kunai_chain': '寒冰连锁',
   'gravityWell': '奇点引擎', 'gravityWell_pctHp': '事件视界',
   'negaBrick': '湮灭', 'negaBrick_splash': '湮灭冲击',
 };

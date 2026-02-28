@@ -72,7 +72,7 @@ class SpriteCache {
     this._createWeaponIcons();
   }
 
-  // ===== 迫击炮弹 =====
+  // ===== 寒冰弹 =====
   _createMortarShell() {
     // 基础尺寸的炮弹（scale=1）
     const w = 24, h = 16;
@@ -264,7 +264,7 @@ class SpriteCache {
   _createWeaponIcons() {
     const S = 32, C = 16;
 
-    // --- 光能迫击炮：炮弹 ---
+    // --- 寒冰弹：弹体 ---
     this.getOrCreate('wicon_kunai', S, S, C, C, (ctx) => {
       ctx.fillStyle = '#00FFFF';
       ctx.beginPath();
@@ -357,7 +357,7 @@ class SpriteCache {
       ctx.beginPath(); ctx.arc(C, C, 3, 0, Math.PI * 2); ctx.stroke();
     });
 
-    // --- 冰霜发生器：横向冰晶屏障 ---
+    // --- 寒冰发生器：横向冰晶屏障 ---
     this.getOrCreate('wicon_frostStorm', S, S, C, C, (ctx) => {
       // 底座横条
       ctx.fillStyle = '#00DDFF';

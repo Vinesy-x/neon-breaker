@@ -20,7 +20,8 @@ class DroneWeapon extends Weapon {
   }
 
   _syncDrones() {
-    const count = 2 + (this.branches.count || 0);
+    var extraDrones = (ctx && ctx.saveManager && ctx.saveManager.hasWeaponPassive('drone', 'matrixPlus')) ? 2 : 0;
+    const count = 2 + (this.branches.count || 0) + extraDrones;
     while (this.drones.length < count) {
       this.drones.push({
         x: Config.SCREEN_WIDTH / 2 + (Math.random() - 0.5) * 60,
@@ -36,10 +37,18 @@ class DroneWeapon extends Weapon {
   }
 
   update(dtMs, ctx) {
+    // shield被动：每15秒给玩家护盾
+    if (ctx && ctx.saveManager && ctx.saveManager.hasWeaponPassive('drone', 'shield')) {
+      this._shieldTimer = (this._shieldTimer || 0) + dtMs;
+      if (this._shieldTimer >= 15000) {
+        this._shieldTimer = 0;
+        if (ctx.launcher) ctx.launcher.shield = Math.min((ctx.launcher.shield || 0) + 1, 3);
+      }
+    }
     const dt = dtMs / 16.67;
     this._syncDrones();
 
-    const speedLv = this.branches.speed || 0;
+    const speedLv = 0; // speed分支已移除，机动由外部养成控制
     const arcLv = this.branches.arc || 0;
     const deployLv = this.branches.deploy || 0;
     const lcx = ctx.launcher.getCenterX();
@@ -83,14 +92,28 @@ class DroneWeapon extends Weapon {
     // === 激光线伤害 ===
     const tickSpeedMult = 1 + speedLv * 0.3;
     this._tickTimer += dtMs * tickSpeedMult;
-    const tickInterval = 300;
+    // tick间隔由外部养成爽点控制（基础450，每5级-30）
+    var tickInterval = 300;
+    if (ctx && ctx.saveManager) {
+      var ss = ctx.saveManager.getWeaponSweetSpot('drone');
+      if (ss !== null) tickInterval = Math.max(150, ss * 0.67); // 比例换算
+    }
 
     if (this._tickTimer >= tickInterval) {
       this._tickTimer = 0;
       const baseAttack = ctx.getBaseAttack ? ctx.getBaseAttack() : 1;
-      const damage = this.getDamage(baseAttack);
+      var rawDamage = this.getDamage(baseAttack, ctx);
+      // overload被动：砖块到达70%危险线时伤害×2
+      var dangerLine = Config.SCREEN_HEIGHT * 0.65;
+      var hasDangerBricks = false;
+      for (var di = 0; di < ctx.bricks.length; di++) {
+        if (ctx.bricks[di].alive && ctx.bricks[di].getCenter().y > dangerLine) { hasDangerBricks = true; break; }
+      }
+      var overloadMult = (hasDangerBricks && ctx.saveManager && ctx.saveManager.hasWeaponPassive('drone', 'overload')) ? 2 : 1;
+      const damage = rawDamage * overloadMult;
       const widthLv = this.branches.width || 0;
-      const laserWidth = 10 + widthLv * 8;
+      var annihilateMult = (ctx.saveManager && ctx.saveManager.hasWeaponPassive('drone', 'annihilate')) ? 2 : 1;
+      const laserWidth = (10 + widthLv * 8) * annihilateMult;
       const overchargeLv = this.branches.overcharge || 0;
       const focusLv = this.branches.focus || 0;
       const pulseLv = this.branches.pulse || 0;

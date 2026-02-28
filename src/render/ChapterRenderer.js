@@ -13,6 +13,8 @@ class ChapterRenderer {
     this._chapterViewH = 0;
     this._chapterTabAreas = null;
     this._shopUpgradeAreas = [];
+    this._upgradeEffects = []; // 升级特效粒子
+    this._weaponListScrollY = 0; // 武器列表滚动偏移
     this._weaponHitAreas = [];
     this._weaponDetailKey = null;
     this._weaponDetailHitAreas = [];
@@ -41,7 +43,17 @@ class ChapterRenderer {
 
   _drawBg(ctx, sw, sh, alpha, bgImg) {
     if (bgImg) {
-      ctx.drawImage(bgImg, 0, 0, sw, sh);
+      // cover适配，高度排除底栏(tabH=70+SAFE_BOTTOM)
+      const imgW = bgImg.width || 1024;
+      const imgH = bgImg.height || 1024;
+      const visH = sh - Config.SAFE_BOTTOM - 70;
+      const scale = Math.max(sw / imgW, visH / imgH);
+      const drawW = imgW * scale;
+      const drawH = imgH * scale;
+      const x = (sw - drawW) / 2;
+      const y = (visH - drawH) / 2;
+
+      ctx.drawImage(bgImg, x, y, drawW, drawH);
       ctx.fillStyle = 'rgba(5,3,20,' + alpha + ')';
       ctx.fillRect(0, 0, sw, sh);
     } else {
@@ -220,109 +232,154 @@ class ChapterRenderer {
 
   // ===== 升级商店 =====
   drawUpgradeShop(ctx, saveManager) {
-    const sw = Config.SCREEN_WIDTH, sh = Config.SCREEN_HEIGHT, top = Config.SAFE_TOP;
+    var sw = Config.SCREEN_WIDTH, sh = Config.SCREEN_HEIGHT, top = Config.SAFE_TOP;
     ctx.fillStyle = 'rgba(5,3,20,1)'; ctx.fillRect(0, 0, sw, sh);
-    if (this._upgradeBg) { ctx.drawImage(this._upgradeBg, 0, 0, sw, sh); ctx.fillStyle = 'rgba(5,3,20,0.55)'; ctx.fillRect(0, 0, sw, sh); }
+    this._drawBg(ctx, sw, sh, 0.3, this._upgradeBg);
 
     // 顶部信息栏
-    ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fillRect(0, 0, sw, top + 32);
-    const IL1 = getIconLoader();
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, sw, top + 32);
+    var IL1 = getIconLoader();
     IL1.drawIcon(ctx, 'ui_coin', 20, top + 13, 16);
     ctx.fillStyle = Config.NEON_YELLOW; ctx.font = 'bold 14px monospace';
     ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText('' + saveManager.getCoins(), 30, top + 6);
     ctx.fillStyle = Config.NEON_CYAN; ctx.font = 'bold 16px monospace';
     ctx.textAlign = 'center'; ctx.fillText('飞机改造', sw / 2, top + 6);
 
-    const margin = 12, contentW = sw - margin * 2;
-    const upgrades = [
-      { key:'attack', name:'弹药强化', desc:'子弹伤害+1', iconKey:'upgrade_attack', color:'#FF6644' },
-      { key:'fireRate', name:'引擎改造', desc:'射击间隔-2%', iconKey:'upgrade_fireRate', color:'#44BBFF' },
-      { key:'crit', name:'瞄准系统', desc:'暴击率+1%', iconKey:'upgrade_crit', color:'#FFAA00' },
-      { key:'startLevel', name:'科技预载', desc:'开局自带等级', iconKey:'upgrade_startLevel', color:'#AA66FF' },
-      { key:'coinBonus', name:'回收模块', desc:'金币收益+5%', iconKey:'upgrade_coinBonus', color:'#44FF88' },
+    // imgPt：原图坐标→屏幕坐标（与_drawBg cover适配同步）
+    var imgW = this._upgradeBg ? (this._upgradeBg.width || 1024) : 1024;
+    var imgH = this._upgradeBg ? (this._upgradeBg.height || 1024) : 1024;
+    var visH = sh - Config.SAFE_BOTTOM - 70;
+    var imgScale = Math.max(sw / imgW, visH / imgH);
+    var bgOffX = (sw - imgW * imgScale) / 2;
+    var bgOffY = (visH - imgH * imgScale) / 2;
+    function imgPt(ix, iy) { return { x: bgOffX + ix * imgScale, y: bgOffY + iy * imgScale }; }
+
+    // Vin确认锚点（原图1024x1024）
+    var anchors = {
+      nose:   imgPt(370, 685),
+      tail:   imgPt(540, 420),
+      leftW:  imgPt(650, 580),
+      rightW: imgPt(420, 495),
+      core:   imgPt(506, 540),
+    };
+
+    var cardW = sw * 0.43, cardH = 90;
+    var m = 5;
+
+    // Vin手动指定：部位 → 占比位置 + 靠左/靠右（基于可见区域visH）
+    var visH = sh - Config.SAFE_BOTTOM - 70;
+    var layouts = [
+      { key:'attack',    name:'机炮改装',   part:'机头', icon:'nose_icon',  desc:'攻击力',   suffix:'',  color:'#44FF88',
+        anchor: anchors.nose,   x: m,              y: visH * (680 / 1024) },
+      { key:'energyDmg', name:'尾翼·脉冲',  part:'尾翼', icon:'tail_icon',  desc:'能量伤害', suffix:'%', color:'#BB66FF',
+        anchor: anchors.tail,   x: sw - cardW - m, y: visH * (240 / 1024) },
+      { key:'fireDmg',   name:'左翼·烈焰',  part:'左翼', icon:'leftW_icon',  desc:'火焰伤害', suffix:'%', color:'#FF4422',
+        anchor: anchors.leftW,  x: sw - cardW - m, y: visH * (630 / 1024) },
+      { key:'iceDmg',    name:'右翼·寒冰',  part:'右翼', icon:'rightW_icon',  desc:'寒冰伤害', suffix:'%', color:'#44DDFF',
+        anchor: anchors.rightW, x: m,              y: visH * (330 / 1024) },
+      { key:'crit',      name:'引擎核心',   part:'引擎', icon:'core_icon',  desc:'暴击率',   suffix:'%', color:'#FFAA00',
+        anchor: anchors.core,   x: sw - cardW - m, y: visH * (430 / 1024) },
     ];
-    const itemH = 96, itemGap = 8, startY = top + 38;
+
     this._shopUpgradeAreas = [];
-    const SaveManagerClass = require('../systems/SaveManager');
+    var SaveManagerClass = require('../systems/SaveManager');
+    var now = Date.now();
 
-    for (let i = 0; i < upgrades.length; i++) {
-      const u = upgrades[i], y = startY + i * (itemH + itemGap);
-      const lv = saveManager.getUpgrade(u.key), maxLvl = SaveManagerClass.UPGRADE_CONFIG[u.key] ? SaveManagerClass.UPGRADE_CONFIG[u.key].maxLevel : 1;
-      const maxed = saveManager.isUpgradeMaxed(u.key), cost = saveManager.getUpgradeCost(u.key), canAfford = saveManager.getCoins() >= cost;
+    for (var i = 0; i < layouts.length; i++) {
+      var u = layouts[i];
+      var ax = u.anchor.x, ay = u.anchor.y;
+      var posX = u.x, posY = u.y;
 
-      // 卡片背景（半透明毛玻璃感）
-      ctx.fillStyle = 'rgba(12,8,35,0.85)';
-      ctx.beginPath(); ctx.roundRect(margin, y, contentW, itemH, 14); ctx.fill();
-      // 左侧彩色条
-      ctx.fillStyle = u.color + '88';
-      ctx.beginPath(); ctx.roundRect(margin, y, 4, itemH, [14, 0, 0, 14]); ctx.fill();
-      // 边框
-      ctx.strokeStyle = u.color + '22'; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.roundRect(margin, y, contentW, itemH, 14); ctx.stroke();
+      var lv = saveManager.getUpgrade(u.key);
+      var maxLvl = SaveManagerClass.UPGRADE_CONFIG[u.key] ? SaveManagerClass.UPGRADE_CONFIG[u.key].maxLevel : 1;
+      var maxed = saveManager.isUpgradeMaxed(u.key);
+      var cost = saveManager.getUpgradeCost(u.key);
+      var canAfford = saveManager.getCoins() >= cost;
 
-      // 图标
-      const iconCx = margin + 36, iconCy = y + 38;
-      ctx.fillStyle = u.color + '18';
-      ctx.beginPath(); ctx.arc(iconCx, iconCy, 22, 0, Math.PI * 2); ctx.fill();
-      const IL = getIconLoader();
-      IL.drawIcon(ctx, u.iconKey, iconCx, iconCy, 36);
-
-      // 名称
-      const textX = margin + 66;
-      ctx.fillStyle = '#FFFFFF'; ctx.font = 'bold 18px monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-      ctx.fillText(u.name, textX, y + 10);
-
-      // 描述
-      ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.font = '14px monospace';
-      ctx.fillText(u.desc, textX, y + 34);
-
-      // 进度条
-      const barX = textX, barY2 = y + 56, barW = contentW - 66 - margin - 84, barH = 6;
-      ctx.fillStyle = 'rgba(255,255,255,0.06)';
-      ctx.beginPath(); ctx.roundRect(barX, barY2, barW, barH, 3); ctx.fill();
-      const fillW = barW * (lv / maxLvl);
-      if (fillW > 0) {
-        ctx.fillStyle = u.color + 'CC';
-        ctx.beginPath(); ctx.roundRect(barX, barY2, Math.max(fillW, 6), barH, 3); ctx.fill();
+      // 引导线起点：卡牌四边中点选最近锚点的
+      var mids = [
+        { x: posX + cardW / 2, y: posY },
+        { x: posX + cardW / 2, y: posY + cardH },
+        { x: posX,             y: posY + cardH / 2 },
+        { x: posX + cardW,     y: posY + cardH / 2 },
+      ];
+      var bestD = 99999, lsx = mids[0].x, lsy = mids[0].y;
+      for (var mi = 0; mi < mids.length; mi++) {
+        var ddx = mids[mi].x - ax, ddy = mids[mi].y - ay;
+        if (ddx * ddx + ddy * ddy < bestD) { bestD = ddx*ddx+ddy*ddy; lsx = mids[mi].x; lsy = mids[mi].y; }
       }
-      // 等级文字（进度条下方）
-      ctx.fillStyle = u.color; ctx.font = 'bold 12px monospace';
-      ctx.fillText('Lv.' + lv + ' / ' + maxLvl, barX, y + 66);
 
-      // 升级按钮
-      const btnW = 76, btnH2 = 44, btnX = sw - margin - btnW - 8, btnY = y + (itemH - btnH2) / 2;
+      ctx.strokeStyle = u.color + '18'; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.moveTo(lsx, lsy); ctx.lineTo(ax, ay); ctx.stroke();
+      ctx.strokeStyle = u.color + '77'; ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath(); ctx.moveTo(lsx, lsy); ctx.lineTo(ax, ay); ctx.stroke();
+      ctx.setLineDash([]);
+      var pulse = 0.5 + 0.5 * Math.sin(now / 500 + i * 1.2);
+      var pAlpha = Math.floor(pulse * 140 + 80).toString(16).padStart(2, '0');
+      ctx.fillStyle = u.color + pAlpha;
+      ctx.beginPath(); ctx.arc(ax, ay, 2.5 + pulse * 2, 0, Math.PI * 2); ctx.fill();
+
+      // 卡牌
+      ctx.fillStyle = 'rgba(8,4,22,0.92)';
+      ctx.beginPath(); ctx.roundRect(posX, posY, cardW, cardH, 8); ctx.fill();
+      var isFlashing = this._upgradeFlash && this._upgradeFlash.key === u.key && (Date.now() - this._upgradeFlash.time) < 400;
+      ctx.strokeStyle = isFlashing ? u.color : ((canAfford || maxed) ? u.color + '55' : u.color + '18');
+      ctx.lineWidth = isFlashing ? 2.5 : 1;
+      ctx.beginPath(); ctx.roundRect(posX, posY, cardW, cardH, 8); ctx.stroke();
+      ctx.fillStyle = u.color + '66';
+      ctx.fillRect(posX + 8, posY, cardW - 16, 2);
+
+      // 第1行：图标 + 名称（垂直居中）
+      var IL = getIconLoader();
+      IL.drawIcon(ctx, u.icon, posX + 18, posY + 12, 22);
+
+      ctx.fillStyle = '#FFFFFF'; ctx.font = 'bold 13px monospace';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText(u.name, posX + 34, posY + 12);
+
+      // 第2行：效果数值
+      ctx.fillStyle = u.color; ctx.font = 'bold 16px monospace';
+      ctx.textBaseline = 'top';
+      ctx.fillText(u.desc + ' +' + lv + u.suffix, posX + 8, posY + 28);
+
+      // 第3行：等级
+      ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.font = '11px monospace';
+      ctx.fillText('Lv.' + lv + '/' + maxLvl, posX + 8, posY + 50);
+
+      var btnW = 72, btnH = 30, btnX = posX + cardW - btnW - 6, btnY = posY + cardH - btnH - 6;
       if (maxed) {
-        ctx.fillStyle = 'rgba(80,255,80,0.1)';
-        ctx.beginPath(); ctx.roundRect(btnX, btnY, btnW, btnH2, 10); ctx.fill();
-        ctx.strokeStyle = Config.NEON_GREEN + '44'; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.roundRect(btnX, btnY, btnW, btnH2, 10); ctx.stroke();
-        ctx.fillStyle = Config.NEON_GREEN; ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText('MAX', btnX + btnW / 2, btnY + btnH2 / 2);
+        ctx.fillStyle = Config.NEON_GREEN; ctx.font = 'bold 14px monospace';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('MAX', btnX + btnW / 2, btnY + btnH / 2);
       } else {
-        ctx.fillStyle = canAfford ? 'rgba(0,200,255,0.12)' : 'rgba(60,60,60,0.08)';
-        ctx.beginPath(); ctx.roundRect(btnX, btnY, btnW, btnH2, 10); ctx.fill();
-        ctx.strokeStyle = canAfford ? Config.NEON_CYAN + '66' : 'rgba(100,100,100,0.15)'; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.roundRect(btnX, btnY, btnW, btnH2, 10); ctx.stroke();
-        ctx.fillStyle = canAfford ? Config.NEON_YELLOW : 'rgba(150,150,150,0.35)';
-        ctx.font = 'bold 14px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        const bcx = btnX + btnW / 2, bcy = btnY + btnH2 / 2;
-        getIconLoader().drawIcon(ctx, 'ui_coin', bcx - ctx.measureText('' + cost).width / 2 - 9, bcy, 13);
+        ctx.fillStyle = canAfford ? 'rgba(0,200,255,0.15)' : 'rgba(30,30,30,0.1)';
+        ctx.beginPath(); ctx.roundRect(btnX, btnY, btnW, btnH, 4); ctx.fill();
+        ctx.strokeStyle = canAfford ? Config.NEON_CYAN + '44' : 'rgba(60,60,60,0.1)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.roundRect(btnX, btnY, btnW, btnH, 4); ctx.stroke();
+        ctx.fillStyle = canAfford ? Config.NEON_YELLOW : 'rgba(100,100,100,0.3)';
+        ctx.font = 'bold 13px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        var bcx = btnX + btnW / 2, bcy = btnY + btnH / 2;
+        getIconLoader().drawIcon(ctx, 'ui_coin', bcx - ctx.measureText('' + cost).width / 2 - 9, bcy, 10);
         ctx.fillText(' ' + cost, bcx + 2, bcy);
-        this._shopUpgradeAreas.push({ key: u.key, x: btnX, y: btnY, w: btnW, h: btnH2 });
+        this._shopUpgradeAreas.push({ key: u.key, x: btnX, y: btnY, w: btnW, h: btnH });
       }
     }
+    this._drawUpgradeEffects(ctx);
     this._drawLobbyTabs(ctx, sw, sh, 1);
   }
 
   // ===== 武器商店 =====
   drawWeaponShop(ctx, saveManager) {
+    const WeaponUnlockConfig = require('../config/WeaponUnlockConfig');
+
     const sw = Config.SCREEN_WIDTH, sh = Config.SCREEN_HEIGHT, top = Config.SAFE_TOP;
     const WEAPON_TREES = require('../config/WeaponDefs');
     const SHIP_TREE = require('../config/ShipDefs');
     const SaveManagerClass = require('../systems/SaveManager');
     this._weaponHitAreas = [];
     ctx.fillStyle = 'rgba(0,0,0,0.95)'; ctx.fillRect(0, 0, sw, sh);
-    if (this._weaponBg) { ctx.drawImage(this._weaponBg, 0, 0, sw, sh); ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, 0, sw, sh); }
+    this._drawBg(ctx, sw, sh, 0.55, this._weaponBg);
 
     // 顶部信息栏
     ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fillRect(0, 0, sw, top + 32);
@@ -336,34 +393,49 @@ class ChapterRenderer {
     ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.font = '11px monospace';
     ctx.textAlign = 'right'; ctx.fillText('暴伤+' + (critBonus * 100).toFixed(0) + '%', sw - 14, top + 8);
 
-    if (this._weaponDetailKey) { this._drawWeaponDetail(ctx, sw, sh, top, saveManager, this._weaponDetailKey); this._drawLobbyTabs(ctx, sw, sh, 2); return; }
+    if (this._weaponDetailKey) { this._drawLobbyTabs(ctx, sw, sh, 2); this._drawWeaponDetail(ctx, sw, sh, top, saveManager, this._weaponDetailKey); return; }
 
-    // 武器解锁对应关卡（飞机和光能迫击炮/闪电链初始解锁）
-    const weaponUnlockMap = { ship:1, kunai:1, lightning:1, missile:3, meteor:6, drone:10, spinBlade:15, blizzard:25, ionBeam:40, frostStorm:55 };
+    // 武器解锁配置统一在 WeaponUnlockConfig
     const maxChapter = saveManager.getMaxChapter();
 
-    // 构建武器列表（飞机 + 8武器）
+    // 构建武器列表（飞机 + 武器，按解锁章节排序）
     const allItems = [{ key: 'ship', iconKey: 'tab_upgrade', name: '战斗飞机', color: '#00DDFF', isShip: true }];
-    const weaponKeys = Object.keys(WEAPON_TREES);
+    var WUC = require('../config/WeaponUnlockConfig');
+    var weaponKeys = Object.keys(WEAPON_TREES);
+    weaponKeys.sort(function(a, b) { return (WUC[a] && WUC[a].unlockChapter || 99) - (WUC[b] && WUC[b].unlockChapter || 99); });
     for (let i = 0; i < weaponKeys.length; i++) {
       const wk = weaponKeys[i], wDef = WEAPON_TREES[wk];
       allItems.push({ key: wk, iconKey: 'weapon_' + wk, name: wDef.name, color: wDef.color, isShip: false });
     }
 
-    // 卡牌网格：3列
+    // 卡牌网格：3列（支持滚动）
     const margin = 10, gap = 8, cols = 3;
     const cardW = (sw - margin * 2 - gap * (cols - 1)) / cols;
     const cardH = cardW * 1.3;
     const startY = top + 36;
+    const totalRows = Math.ceil(allItems.length / cols);
+    const contentH = totalRows * (cardH + gap) - gap;
+    const visibleH = sh - startY - 80; // 底栏留80
+    const maxScroll = Math.max(0, contentH - visibleH);
+    this._weaponListMaxScroll = maxScroll;
+    if (!this._elasticMode) {
+      if (this._weaponListScrollY < 0) this._weaponListScrollY = 0;
+      if (this._weaponListScrollY > maxScroll) this._weaponListScrollY = maxScroll;
+    }
+    const scrollY = this._weaponListScrollY;
+
+    // 裁剪区域（不画到底栏上）
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, startY - 4, sw, visibleH + 8); ctx.clip();
 
     for (let i = 0; i < allItems.length; i++) {
       const item = allItems[i], wk = item.key;
       const col = i % cols, row = Math.floor(i / cols);
       const cx = margin + col * (cardW + gap);
-      const cy = startY + row * (cardH + gap);
-      if (cy + cardH < 0 || cy > sh) continue;
+      const cy = startY + row * (cardH + gap) - scrollY;
+      if (cy + cardH < startY - 10 || cy > sh) continue;
 
-      const unlockAt = weaponUnlockMap[wk] || 1;
+      const unlockCfg = WeaponUnlockConfig[wk] || {}; const unlockAt = unlockCfg.unlockChapter || 1;
       const isUnlocked = maxChapter >= unlockAt;
 
       const lv = saveManager.getWeaponLevel(wk), maxLv = saveManager.getWeaponMaxLevel();
@@ -394,14 +466,15 @@ class ChapterRenderer {
         ctx.fillStyle = maxed ? Config.NEON_GREEN : item.color;
         ctx.font = 'bold 13px monospace';
         ctx.fillText(maxed ? 'MAX' : 'Lv.' + lv, cx + cardW / 2, cy + cardH * 0.66);
-        // 进度条
-        const barX = cx + 8, barY = cy + cardH * 0.80, barW = cardW - 16, barH = 4;
-        ctx.fillStyle = 'rgba(255,255,255,0.08)';
-        ctx.beginPath(); ctx.roundRect(barX, barY, barW, barH, 2); ctx.fill();
-        if (ratio > 0) {
-          ctx.fillStyle = item.color + 'BB';
-          ctx.beginPath(); ctx.roundRect(barX, barY, Math.max(barW * ratio, 4), barH, 2); ctx.fill();
-        }
+        // 伤害类型小标签
+        const dtCfg = WeaponUnlockConfig[wk] || {}; const dtI = { type: dtCfg.dmgType || 'physical', label: dtCfg.dmgLabel || '物理', color: dtCfg.dmgColor || '#FFFFFF' };
+        ctx.font = 'bold 10px monospace';
+        const dtW2 = ctx.measureText(dtI.label).width + 10;
+        const dtX2 = cx + (cardW - dtW2) / 2, dtY3 = cy + cardH * 0.80;
+        ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.beginPath(); ctx.roundRect(dtX2, dtY3, dtW2, 16, 3); ctx.fill();
+        ctx.strokeStyle = dtI.color + '55'; ctx.lineWidth = 0.5; ctx.beginPath(); ctx.roundRect(dtX2, dtY3, dtW2, 16, 3); ctx.stroke();
+        ctx.fillStyle = dtI.color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(dtI.label, cx + cardW / 2, dtY3 + 8);
         this._weaponHitAreas.push({ key: wk, x: cx, y: cy, w: cardW, h: cardH });
       } else {
         // === 未解锁 ===
@@ -425,13 +498,23 @@ class ChapterRenderer {
       }
     }
 
+    ctx.restore(); // 恢复裁剪
+    // 滚动指示器
+    if (maxScroll > 0) {
+      const barH = Math.max(20, visibleH * (visibleH / contentH));
+      const barY = startY + (visibleH - barH) * (scrollY / maxScroll);
+      ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      ctx.beginPath(); ctx.roundRect(sw - 4, barY, 3, barH, 1.5); ctx.fill();
+    }
     this._drawLobbyTabs(ctx, sw, sh, 2);
   }
 
   _drawWeaponDetail(ctx, sw, sh, top, saveManager, weaponKey) {
+    const WeaponUnlockConfig2 = require('../config/WeaponUnlockConfig');
     const WEAPON_TREES = require('../config/WeaponDefs'), SaveManagerClass = require('../systems/SaveManager');
     const SHIP_TREE = require('../config/ShipDefs');
     // 飞机视为特殊武器
+    const ShopDefs = require('../config/WeaponShopDefs');
     const isShip = weaponKey === 'ship';
     const wDef = isShip
       ? { name: '战斗飞机', desc: '你的主力战机，发射子弹消灭砖块', color: '#00DDFF', basePct: 1.0, interval: 400, branches: SHIP_TREE }
@@ -440,17 +523,23 @@ class ChapterRenderer {
     const lv = saveManager.getWeaponLevel(weaponKey), maxLv = saveManager.getWeaponMaxLevel();
     const cost = saveManager.getWeaponUpgradeCost(weaponKey), canAfford = saveManager.getCoins() >= cost.coins, maxed = saveManager.isWeaponMaxed(weaponKey);
     this._weaponDetailHitAreas = [];
-    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, 0, sw, sh);
-    const popW = sw - 40, popH = sh * 0.75, popX = 20, popY = (sh - popH) / 2, cx = sw / 2, pad = 16, innerX = popX + pad, innerW = popW - pad * 2;
+    // 遮罩（覆盖底栏）
+    ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0, 0, sw, sh);
+    const popW = sw - 32, popH = sh * 0.65, popX = 16, popY = (sh - popH) / 2 - 20, cx = sw / 2, pad = 16, innerX = popX + pad, innerW = popW - pad * 2;
+    // 弹框主体
     ctx.fillStyle = 'rgba(15,10,40,0.97)'; ctx.beginPath(); ctx.roundRect(popX, popY, popW, popH, 16); ctx.fill();
     ctx.strokeStyle = wDef.color + '66'; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(popX, popY, popW, popH, 16); ctx.stroke();
     this._weaponPopupRect = { x: popX, y: popY, w: popW, h: popH };
 
-    // 关闭按钮
-    const closeS = 34, closeX = popX + popW - closeS - 8, closeY2 = popY + 8;
-    ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.beginPath(); ctx.roundRect(closeX, closeY2, closeS, closeS, 8); ctx.fill();
-    ctx.fillStyle = '#FFFFFF'; ctx.font = 'bold 18px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('X', closeX + closeS / 2, closeY2 + closeS / 2);
-    this._weaponDetailHitAreas.push({ action: 'close', x: closeX, y: closeY2, w: closeS, h: closeS });
+    // 底部关闭按钮（圆形 X）
+    const closeR = 22, closeCY = popY + popH + 28;
+    ctx.beginPath(); ctx.arc(cx, closeCY, closeR, 0, Math.PI * 2); ctx.fillStyle = 'rgba(15,10,40,0.9)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 1.5; ctx.stroke();
+    // X 图形
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(cx - 8, closeCY - 8); ctx.lineTo(cx + 8, closeCY + 8); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx + 8, closeCY - 8); ctx.lineTo(cx - 8, closeCY + 8); ctx.stroke();
+    this._weaponDetailHitAreas.push({ action: 'close', x: cx - closeR, y: closeCY - closeR, w: closeR * 2, h: closeR * 2 });
 
     // 顶部：图标+名称+等级
     let cy = popY + 18;
@@ -458,8 +547,19 @@ class ChapterRenderer {
     const detailIconKey = isShip ? 'tab_upgrade' : ('weapon_' + weaponKey);
     IL.drawIcon(ctx, detailIconKey, innerX + 18, cy + 18, 34);
     ctx.fillStyle = '#FFFFFF'; ctx.font = 'bold 18px monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText(wDef.name, innerX + 44, cy + 2);
-    ctx.fillStyle = wDef.color; ctx.font = 'bold 16px monospace'; ctx.fillText(lv + '级', innerX + 44, cy + 24); cy += 50;
-    ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.font = '13px monospace'; ctx.fillText(wDef.desc, innerX, cy); cy += 26;
+    ctx.fillStyle = wDef.color; ctx.font = 'bold 16px monospace'; ctx.fillText(lv + '级', innerX + 44, cy + 24);
+    cy += 50;
+    ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.font = '12px monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    // 描述自动换行
+    var descWords = wDef.desc, descMaxW = innerW, descLines = [];
+    var tmpLine = '';
+    for (var di = 0; di < descWords.length; di++) {
+      tmpLine += descWords[di];
+      if (ctx.measureText(tmpLine).width > descMaxW) { descLines.push(tmpLine.slice(0, -1)); tmpLine = descWords[di]; }
+    }
+    if (tmpLine) descLines.push(tmpLine);
+    for (var dl = 0; dl < descLines.length; dl++) { ctx.fillText(descLines[dl], innerX, cy + dl * 16); }
+    cy += Math.max(descLines.length, 1) * 16 + 6;
 
     // ===== 双Tab =====
     const tabW = innerW / 2, tabH = 32, tabY = cy;
@@ -484,64 +584,146 @@ class ChapterRenderer {
     if (this._weaponDetailTab === 0) {
       // ===== 属性Tab =====
       // 武器伤害类型映射
-      const WEAPON_DMG_TYPES = {
-        ship:      [{ type: 'physical', label: '物理' }],
-        kunai:     [{ type: 'physical', label: '物理' }, { type: 'fire', label: '火焰' }],
-        lightning: [{ type: 'energy', label: '能量' }],
-        missile:   [{ type: 'physical', label: '物理' }, { type: 'fire', label: '火焰' }],
-        meteor:    [{ type: 'fire', label: '火焰' }],
-        drone:     [{ type: 'energy', label: '能量' }],
-        spinBlade: [{ type: 'physical', label: '物理' }],
-        blizzard:  [{ type: 'fire', label: '火焰' }],
-        ionBeam:   [{ type: 'energy', label: '能量' }],
-      };
-      const DMG_COLORS = { physical: '#FFFFFF', fire: '#FF4400', ice: '#44DDFF', energy: '#FFF050' };
-
-      const interval = (wDef.interval / 1000).toFixed(1);
-      ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.beginPath(); ctx.roundRect(innerX, cy, innerW, 98, 8); ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(innerX, cy, innerW, 98, 8); ctx.stroke();
+      
+      // ===== 技能属性（含爽点属性+升级预览） =====
+      const shopDef2 = ShopDefs.WEAPON_SHOP[weaponKey];
+      const currentDmgMult = ShopDefs.getDmgMultiplier(lv);
+      const nextDmgMult = maxed ? currentDmgMult : ShopDefs.getDmgMultiplier(lv + 1);
+      const effectivePct = (wDef.basePct * currentDmgMult * 100).toFixed(0);
+      const nextEffectivePct = (wDef.basePct * nextDmgMult * 100).toFixed(0);
+      const dmgChanged = !maxed && nextEffectivePct !== effectivePct;
+      
+      // 爽点属性当前值
+      const ssVal = ShopDefs.getSweetSpotValue(weaponKey, lv);
+      const nextSsVal = maxed ? ssVal : ShopDefs.getSweetSpotValue(weaponKey, lv + 1);
+      const ssChanged = !maxed && nextSsVal !== ssVal;
+      const ssTypeNames = { cd: '冷却时间', chains: '闪电链数', pierce: '穿透数', bombs: '载弹量', duration: '持续时间', count: '数量', fireRate: '射速加成' };
+      const ssLabel = shopDef2 ? (ssTypeNames[shopDef2.sweetSpot.type] || shopDef2.sweetSpot.type) : '';
+      
+      // 根据爽点类型格式化显示值
+      function fmtSs(val, type, unit) {
+        if (type === 'cd') return (val / 1000).toFixed(1) + 's';
+        if (type === 'duration') return val.toFixed(1) + 's';
+        if (type === 'fireRate') return (val * 100).toFixed(0) + '%';
+        return val + unit;
+      }
+      
+      // 计算属性行数（伤害系数+冷却/爽点+伤害类型）= 基础3行 + 爽点可能替代冷却
+      var attrRows = 2; // 伤害系数、爽点/冷却
+      var showSeparateCd = true;
+      if (shopDef2 && shopDef2.sweetSpot.type === 'cd') {
+        showSeparateCd = false; // 爽点就是CD，不重复显示
+      } else if (shopDef2) {
+        attrRows = 3; // 伤害系数、冷却、爽点属性
+      }
+      const attrBoxH = 26 + attrRows * 24 + 12;
+      
+      ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.beginPath(); ctx.roundRect(innerX, cy, innerW, attrBoxH, 8); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(innerX, cy, innerW, attrBoxH, 8); ctx.stroke();
       ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = 'bold 14px monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText('▪ 技能属性', innerX + 10, cy + 8);
       const aY = cy + 32, labelX = innerX + 14, valRight = innerX + innerW - 14;
       ctx.font = '14px monospace';
-      ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.textAlign = 'left'; ctx.fillText('伤害系数', labelX, aY);
-      ctx.fillStyle = '#FFFFFF'; ctx.textAlign = 'right'; ctx.fillText((wDef.basePct * 100).toFixed(0) + '%', valRight, aY);
-      ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.textAlign = 'left'; ctx.fillText('冷却时间', labelX, aY + 22);
-      ctx.fillStyle = '#FFFFFF'; ctx.textAlign = 'right'; ctx.fillText(interval + 's', valRight, aY + 22);
-      // 伤害类型
-      ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.textAlign = 'left'; ctx.font = '14px monospace'; ctx.fillText('伤害类型', labelX, aY + 44);
-      const dmgTypes = WEAPON_DMG_TYPES[weaponKey] || [{ type: 'physical', label: '物理' }];
-      let tagX = valRight;
-      for (let di = dmgTypes.length - 1; di >= 0; di--) {
-        const dt = dmgTypes[di];
-        const tagLabel = dt.label;
-        const tagColor = DMG_COLORS[dt.type] || '#FFFFFF';
-        ctx.font = 'bold 12px monospace';
-        const tw = ctx.measureText(tagLabel).width + 16;
-        ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.beginPath(); ctx.roundRect(tagX - tw, aY + 42, tw, 20, 4); ctx.fill();
-        ctx.strokeStyle = tagColor; ctx.globalAlpha = 0.5; ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(tagX - tw, aY + 42, tw, 20, 4); ctx.stroke(); ctx.globalAlpha = 1;
-        ctx.fillStyle = tagColor; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(tagLabel, tagX - tw / 2, aY + 52);
-        tagX -= tw + 6;
+      var rowIdx = 0;
+      
+      // 伤害系数（显示实际值 + 升级预览）
+      ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.textAlign = 'left'; ctx.fillText('伤害系数', labelX, aY + rowIdx * 24);
+      ctx.fillStyle = '#FFFFFF'; ctx.textAlign = 'right'; ctx.fillText(effectivePct + '%', valRight - (dmgChanged ? 70 : 0), aY + rowIdx * 24);
+      if (dmgChanged) {
+        ctx.fillStyle = Config.NEON_GREEN; ctx.font = '12px monospace';
+        ctx.fillText('→ ' + nextEffectivePct + '%', valRight, aY + rowIdx * 24 + 1);
+        ctx.font = '14px monospace';
       }
-      cy += 106;
+      rowIdx++;
+      
+      // 冷却时间 / 爽点属性
+      if (shopDef2 && shopDef2.sweetSpot.type === 'cd') {
+        // 爽点就是CD，直接显示爽点值作为冷却
+        ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.textAlign = 'left'; ctx.fillText('冷却时间', labelX, aY + rowIdx * 24);
+        var cdStr = fmtSs(ssVal, 'cd', 'ms');
+        ctx.fillStyle = Config.NEON_YELLOW; ctx.textAlign = 'right'; ctx.fillText(cdStr, valRight - (ssChanged ? 70 : 0), aY + rowIdx * 24);
+        if (ssChanged) {
+          ctx.fillStyle = Config.NEON_GREEN; ctx.font = '12px monospace';
+          ctx.fillText('→ ' + fmtSs(nextSsVal, 'cd', 'ms'), valRight, aY + rowIdx * 24 + 1);
+          ctx.font = '14px monospace';
+        }
 
-      // 升级解锁列表
-      ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = 'bold 14px monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText('▪ 升级效果', innerX + 4, cy); cy += 24;
-      const unlocks = SaveManagerClass.getWeaponUnlocks(weaponKey);
-      for (let i = 0; i < unlocks.length; i++) {
-        const u = unlocks[i], unlocked = lv >= u.level, cardH = 52;
-        if (cy + cardH > contentBottom) break;
-        ctx.fillStyle = unlocked ? 'rgba(0,255,100,0.06)' : 'rgba(255,255,255,0.03)'; ctx.beginPath(); ctx.roundRect(innerX, cy, innerW, cardH, 8); ctx.fill();
-        ctx.strokeStyle = unlocked ? 'rgba(0,255,100,0.15)' : 'rgba(255,255,255,0.06)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(innerX, cy, innerW, cardH, 8); ctx.stroke();
-        const tagW2 = 42, tagH2 = 26, tagX2 = innerX + 8, tagY2 = cy + (cardH - tagH2) / 2;
-        ctx.fillStyle = unlocked ? 'rgba(0,255,100,0.15)' : 'rgba(255,255,255,0.06)'; ctx.beginPath(); ctx.roundRect(tagX2, tagY2, tagW2, tagH2, 6); ctx.fill();
-        ctx.fillStyle = unlocked ? Config.NEON_GREEN : 'rgba(255,255,255,0.35)'; ctx.font = 'bold 14px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(u.level + '级', tagX2 + tagW2 / 2, tagY2 + tagH2 / 2);
-        ctx.fillStyle = unlocked ? '#FFFFFF' : 'rgba(255,255,255,0.5)'; ctx.font = 'bold 13px monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-        ctx.fillText('解锁 ' + u.branchName, innerX + 58, cy + 8);
-        ctx.fillStyle = unlocked ? 'rgba(255,255,255,0.65)' : 'rgba(255,255,255,0.3)'; ctx.font = '12px monospace'; ctx.fillText(u.desc, innerX + 58, cy + 28);
-        if (unlocked) { ctx.fillStyle = Config.NEON_GREEN; ctx.font = 'bold 14px monospace'; ctx.textAlign = 'right'; ctx.fillText('✓', innerX + innerW - 10, cy + cardH / 2 - 7); }
-        cy += cardH + 6;
+        rowIdx++;
+      } else {
+        // 固定冷却
+        const interval = (wDef.interval / 1000).toFixed(1);
+        ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.textAlign = 'left'; ctx.fillText('冷却时间', labelX, aY + rowIdx * 24);
+        ctx.fillStyle = '#FFFFFF'; ctx.textAlign = 'right'; ctx.fillText(interval + 's', valRight, aY + rowIdx * 24);
+        rowIdx++;
+        
+        // 爽点属性单独一行
+        if (shopDef2) {
+          ctx.fillStyle = Config.NEON_YELLOW; ctx.textAlign = 'left';
+          ctx.fillText(ssLabel, labelX, aY + rowIdx * 24);
+          
+          var ssStr = fmtSs(ssVal, shopDef2.sweetSpot.type, shopDef2.sweetSpot.unit);
+          ctx.fillStyle = Config.NEON_YELLOW; ctx.textAlign = 'right'; ctx.fillText(ssStr, valRight - (ssChanged ? 70 : 0), aY + rowIdx * 24);
+          if (ssChanged) {
+            ctx.fillStyle = Config.NEON_GREEN; ctx.font = '12px monospace';
+            ctx.fillText('→ ' + fmtSs(nextSsVal, shopDef2.sweetSpot.type, shopDef2.sweetSpot.unit), valRight, aY + rowIdx * 24 + 1);
+            ctx.font = '14px monospace';
+          }
+          rowIdx++;
+        }
+      }
+
+      cy += attrBoxH + 8;
+
+      // 升级里程碑列表（选项+被动+爽点）
+      const shopDef = ShopDefs.WEAPON_SHOP[weaponKey];
+
+      if (shopDef) {
+        // 构建里程碑列表
+        const milestones = [];
+        // 选项解锁（2/10/18）
+        for (const slv in shopDef.unlockBranches) {
+          const bk = shopDef.unlockBranches[slv];
+          const bDef = wDef.branches[bk];
+          milestones.push({ level: parseInt(slv), type: 'option', label: '🎰 选项', desc: '解锁: ' + (bDef ? bDef.name : bk) });
+        }
+        // 被动解锁（6/14/22/26/30）
+        for (const plv in shopDef.passives) {
+          const p = shopDef.passives[plv];
+          milestones.push({ level: parseInt(plv), type: 'passive', label: '🌟 被动', desc: p.name + ': ' + p.desc });
+        }
+        milestones.sort(function(a, b) { return a.level - b.level; });
+
+        // 可滚动区域
+        const cardH2 = 60, cardGap2 = 6;
+        const totalH2 = milestones.length * (cardH2 + cardGap2);
+        const viewH2 = contentBottom - cy;
+        const maxScroll2 = Math.max(0, totalH2 - viewH2);
+        if (!this._attrScrollY) this._attrScrollY = 0;
+        this._attrMaxScroll = maxScroll2;
+        ctx.save(); ctx.beginPath(); ctx.rect(popX, cy, popW, viewH2); ctx.clip();
+        let drawY2 = cy - this._attrScrollY;
+
+        for (let i = 0; i < milestones.length; i++) {
+          const m = milestones[i], unlocked = lv >= m.level;
+          if (drawY2 + cardH2 < cy) { drawY2 += cardH2 + cardGap2; continue; }
+          if (drawY2 > contentBottom) break;
+          const typeColors = { sweet: 'rgba(255,200,0,', option: 'rgba(0,180,255,', passive: 'rgba(180,100,255,' };
+          const tc = typeColors[m.type] || 'rgba(255,255,255,';
+          ctx.fillStyle = unlocked ? tc + '0.08)' : 'rgba(255,255,255,0.03)'; ctx.beginPath(); ctx.roundRect(innerX, drawY2, innerW, cardH2, 8); ctx.fill();
+          ctx.strokeStyle = unlocked ? tc + '0.2)' : 'rgba(255,255,255,0.06)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(innerX, drawY2, innerW, cardH2, 8); ctx.stroke();
+          // 等级标签
+          const tagW2 = 42, tagH2 = 26, tagX2 = innerX + 8, tagY2 = drawY2 + (cardH2 - tagH2) / 2;
+          ctx.fillStyle = unlocked ? tc + '0.2)' : 'rgba(255,255,255,0.06)'; ctx.beginPath(); ctx.roundRect(tagX2, tagY2, tagW2, tagH2, 6); ctx.fill();
+          ctx.fillStyle = unlocked ? '#FFFFFF' : 'rgba(255,255,255,0.35)'; ctx.font = 'bold 14px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText(m.level + '级', tagX2 + tagW2 / 2, tagY2 + tagH2 / 2);
+          // 描述文本（不含类型标签）
+          ctx.fillStyle = unlocked ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.3)'; ctx.font = '14px monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+          var descText = m.desc; if (descText.length > 24) descText = descText.substring(0, 23) + '…';
+          ctx.fillText(descText, innerX + 58, drawY2 + cardH2 / 2);
+          if (unlocked) { ctx.fillStyle = Config.NEON_GREEN; ctx.font = 'bold 14px monospace'; ctx.textAlign = 'right'; ctx.fillText('✓', innerX + innerW - 10, drawY2 + cardH2 / 2 - 7); }
+          drawY2 += cardH2 + cardGap2;
+        }
+        ctx.restore();
+
       }
     } else {
       // ===== 技能树Tab（可滚动） =====
@@ -556,8 +738,7 @@ class ChapterRenderer {
       const maxScroll = Math.max(0, totalH - viewH);
 
       // 限制滚动范围
-      if (this._skillTreeScrollY > maxScroll) this._skillTreeScrollY = maxScroll;
-      if (this._skillTreeScrollY < 0) this._skillTreeScrollY = 0;
+      this._skillTreeMaxScroll = maxScroll;
 
       // 裁剪可视区域
       ctx.save();
@@ -602,43 +783,33 @@ class ChapterRenderer {
 
         // 分支名称
         ctx.fillStyle = shopLocked ? 'rgba(255,255,255,0.4)' : '#FFFFFF';
-        ctx.font = 'bold 13px monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+        ctx.font = 'bold 15px monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
         ctx.fillText(bDef.name, innerX + 10, drawY + 8);
 
-        // 等级上限标签
-        ctx.fillStyle = shopLocked ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.5)';
-        ctx.font = '12px monospace'; ctx.textAlign = 'right';
-        ctx.fillText('上限 ' + bDef.max + '级', innerX + innerW - 10, drawY + 9);
+        // 右侧：解锁条件 或 等级上限
+        ctx.font = '13px monospace'; ctx.textAlign = 'right';
+        if (shopLocked) {
+          ctx.fillStyle = '#FF5555';
+          ctx.fillText(shopGate + '级解锁', innerX + innerW - 10, drawY + 9);
+        } else if (reqText) {
+          ctx.fillStyle = 'rgba(200,150,255,0.6)';
+          ctx.fillText(reqText, innerX + innerW - 10, drawY + 9);
+        } else {
+          ctx.fillStyle = 'rgba(255,255,255,0.4)';
+          ctx.fillText('上限' + bDef.max + '级', innerX + innerW - 10, drawY + 9);
+        }
 
         // 描述
         ctx.fillStyle = shopLocked ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.6)';
-        ctx.font = '12px monospace'; ctx.textAlign = 'left';
-        ctx.fillText(bDef.desc, innerX + 10, drawY + 26);
-
-        // 状态标签
-        if (shopLocked) {
-          ctx.fillStyle = '#FF5555'; ctx.font = 'bold 12px monospace'; ctx.textAlign = 'left';
-          ctx.fillText(shopGate + '级解锁', innerX + 10, drawY + 42);
-        } else if (reqText) {
-          ctx.fillStyle = 'rgba(200,150,255,0.6)'; ctx.font = '11px monospace'; ctx.textAlign = 'left';
-          ctx.fillText(reqText, innerX + 10, drawY + 42);
-        } else {
-          ctx.fillStyle = 'rgba(0,200,255,0.5)'; ctx.font = '11px monospace'; ctx.textAlign = 'left';
-          ctx.fillText('- 基础方向（初始可用）', innerX + 10, drawY + 42);
-        }
+        ctx.font = '14px monospace'; ctx.textAlign = 'left';
+        ctx.fillText(bDef.desc, innerX + 10, drawY + 30);
 
         drawY += cardH + cardGap;
       }
 
       ctx.restore(); // 恢复裁剪
 
-      // 滚动条指示器
-      if (maxScroll > 0) {
-        const barH = Math.max(20, viewH * (viewH / totalH));
-        const barY = cy + (scrollOffset / maxScroll) * (viewH - barH);
-        ctx.fillStyle = 'rgba(255,255,255,0.15)';
-        ctx.beginPath(); ctx.roundRect(innerX + innerW - 3, barY, 3, barH, 2); ctx.fill();
-      }
+
     }
 
     // ===== 底部升级区域（两个Tab共用） =====
@@ -655,11 +826,75 @@ class ChapterRenderer {
       ctx.strokeStyle = canAfford ? Config.NEON_GREEN : 'rgba(100,100,100,0.3)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(btnX2, btnY2, btnW2, btnH2, 10); ctx.stroke();
       ctx.fillStyle = canAfford ? '#FFFFFF' : 'rgba(255,255,255,0.3)'; ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('升  级', cx, btnY2 + btnH2 / 2);
       this._weaponDetailHitAreas.push({ action: 'upgrade', key: weaponKey, x: btnX2, y: btnY2, w: btnW2, h: btnH2 });
-      ctx.fillStyle = Config.NEON_ORANGE; ctx.font = '12px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText('升级奖励：暴击伤害+2.0%', cx, btnY2 + btnH2 + 4);
+      ctx.fillStyle = Config.NEON_ORANGE; ctx.font = '12px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; var nextCritPct = (ShopDefs.getCritBonusPerLevel(lv + 1) * 100).toFixed(0);
+      ctx.fillText('升级奖励：暴击伤害+' + nextCritPct + '%', cx, btnY2 + btnH2 + 4);
     }
   }
 
   // ===== 底部3Tab =====
+  // 触发升级成功特效
+  triggerUpgradeEffect(key) {
+    // 找到该卡牌按钮位置
+    if (!this._shopUpgradeAreas) return;
+    for (var i = 0; i < this._shopUpgradeAreas.length; i++) {
+      var a = this._shopUpgradeAreas[i];
+      if (a.key === key) {
+        var cx = a.x + a.w / 2, cy = a.y + a.h / 2;
+        // 找对应颜色
+        var colors = { attack:'#44FF88', energyDmg:'#BB66FF', fireDmg:'#FF4422', iceDmg:'#44DDFF', crit:'#FFAA00' };
+        var col = colors[key] || '#FFFFFF';
+        // 生成粒子
+        for (var p = 0; p < 12; p++) {
+          var angle = (Math.PI * 2 / 12) * p + Math.random() * 0.3;
+          var speed = 2 + Math.random() * 3;
+          this._upgradeEffects.push({
+            x: cx, y: cy,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: 1.0,
+            decay: 0.02 + Math.random() * 0.015,
+            color: col,
+            size: 2 + Math.random() * 3,
+          });
+        }
+        // 闪光环
+        this._upgradeEffects.push({
+          x: cx, y: cy, vx: 0, vy: 0,
+          life: 1.0, decay: 0.04, color: col,
+          size: 5, isRing: true,
+        });
+        // 数值飘字
+        this._upgradeFlash = { key: key, time: Date.now(), color: col };
+        break;
+      }
+    }
+  }
+
+  // 绘制升级特效
+  _drawUpgradeEffects(ctx) {
+    for (var i = this._upgradeEffects.length - 1; i >= 0; i--) {
+      var p = this._upgradeEffects[i];
+      p.x += p.vx; p.y += p.vy;
+      p.life -= p.decay;
+      if (p.life <= 0) { this._upgradeEffects.splice(i, 1); continue; }
+      var alpha = Math.floor(p.life * 255).toString(16).padStart(2, '0');
+      if (p.isRing) {
+        var radius = (1 - p.life) * 40 + 5;
+        ctx.strokeStyle = p.color + alpha;
+        ctx.lineWidth = 2 * p.life;
+        ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, Math.PI * 2); ctx.stroke();
+      } else {
+        ctx.fillStyle = p.color + alpha;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    // 升级闪光卡牌边框
+    if (this._upgradeFlash) {
+      var elapsed = Date.now() - this._upgradeFlash.time;
+      if (elapsed > 500) { this._upgradeFlash = null; }
+    }
+  }
+
   _drawLobbyTabs(ctx, sw, sh, activeIdx) {
     const tabH = 70, tabY = sh - Config.SAFE_BOTTOM - tabH, tabW = sw / 3;
     const labels = ['关卡', '飞机', '武器'];

@@ -4,17 +4,18 @@
  */
 
 var Weapon = require('./Weapon');
+const WB = require('../config/WeaponBalanceConfig');
 var Config = require('../Config');
 
 // --- 常量 ---
-var BASE_RADIUS = 120;       // 基础吸引半径（100→120）
-var BASE_DURATION = 5000;    // 基础持续时间 5s（4→5）
-var BASE_PULL = 0.4;         // 基础吸力 px/帧（0.3→0.4）
-var TICK_INTERVAL = 400;     // 伤害tick间隔（500→400，更频繁）
-var NEGA_BASE_RATE = 0.04;    // 负能量基础转化率（0.06→0.04 nerf）
-var NEGA_LIFETIME = 15000;   // 负能量砖块存活时间
-var PCT_HP_CAP_MULT = 8;    // %HP伤害上限 = baseAttack × 8（10→8 nerf）
-var NEGA_BRICK_SIZE = 1.5;   // 负能量砖块大小倍率
+var BASE_RADIUS = WB.gravityWell.baseRadius;       // 基础吸引半径（100→120）
+var BASE_DURATION = WB.gravityWell.baseDuration;    // 基础持续时间 5s（4→5）
+var BASE_PULL = WB.gravityWell.basePull;         // 基础吸力 px/帧（0.3→0.4）
+var TICK_INTERVAL = WB.gravityWell.tickInterval;     // 伤害tick间隔（500→400，更频繁）
+var NEGA_BASE_RATE = WB.gravityWell.negaBaseRate;    // 负能量基础转化率（0.06→0.04 nerf）
+var NEGA_LIFETIME = WB.gravityWell.negaLifetime;   // 负能量砖块存活时间
+var PCT_HP_CAP_MULT = WB.gravityWell.pctHpCapMult;    // %HP伤害上限 = baseAttack × 8（10→8 nerf）
+var NEGA_BRICK_SIZE = WB.gravityWell.negaBrickSize;   // 负能量砖块大小倍率
 
 class GravityWellWeapon extends Weapon {
   constructor() {
@@ -33,7 +34,7 @@ class GravityWellWeapon extends Weapon {
     var negaLv = this.getBranch('negaEnergy');
     var darkMatterLv = this.getBranch('darkMatter');
     var annihilateLv = this.getBranch('annihilate');
-    var freqLv = this.getBranch('freq');
+    var freqLv = 0; // freq已移除，CD由外部养成控制
     var countLv = this.getBranch('count');
     var lensLv = this.getBranch('lens');
     var baseAttack = ctx.getBaseAttack ? ctx.getBaseAttack() : 1;
@@ -41,9 +42,10 @@ class GravityWellWeapon extends Weapon {
     var now = Date.now();
 
     // --- CD逻辑：场上有黑洞时不冷却，全部消失后才开始倒计时 ---
-    var interval = this.def.interval - freqLv * 2000;
+    var interval = this.def.interval;
     interval = Math.max(interval, 3000);
-    var maxWells = 1 + countLv;
+    var binaryBonus = (ctx && ctx.saveManager && ctx.saveManager.hasWeaponPassive('gravityWell', 'binarySystem')) ? 1 : 0;
+    var maxWells = 1 + countLv + binaryBonus;
 
     if (this.wells.length > 0) {
       // 有黑洞存活，不计冷却
@@ -93,12 +95,34 @@ class GravityWellWeapon extends Weapon {
 
       // 黑洞结束
       if (well.timer <= 0) {
-        // 生成负能量砖块
+        // 生成负能量砖块（优先叠加到附近已有的负能量砖块）
         if (negaLv > 0 && well.energyAccum > 0) {
           var rate = NEGA_BASE_RATE + negaLv * 0.1;
           var negaHp = well.energyAccum * rate;
           if (negaHp > 10) {
-            this._spawnNegaBrick(well.x, well.y, negaHp, darkMatterLv);
+            var merged = false;
+            // 检查黑洞中心范围内是否有现存负能量砖块
+            for (var ni = 0; ni < this.negaBricks.length; ni++) {
+              var existNb = this.negaBricks[ni];
+              var ndx = existNb.x - well.x, ndy = existNb.y - well.y;
+              if (ndx * ndx + ndy * ndy < well.radius * well.radius) {
+                // 叠加负能量到现有砖块
+                existNb.hp -= negaHp;
+                existNb.flashTimer = 300; // 充能反馈
+                // 体积随能量增长（有上限）
+                var newSizeMult = Math.min(existNb.sizeMult * 1.15, NEGA_BRICK_SIZE + 5 * 0.3);
+                existNb.width = 30 * newSizeMult;
+                existNb.height = 20 * newSizeMult;
+                existNb.sizeMult = newSizeMult;
+                // 重置存活时间
+                existNb.birthTime = Date.now();
+                merged = true;
+                break;
+              }
+            }
+            if (!merged) {
+              this._spawnNegaBrick(well.x, well.y, negaHp, darkMatterLv);
+            }
           }
         }
         // 黑洞消失爆炸粒子
@@ -113,6 +137,25 @@ class GravityWellWeapon extends Weapon {
             size: 2 + Math.random() * 3,
             type: 'burst'
           });
+        }
+        // singBurst被动：结束时爆炸累积伤害50%
+        if (ctx.saveManager && ctx.saveManager.hasWeaponPassive('gravityWell', 'singBurst') && well.energyAccum > 0) {
+          var burstDmg = well.energyAccum * 0.5;
+          var burstR = well.radius * 1.5;
+          for (var bi = 0; bi < ctx.bricks.length; bi++) {
+            var bb = ctx.bricks[bi];
+            if (!bb.alive) continue;
+            var bbc = bb.getCenter();
+            if (Math.sqrt((bbc.x - well.x) ** 2 + (bbc.y - well.y) ** 2) <= burstR) {
+              ctx.damageBrick(bb, burstDmg, 'gravityWell_burst', 'energy');
+            }
+          }
+          if (ctx.boss && ctx.boss.alive) {
+            var bd = Math.sqrt((ctx.boss.getCenterX() - well.x) ** 2 + (ctx.boss.getCenterY() - well.y) ** 2);
+            if (bd <= burstR) ctx.damageBoss(burstDmg, 'gravityWell_burst');
+          }
+          this.explosions = this.explosions || [];
+          this.explosions.push({ x: well.x, y: well.y, radius: burstR, alpha: 1.0 });
         }
         this.wells.splice(i, 1);
       }
@@ -149,8 +192,16 @@ class GravityWellWeapon extends Weapon {
       }
     }
 
-    var duration = BASE_DURATION + singularityLv * 1500;
-    var pullStr = BASE_PULL * (1 + damageLv * 0.2);
+    // 基础持续时间由外部养成爽点控制(base 3s, +0.5s per milestone)
+    var shopDur = BASE_DURATION;
+    if (ctx && ctx.saveManager) {
+      var ss = ctx.saveManager.getWeaponSweetSpot('gravityWell');
+      if (ss !== null) shopDur = ss * 1000;
+    }
+    var superMult = (ctx && ctx.saveManager && ctx.saveManager.hasWeaponPassive('gravityWell', 'superHole')) ? 2 : 1;
+    var duration = (shopDur + singularityLv * 1500) * superMult;
+    var gravX2 = (ctx && ctx.saveManager && ctx.saveManager.hasWeaponPassive('gravityWell', 'gravityX2')) ? 2 : 1;
+    var pullStr = BASE_PULL * (1 + damageLv * 0.2) * gravX2;
 
     this.wells.push({
       x: bestX,
@@ -176,6 +227,10 @@ class GravityWellWeapon extends Weapon {
       if (dist < well.radius && dist > 5) {
         var force = well.pullStr * (1 - dist / well.radius);
         b.x += (dx / dist) * force;
+        // siphon被动：引力范围内受伤+20%
+        if (ctx.saveManager && ctx.saveManager.hasWeaponPassive('gravityWell', 'siphon')) {
+          b._siphonMark = Date.now() + 500; // 标记0.5秒
+        }
         b.y += (dy / dist) * force;
         // 标记禁止融合
         b._noMerge = true;
@@ -370,7 +425,7 @@ class GravityWellWeapon extends Weapon {
 
     // 屏幕震动
     if (dmg > 100) {
-      ctx.screenShake = Math.min((ctx.screenShake || 0) + Math.min(dmg / 500, 6), 12);
+      if (!ctx.shakeCooldown) { ctx.screenShake = Math.min((ctx.screenShake || 0) + Math.min(dmg / 500, 3), 6); ctx.shakeCooldown = 10; }
     }
   }
 

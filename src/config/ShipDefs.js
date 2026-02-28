@@ -1,8 +1,8 @@
 /**
- * ShipDefs.js - 飞机升级树定义 v8.0
+ * ShipDefs.js - 飞机升级树定义 v9.0（外部养成版，fireRate移除）
  *
  * 分支结构（6基础 + 3互斥元素 + 6元素进阶 = 15方向）
- *   基础线: attack, fireRate               (无前置)
+ *   基础线: attack                          (无前置)
  *   弹道线: spread, pierce                 (无前置，rare)
  *   弹幕线: barrage                        (需fireRate:2)
  *   元素线: fire/ice/thunder               (互斥三选一)
@@ -22,15 +22,7 @@ const SHIP_TREE = {
     requires: null,
     quality: 'normal',
   },
-  fireRate: {
-    name: '射速',
-    desc: '+50%射速',
-    icon: '»',
-    color: '#FFF050',
-    max: 4,
-    requires: null,
-    quality: 'normal',
-  },
+
 
   // ===== 弹道线 =====
   spread: {
@@ -41,6 +33,7 @@ const SHIP_TREE = {
     max: 3,
     requires: null,
     quality: 'rare',
+    shopGated: true,
   },
   pierce: {
     name: '穿透弹',
@@ -61,6 +54,7 @@ const SHIP_TREE = {
     max: 3,
     requires: null,
     quality: 'rare',
+    shopGated: true,
   },
   ricochet: {
     name: '弹射反弹',
@@ -79,8 +73,9 @@ const SHIP_TREE = {
     icon: '🌀',
     color: '#AA44FF',
     max: 3,
-    requires: { fireRate: 2 },
+    requires: null,
     quality: 'rare',
+    shopGated: true,
   },
 
   // ===== 元素弹（互斥三选一）=====

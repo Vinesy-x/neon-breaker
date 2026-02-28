@@ -209,6 +209,16 @@ class DevPanel {
         }
         game._syncLauncherStats();
         break;
+      case 'resetSave':
+        if (game.saveManager) {
+          game.saveManager.resetSave(function() {
+            console.log('[Dev] 存档重置完成，重启');
+          });
+          // 回标题
+          game.state = 'TITLE';
+          game.renderer._weaponDetailKey = null;
+        }
+        break;
       case 'resetAll':
         game.upgrades.reset();
         game._syncLauncherStats();
@@ -418,7 +428,7 @@ class DevPanel {
     ctx.fillText('✕', clsX + clsS / 2, clsY + clsS / 2);
 
     // ===== Tab 页签 =====
-    const tabNames = ['⚡ 快捷', '🔪 武器', '✈ 飞机', '💎 永久', '👹 Boss'];
+    const tabNames = ['⚡ 快捷', '🔪 武器', '✈ 飞机', '💎 永久', '👹 Boss', '📊 战报'];
     const tabY = py + 32;
     const tabH = 34;
     const tabGap = 4;
@@ -460,6 +470,7 @@ class DevPanel {
       case 2: cy = this._drawShipTab(ctx, game, cx, cy, cw); break;
       case 3: cy = this._drawPermTab(ctx, game, cx, cy, cw); break;
       case 4: cy = this._drawBossTestTab(ctx, game, cx, cy, cw); break;
+      case 5: cy = this._drawBattleReportTab(ctx, game, cx, cy, cw); break;
     }
 
     this.maxScroll = Math.max(0, (cy + this.scroll) - (ctop + ch));
@@ -562,6 +573,7 @@ class DevPanel {
       { label: '💀 秒杀Boss', action: 'killBoss', color: Config.NEON_PINK },
       { label: '🚀 全武器满级', action: 'maxAllWeapons', color: '#FFD700' },
       { label: '🔄 重置全部', action: 'resetAll', color: '#FF5555' },
+      { label: '💀 重置存档', action: 'resetSave', color: '#FF0000' },
       { label: '📊 清统计', action: 'resetStats', color: '#888888' },
       { label: `⏩ 速度 ×${game._devTimeScale || 1}`, action: 'cycleSpeed', color: (game._devTimeScale || 1) > 1 ? Config.NEON_YELLOW : '#888888' },
       { label: '🔓 解锁全关', action: 'unlockAllChapters', color: '#FFD700' },
@@ -933,6 +945,146 @@ class DevPanel {
       ctx.fillText('💡 先进入游戏再测试Boss', x + w / 2, y + 18);
       y += 44;
     }
+
+    return y;
+  }
+
+
+  // ===== Tab 5: 战斗详情 =====
+  _drawBattleReportTab(ctx, game, x, y, w) {
+    const NAMES = DAMAGE_NAMES;
+    const elapsedMs = game.elapsedMs || 0;
+    const bricksKilled = game._bricksKilled || 0;
+    const chapter = game.currentChapter || 1;
+    const level = game.expSystem ? game.expSystem.playerLevel : 1;
+    const score = game.score || 0;
+    const shipTree = game.upgrades ? game.upgrades.shipTree : {};
+    const stats = game.damageStats || {};
+
+    // Time
+    const min = Math.floor(elapsedMs / 60000);
+    const sec = Math.floor((elapsedMs % 60000) / 1000);
+    const timeStr = min + ':' + (sec < 10 ? '0' : '') + sec;
+
+    // Header info box
+    ctx.fillStyle = 'rgba(0,255,255,0.1)';
+    ctx.beginPath(); ctx.roundRect(x, y, w, 52, 6); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,255,255,0.3)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.roundRect(x, y, w, 52, 6); ctx.stroke();
+
+    ctx.fillStyle = Config.NEON_CYAN; ctx.font = 'bold 12px monospace';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText('Ch' + chapter + '  Lv' + level + '  ' + timeStr, x + 8, y + 6);
+    ctx.fillStyle = '#FFFFFF'; ctx.font = '11px monospace';
+    ctx.fillText('Score: ' + this._formatNum(score) + '  Kills: ' + bricksKilled, x + 8, y + 22);
+
+    // Exp info
+    if (game.expSystem) {
+      const exp = game.expSystem.exp || 0;
+      const expNext = game.expSystem.expToNext || 1;
+      ctx.fillText('Exp: ' + exp + '/' + expNext, x + 8, y + 36);
+    }
+    y += 58;
+
+    // ===== Damage Stats =====
+    const entries = Object.entries(stats).sort((a, b) => b[1] - a[1]);
+    const totalDmg = entries.reduce((s, e) => s + e[1], 0);
+    const dps = elapsedMs > 0 ? (totalDmg / (elapsedMs / 1000)) : 0;
+
+    if (totalDmg > 0) {
+      const panelH = 28 + entries.length * 18 + 4;
+      ctx.fillStyle = 'rgba(255,80,80,0.1)';
+      ctx.beginPath(); ctx.roundRect(x, y, w, panelH, 6); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,80,80,0.3)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect(x, y, w, panelH, 6); ctx.stroke();
+
+      ctx.fillStyle = Config.NEON_RED; ctx.font = 'bold 11px monospace';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      ctx.fillText('DMG: ' + this._formatNum(totalDmg) + '  DPS: ' + dps.toFixed(1) + '/s', x + 8, y + 4);
+      y += 24;
+
+      const barMaxW = w - 110;
+      const maxDmg = entries[0][1];
+
+      for (const [src, dmg] of entries) {
+        const pct = (dmg / totalDmg * 100).toFixed(1);
+        const barW = (dmg / maxDmg) * barMaxW;
+        const name = NAMES[src] || src;
+
+        // Bar
+        ctx.fillStyle = 'rgba(255,80,80,0.3)';
+        ctx.fillRect(x + 8, y + 2, barW, 13);
+
+        // Name
+        ctx.fillStyle = '#FFFFFF'; ctx.font = '10px monospace';
+        ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+        ctx.fillText(name, x + 10, y + 2);
+
+        // Value
+        ctx.textAlign = 'right';
+        ctx.fillText(this._formatNum(dmg) + ' (' + pct + '%)', x + w - 8, y + 2);
+        y += 18;
+      }
+      y += 8;
+    } else {
+      ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.font = '11px monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillText('暂无伤害数据', x + w / 2, y);
+      y += 20;
+    }
+
+    // ===== Ship Tree =====
+    const activeShip = [];
+    for (const sk in shipTree) {
+      if (shipTree[sk] > 0) {
+        const def = Config.SHIP_TREE[sk];
+        activeShip.push((def ? def.icon + ' ' : '') + (def ? def.name : sk) + ' Lv' + shipTree[sk]);
+      }
+    }
+    if (activeShip.length > 0) {
+      ctx.fillStyle = 'rgba(0,255,255,0.08)';
+      const shipH = 20 + activeShip.length * 16;
+      ctx.beginPath(); ctx.roundRect(x, y, w, shipH, 6); ctx.fill();
+
+      ctx.fillStyle = Config.NEON_CYAN; ctx.font = 'bold 11px monospace';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      ctx.fillText('✈ 飞机升级', x + 8, y + 4);
+      y += 20;
+
+      ctx.fillStyle = '#FFFFFF'; ctx.font = '10px monospace';
+      for (const s of activeShip) {
+        ctx.fillText(s, x + 12, y);
+        y += 16;
+      }
+      y += 4;
+    }
+
+    // ===== Weapons Build =====
+    const ownedList = game.upgrades ? game.upgrades.getOwnedWeapons() : [];
+    if (ownedList.length > 0) {
+      ctx.fillStyle = 'rgba(255,200,0,0.08)';
+      const wpnH = 20 + ownedList.length * 16;
+      ctx.beginPath(); ctx.roundRect(x, y, w, wpnH, 6); ctx.fill();
+
+      ctx.fillStyle = '#FFD700'; ctx.font = 'bold 11px monospace';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      ctx.fillText('🔪 武器Build', x + 8, y + 4);
+      y += 20;
+
+      ctx.font = '10px monospace';
+      for (const p of ownedList) {
+        ctx.fillStyle = p.color || '#FFF';
+        ctx.fillText(p.icon + ' ' + (p.name || p.key) + '  Lv' + (p.totalLevel || 0), x + 12, y);
+        y += 16;
+      }
+      y += 4;
+    }
+
+    // Clear stats button
+    y += 8;
+    this._drawBigBtn(ctx, '📊 清除统计', x, y, w, 36, '#888888',
+      { action: 'resetStats', params: {} });
+    y += 44;
 
     return y;
   }

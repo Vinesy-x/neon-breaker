@@ -40,9 +40,9 @@ function generateZigzag(points) {
   return result;
 }
 
-// ===== 迫击炮(Kunai) =====
+// ===== 寒冰弹(Kunai) =====
 function drawKunai(ctx, sprites, data) {
-  const { knives, explosions, color } = data;
+  const { knives, explosions, splitBombs, color } = data;
 
   for (const k of knives) {
     if (k.trail && k.trail.length > 1) {
@@ -67,36 +67,115 @@ function drawKunai(ctx, sprites, data) {
   if (explosions) {
     for (const e of explosions) {
       const progress = 1 - e.life / e.maxLife;
-      const r = Math.min(e.radius, e.maxRadius);
-      const alpha = (1 - progress * progress) * 0.85;
-      if (alpha < 0.05) continue;
+      const er = Math.min(e.radius, e.maxRadius);
+      if (progress > 0.98) continue;
+      const eColor = e.isChain ? '#FF6600' : color;
 
-      ctx.globalAlpha = alpha * 0.5;
-      ctx.strokeStyle = e.isChain ? '#FF6600' : color;
-      ctx.lineWidth = Math.max(1, 3 - progress * 2.5);
-      ctx.beginPath(); ctx.arc(e.x, e.y, r, 0, Math.PI * 2); ctx.stroke();
+      // 快速展开曲线：前20%就扩到满半径
+      var expand = Math.min(1, progress * 5); // 0→1 在 progress 0~0.2
+      var curR = er * expand;
 
-      ctx.globalAlpha = alpha * 0.2;
-      ctx.fillStyle = e.isChain ? '#FF6600' : color;
-      ctx.beginPath(); ctx.arc(e.x, e.y, r * 0.7, 0, Math.PI * 2); ctx.fill();
+      // ① 伤害范围区域（使用武器颜色）
+      var zoneAlpha = Math.max(0, 0.35 * (1 - progress * 1.2));
+      if (zoneAlpha > 0.01) {
+        ctx.globalAlpha = zoneAlpha;
+        ctx.fillStyle = eColor;
+        ctx.beginPath(); ctx.arc(e.x, e.y, curR, 0, Math.PI * 2); ctx.fill();
+      }
 
+      // ② 亮色内圈（收缩消失）
       if (progress < 0.6) {
-        const crossAlpha = (0.6 - progress) * 1.2;
-        const crossLen = r * (1 + progress * 0.4);
-        ctx.globalAlpha = crossAlpha * 0.6;
-        ctx.strokeStyle = '#FFFFFF';
-        ctx.lineWidth = Math.max(0.5, 1.5 - progress * 2);
-        ctx.beginPath();
-        ctx.moveTo(e.x - crossLen, e.y); ctx.lineTo(e.x + crossLen, e.y);
-        ctx.moveTo(e.x, e.y - crossLen); ctx.lineTo(e.x, e.y + crossLen);
-        ctx.stroke();
+        var innerR = curR * 0.6 * (1 - progress * 0.8);
+        ctx.globalAlpha = (0.6 - progress) * 0.6;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath(); ctx.arc(e.x, e.y, Math.max(2, innerR), 0, Math.PI * 2); ctx.fill();
       }
 
-      if (progress < 0.25) {
-        ctx.globalAlpha = (0.25 - progress) * 4;
+      // ③ 白色中心闪光（瞬间爆发）
+      if (progress < 0.15) {
+        var flashR = curR * 0.35 * (1 - progress * 6);
+        ctx.globalAlpha = (0.15 - progress) * 6;
         ctx.fillStyle = '#FFFFFF';
-        ctx.beginPath(); ctx.arc(e.x, e.y, Math.max(2, r * 0.25), 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(e.x, e.y, Math.max(3, flashR), 0, Math.PI * 2); ctx.fill();
       }
+
+      // ④ 冰晶锯齿环（不规则冰晶边缘）
+      var ringR = curR * (1 + progress * 0.3);
+      var ringAlpha = (1 - progress) * (1 - progress) * 0.8;
+      var ringWidth = Math.max(1.5, 4 * (1 - progress));
+      if (ringAlpha > 0.02) {
+        ctx.globalAlpha = ringAlpha;
+        ctx.strokeStyle = eColor;
+        ctx.lineWidth = ringWidth;
+        ctx.beginPath();
+        var spikes = 16;
+        for (var si = 0; si <= spikes; si++) {
+          var a = (si / spikes) * Math.PI * 2;
+          // 每隔一个点凸出，形成锯齿冰晶感
+          var spikeR = (si % 2 === 0) ? ringR * 1.12 : ringR * 0.88;
+          // 用爆炸id(x+y)做种子让每次不同
+          var jitter = Math.sin(a * 3.7 + e.x * 0.1) * ringR * 0.06;
+          var px = e.x + Math.cos(a) * (spikeR + jitter);
+          var py = e.y + Math.sin(a) * (spikeR + jitter);
+          if (si === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        // 锯齿环内部微填充
+        ctx.globalAlpha = ringAlpha * 0.15;
+        ctx.fillStyle = eColor;
+        ctx.fill();
+      }
+
+      // ⑤ 冰晶碎片粒子（从中心飞散）
+      if (e.shards) {
+        for (var si2 = 0; si2 < e.shards.length; si2++) {
+          var sh = e.shards[si2];
+          var shX = e.x + sh.x + sh.vx * progress * 60;
+          var shY = e.y + sh.y + sh.vy * progress * 60;
+          var shAlpha = Math.max(0, 1 - progress * 1.5);
+          if (shAlpha < 0.02) continue;
+          ctx.globalAlpha = shAlpha * 0.9;
+          ctx.fillStyle = '#AAEEFF';
+          ctx.save();
+          ctx.translate(shX, shY);
+          ctx.rotate(sh.rot + sh.rotSpd * progress * 60);
+          // 三角形冰晶
+          var ss = sh.size * (1 - progress * 0.5);
+          ctx.beginPath();
+          ctx.moveTo(0, -ss);
+          ctx.lineTo(-ss * 0.6, ss * 0.5);
+          ctx.lineTo(ss * 0.6, ss * 0.5);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // 分裂弹小寒冰弹
+  if (splitBombs) {
+    for (const sb of splitBombs) {
+      const progress = 1 - sb.life / sb.maxLife;
+      const alpha = Math.max(0.3, 1 - progress);
+      ctx.globalAlpha = alpha;
+      const angle = Math.atan2(sb.vy, sb.vx);
+      // 小弹丸（橙色小圆）
+      ctx.fillStyle = '#FF8800';
+      ctx.beginPath();
+      ctx.arc(sb.x, sb.y, 3, 0, Math.PI * 2);
+      ctx.fill();
+      // 拖尾
+      ctx.globalAlpha = alpha * 0.4;
+      ctx.strokeStyle = '#FF6600';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(sb.x, sb.y);
+      ctx.lineTo(sb.x - sb.vx * 3, sb.y - sb.vy * 3);
+      ctx.stroke();
     }
     ctx.globalAlpha = 1;
   }
@@ -457,6 +536,7 @@ function drawSpinBlade(ctx, data) {
 function drawIonBeam(ctx, data) {
   const { beam, isFiring, chargeProgress, burstFlash, markStacks, hitSparks, superOrb, superCharging, superChargeProgress, color } = data;
   const now = Date.now();
+  ctx.globalCompositeOperation = 'lighter'; // 加法混合，射线穿透砖块发光
 
   if (beam && isFiring) {
     const { sx, sy, tx, ty } = beam;
@@ -542,6 +622,7 @@ function drawIonBeam(ctx, data) {
   }
 
   ctx.globalAlpha = 1; ctx.lineCap = 'butt';
+  ctx.globalCompositeOperation = 'source-over'; // 恢复默认混合
 }
 
 // ===== 白磷弹(Blizzard) =====

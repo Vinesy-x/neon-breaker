@@ -54,6 +54,7 @@ class Game {
     this.boss = null;
     this.floatingTexts = [];
     this.screenShake = 0;
+    this.shakeCooldown = 0; // 震动冷却（帧数）
 
     // 持久系统
     this.saveManager = new SaveManager();
@@ -71,6 +72,10 @@ class Game {
     // 计时器 & 状态
     this.fireTimer = 0;
     this.pendingSkillChoices = [];
+    this._refreshCount = 0;       // 本局已用刷新次数
+    this._maxFreeRefresh = 1;     // 免费刷新次数
+    this._maxAdRefresh = 3;       // 广告刷新次数
+    this._adRefreshUsed = 0;      // 已用广告刷新次数
     this._preChoiceState = null;
     this._choiceSource = null;
     this.lastCrateTime = 0;
@@ -103,17 +108,26 @@ class Game {
     this._scrollVelocity = 0;
     this._scrolling = false;
 
-    // 统一滑动分发
+    // 统一弹性滑动系统
+    // _scrollVelocity 统一为"向上滑=正值（scrollY增大）"
     this.input.onDragY = (dy) => {
       if (this.devPanel && this.devPanel.open) { this.devPanel.handleDrag(dy); return; }
-      if (this.state === Config.STATE.WEAPON_SHOP && this.renderer._weaponDetailKey && this.renderer._weaponDetailTab === 1) {
-        this.renderer._skillTreeScrollY = Math.max(0, (this.renderer._skillTreeScrollY || 0) - dy);
+      this._scrolling = true;
+
+      if (this.state === Config.STATE.WEAPON_SHOP) {
+        var negDy = -dy; // 手指上划 dy<0 → scrollY增大
+        this._scrollVelocity = negDy;
+        if (this.renderer._weaponDetailKey) {
+          var key = this.renderer._weaponDetailTab === 0 ? '_attrScrollY' : '_skillTreeScrollY';
+          this.renderer[key] = (this.renderer[key] || 0) + negDy;
+        } else {
+          this.renderer._weaponListScrollY = (this.renderer._weaponListScrollY || 0) + negDy;
+        }
         return;
       }
       if (this.state === Config.STATE.CHAPTER_SELECT) {
-        this.renderer._chapterScrollY = (this.renderer._chapterScrollY || 0) + dy;
         this._scrollVelocity = dy;
-        this._scrolling = true;
+        this.renderer._chapterScrollY = (this.renderer._chapterScrollY || 0) + dy;
       }
     };
 
@@ -173,7 +187,7 @@ class Game {
     this.score = 0;
 
     this.upgrades.reset();
-    this.upgrades.setChapter(this.currentChapter);
+    this.upgrades.setChapter(Math.max(this.currentChapter, this.saveManager ? this.saveManager.getMaxChapter() : 1));
     this.expSystem.reset();
     this.dotSystem.reset();
     this.damageStats = {};
@@ -321,6 +335,13 @@ class Game {
 
   _updatePlaying(dt, dtMs) {
     var pauseTap = this.input.consumeTap();
+    if (pauseTap && this.renderer.getSpeedBtnHit(pauseTap)) {
+      var speeds = [1, 2, 3, 5];
+      var cur = this._devTimeScale || 1;
+      var idx = speeds.indexOf(cur);
+      this._devTimeScale = speeds[(idx + 1) % speeds.length];
+      return;
+    }
     if (pauseTap && this.renderer.getPauseBtnHit(pauseTap)) {
       this._pausedFrom = Config.STATE.PLAYING;
       this.state = Config.STATE.PAUSED;
@@ -528,18 +549,27 @@ class Game {
       case Config.STATE.PAUSED: this._renderGame(); this.renderer.drawPauseDialog(); break;
       case Config.STATE.LEVEL_UP:
         this._renderGame();
-        this.renderer.drawSkillChoice(this.pendingSkillChoices, this.upgrades, '⬆ LEVEL ' + this.expSystem.playerLevel);
+        this.renderer.drawSkillChoice(this.pendingSkillChoices, this.upgrades, '⬆ LEVEL ' + this.expSystem.playerLevel, this);
         break;
       case Config.STATE.SKILL_CHOICE:
         this._renderGame();
-        this.renderer.drawSkillChoice(this.pendingSkillChoices, this.upgrades, '技能宝箱');
+        this.renderer.drawSkillChoice(this.pendingSkillChoices, this.upgrades, '技能宝箱', this);
         break;
       case Config.STATE.CHAPTER_CLEAR:
         this.renderer.drawChapterClear(this.currentChapter, this.score, this.expSystem.playerLevel, this.maxCombo, this.upgrades.getOwnedWeapons(), this.coinsEarned, false);
         break;
       case Config.STATE.GAME_OVER:
         this._renderGame();
-        this.renderer.drawGameOver(this.score, this.expSystem.playerLevel, this.upgrades.getOwnedWeapons());
+        this.renderer.drawGameOver({
+          score: this.score,
+          level: this.expSystem.playerLevel,
+          weapons: this.upgrades.getOwnedWeapons(),
+          damageStats: this.damageStats || {},
+          elapsedMs: this.elapsedMs,
+          chapter: this.currentChapter,
+          shipTree: this.upgrades.shipTree,
+          bricksKilled: this._bricksKilled || 0,
+        });
         break;
     }
     // Dev panel 最后绘制（在最上层）
@@ -547,14 +577,17 @@ class Game {
   }
 
   _renderGame() {
+    // 震动冷却
+    if (this.shakeCooldown > 0) this.shakeCooldown--;
     var shaking = this.screenShake > 0.5;
     if (shaking) {
+      var intensity = Math.min(this.screenShake, 6); // 强度上限6（原来12太猛）
       this.renderer.ctx.save();
       this.renderer.ctx.translate(
-        (Math.random() - 0.5) * this.screenShake * this.renderer.dpr,
-        (Math.random() - 0.5) * this.screenShake * this.renderer.dpr
+        (Math.random() - 0.5) * intensity * this.renderer.dpr,
+        (Math.random() - 0.5) * intensity * this.renderer.dpr
       );
-      this.screenShake *= 0.85;
+      this.screenShake *= 0.80; // 衰减更快（0.85→0.80）
       if (this.screenShake < 0.5) this.screenShake = 0;
     }
     this.renderer.drawDangerLine(this.gameHeight * Config.BRICK_DANGER_Y);
@@ -562,14 +595,14 @@ class Game {
     if (this.boss && this.boss.alive) this.renderer.drawBoss(this.boss);
     for (var j = 0; j < this.powerUps.length; j++) this.renderer.drawPowerUp(this.powerUps[j]);
     this.renderer.drawExpOrbs(this.expSystem.orbs);
-    this.renderer.drawWeapons(this.upgrades.weapons, this.launcher);
-    this.renderer.drawWeaponWings(this.upgrades.weapons, this.launcher);
     this.renderer.drawBullets(this.bullets);
     if (this.launcher) this.renderer.drawLauncher(this.launcher, this.upgrades);
+    this.renderer.drawWeapons(this.upgrades.weapons, this.launcher);
+    this.renderer.drawWeaponWings(this.upgrades.weapons, this.launcher);
     this.renderer.drawParticles(this.particles.particles);
     this.renderer.drawFloatingTexts(this.floatingTexts);
     this.renderer.drawWeaponHUD(this.upgrades.getOwnedWeapons());
-    this.renderer.drawChapterHUD(this.currentChapter, this.score, this.combo, this.expSystem.playerLevel, this.elapsedMs, Sound.enabled);
+    this.renderer.drawChapterHUD(this.currentChapter, this.score, this.combo, this.expSystem.playerLevel, this.elapsedMs, Sound.enabled, this._devTimeScale || 1);
     this.renderer.drawExpBar(this.expSystem.exp, this.expSystem.expToNext, this.expSystem.playerLevel);
     if (Config.DEV_MODE) this._statsArea = this.renderer.drawDamageStats(this.damageStats, this.statsExpanded);
     if (shaking) this.renderer.ctx.restore();

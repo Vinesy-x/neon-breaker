@@ -10,6 +10,7 @@
  *   - fireBullet/iceBullet/thunderBullet: 互斥元素弹
  */
 const Config = require('../Config');
+const WeaponUnlockConfig = require('../config/WeaponUnlockConfig');
 const { createWeapon } = require('../weapons/WeaponFactory');
 const SaveManager = require('./SaveManager');
 
@@ -22,16 +23,14 @@ class UpgradeManager {
     this.saveManager = saveManager || null; // 武器商店等级检查
   }
 
-  // 武器解锁章节映射（迫击炮和闪电链默认拥有）
-  static WEAPON_UNLOCK_CHAPTERS = {
-    kunai: 1, lightning: 1, missile: 1, meteor: 1, // 初始6武器中的4个
-    drone: 10, spinBlade: 15, blizzard: 25, ionBeam: 40, frostStorm: 55, gravityWell: 1, // TODO: 正式版改为70
-  };
+  // 武器解锁章节映射（寒冰弹和闪电链默认拥有）
+  // 武器解锁配置统一在 WeaponUnlockConfig.js
 
   setChapter(chapter) { this.currentChapter = chapter; }
 
   isWeaponUnlocked(key) {
-    const unlockChapter = UpgradeManager.WEAPON_UNLOCK_CHAPTERS[key] || 1;
+    const cfg = WeaponUnlockConfig[key];
+    const unlockChapter = cfg ? cfg.unlockChapter : 999;
     return this.currentChapter >= unlockChapter;
   }
 

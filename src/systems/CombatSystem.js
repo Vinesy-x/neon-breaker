@@ -83,7 +83,7 @@ class CombatSystem {
     var g = this.game;
     var c = brick.getCenter();
     g.particles.emitBrickBreak(brick.x, brick.y, brick.width, brick.height, brick.color);
-    if (brick.maxHp >= 3) g.screenShake = Math.min(g.screenShake + 2, 8);
+    if (brick.maxHp >= 3) if (!g.shakeCooldown) { g.screenShake = Math.min(g.screenShake + 2 * 0.5, 6); g.shakeCooldown = 10; }
     g.combo++;
     g.comboTimer = 0;
     if (g.combo > g.maxCombo) g.maxCombo = g.combo;
@@ -98,6 +98,7 @@ class CombatSystem {
       var BrickFactory = require('../BrickFactory');
       g.bricks = g.bricks.concat(BrickFactory.spawnSplitChildren(brick));
     }
+    g._bricksKilled = (g._bricksKilled || 0) + 1;
     g.expSystem.spawnOrbs(c.x, c.y, g.expSystem.calcBrickExp(brick) + (brick.bonusExp || 0), g.saveManager.getExpMultiplier());
     var drops = generateDrops(c.x, c.y, g.lastCrateTime, g.elapsedMs);
     for (var i = 0; i < drops.items.length; i++) g.powerUps.push(drops.items[i]);
@@ -128,12 +129,15 @@ class CombatSystem {
   fireBullets() {
     var g = this.game;
     var sp = g.upgrades.getSpreadBonus();
-    var count = 1 + sp;
+    var spreadPlusBonus = (g.saveManager && g.saveManager.hasWeaponPassive('ship', 'spreadPlus')) ? 1 : 0;
+    var count = 1 + sp + spreadPlusBonus;
     var spread = count > 1 ? (count - 1) * 0.12 : 0;
     var cx = g.launcher.getCenterX(), sy = g.launcher.y - 5;
     var bulletCoef = 1.0;
     var dmg = Math.max(0.1, g.getBaseAttack() * bulletCoef * g.upgrades.getAttackMult());
     var pierce = g.upgrades.getPierceCount();
+    // pierceOne被动：默认穿透+1
+    if (g.saveManager && g.saveManager.hasWeaponPassive('ship', 'pierceOne')) pierce += 1;
     var element = g.upgrades.getElementType();
     var elementLv = g.upgrades.getElementLevel();
 
@@ -143,6 +147,10 @@ class CombatSystem {
       var bul = new Bullet(cx, sy, Math.cos(a) * Config.BULLET_SPEED, Math.sin(a) * Config.BULLET_SPEED, dmg);
       bul.pierce = pierce;
       bul.element = element;
+      // elemAffinity被动：元素弹伤害+30%
+      if (element && g.saveManager && g.saveManager.hasWeaponPassive('ship', 'elemAffinity')) {
+        bul.damage *= 1.3;
+      }
       bul.elementLv = elementLv;
       // 反弹系统
       var wallBounceLv = g.upgrades.shipTree.wallBounce || 0;
@@ -151,8 +159,9 @@ class CombatSystem {
         bul.wallBounce = wallBounceLv + 1;
         bul.bounceDmgMult = 0.25;
       }
-      if (ricochetLv > 0) {
-        bul.ricochet = ricochetLv;
+      var ricochetPassive = (g.saveManager && g.saveManager.hasWeaponPassive('ship', 'ricochet')) ? 1 : 0;
+      if (ricochetLv > 0 || ricochetPassive > 0) {
+        bul.ricochet = ricochetLv + ricochetPassive;
       }
       g.bullets.push(bul);
     }

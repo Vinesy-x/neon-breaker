@@ -150,7 +150,8 @@ class CollisionSystem {
     var g = this.game;
     for (var i = g.powerUps.length - 1; i >= 0; i--) {
       var p = g.powerUps[i];
-      p.update(dt, null);
+      var magnet = Config.DEV_MODE ? { x: g.launcher.getCenterX(), y: g.launcher.y } : null;
+      p.update(dt, magnet);
       if (p.collideLauncher(g.launcher)) {
         g.combat.applyPowerUp(p);
         g.powerUps.splice(i, 1);

@@ -29,14 +29,14 @@ class IonBeamWeapon extends Weapon {
     this.superChargeProgress = 0;  // 蓄能进度 0-1
   }
 
-  getDamage(baseAttack) {
+  getDamage(baseAttack, ctx) {
     return Math.max(0.1, baseAttack * this.def.basePct * (1 + (this.branches.damage || 0) * 0.7));  // 0.5→0.7 buff
   }
 
   update(dtMs, ctx) {
     const dt = dtMs / 16.67;
     const baseAttack = ctx.getBaseAttack ? ctx.getBaseAttack() : 1;
-    const tickDamage = this.getDamage(baseAttack);
+    const tickDamage = this.getDamage(baseAttack, ctx);
     const durationLv = this.branches.duration || 0;
     const pierceLv = this.branches.pierce || 0;
     const chargeLv = this.branches.charge || 0;
@@ -45,8 +45,14 @@ class IonBeamWeapon extends Weapon {
     const splitLv = this.branches.split || 0;
     const superOrbLv = this.branches.superOrb || 0;
 
-    const fireInterval = this.def.interval * Math.pow(0.8, this.branches.freq || 0);
-    const fireDuration = 3000 + durationLv * 1000;
+    const fireInterval = this.def.interval; // CD由外部养成控制
+    // 基础射击时间由外部养成爽点控制(base 2s, +0.3s per milestone)
+    var baseBeamSec = 2;
+    if (ctx && ctx.saveManager) {
+      var ss = ctx.saveManager.getWeaponSweetSpot('ionBeam');
+      if (ss !== null) baseBeamSec = ss;
+    }
+    const fireDuration = baseBeamSec * 1000 + durationLv * 1000;
 
     if (this.burstFlash > 0) this.burstFlash -= dtMs;
 
@@ -135,7 +141,7 @@ class IonBeamWeapon extends Weapon {
             dmg *= (2.5 + chargeLv * 1.5);
             this.burstReady = false;
             this.burstFlash = 400;
-            ctx.screenShake = Math.min((ctx.screenShake || 0) + 3, 6);
+            if (!ctx.shakeCooldown) { ctx.screenShake = Math.min((ctx.screenShake || 0) + 3 * 0.5, 6); ctx.shakeCooldown = 10; }
             this._emitHitSparks(tx, ty, 8);
           }
 
@@ -155,6 +161,14 @@ class IonBeamWeapon extends Weapon {
             ctx.damageBoss(dmg, 'ionBeam');
           } else {
             ctx.damageBrick(target.ref, dmg, 'ionBeam', 'energy');
+            // overloadMark被动：叠3层爆炸
+            if (ctx.saveManager && ctx.saveManager.hasWeaponPassive('ionBeam', 'overloadMark') && target.ref.alive) {
+              target.ref._ionStacks = (target.ref._ionStacks || 0) + 1;
+              if (target.ref._ionStacks >= 3) {
+                target.ref._ionStacks = 0;
+                this._overloadBurst(target.ref.getCenter().x, target.ref.getCenter().y, dmg * 2, ctx);
+              }
+            }
           }
 
           // 离子灼烧DOT：每tick造成目标当前HP 1%的伤害，上限为baseAttack × 20
@@ -237,7 +251,18 @@ class IonBeamWeapon extends Weapon {
         this.beam = null;
       }
 
+      // doomBeam被动：持续5秒后全屏贯穿
+      if (this.firingTimer >= 5000 && !this._doomFired && ctx.saveManager && ctx.saveManager.hasWeaponPassive('ionBeam', 'doomBeam')) {
+        this._doomFired = true;
+        var doomDmg = this.getDamage(baseAttack, ctx) * 10;
+        for (var di = 0; di < ctx.bricks.length; di++) {
+          if (ctx.bricks[di].alive) ctx.damageBrick(ctx.bricks[di], doomDmg, 'ionBeam_doom', 'energy');
+        }
+        if (ctx.boss && ctx.boss.alive) ctx.damageBoss(doomDmg, 'ionBeam_doom');
+        if (!ctx.shakeCooldown) { ctx.screenShake = 6; ctx.shakeCooldown = 10; }
+      }
       if (this.firingTimer >= fireDuration) {
+        this._doomFired = false;
         this.isFiring = false;
         this.beam = null;
 
@@ -279,7 +304,7 @@ class IonBeamWeapon extends Weapon {
 
     // 超级命中特效
     this.burstFlash = 500;
-    ctx.screenShake = Math.min((ctx.screenShake || 0) + 6, 10);
+    if (!ctx.shakeCooldown) { ctx.screenShake = Math.min((ctx.screenShake || 0) + 6 * 0.5, 6); ctx.shakeCooldown = 10; }
     this._emitHitSparks(tx, ty, 15);
 
     // 周围溅射伤害
@@ -459,7 +484,7 @@ class IonBeamWeapon extends Weapon {
       }
     }
     if (ctx.particles) ctx.particles.emitBrickBreak(cx - 10, cy - 10, 20, 20, '#FF4444');
-    ctx.screenShake = Math.min((ctx.screenShake || 0) + 3, 7);
+    if (!ctx.shakeCooldown) { ctx.screenShake = Math.min((ctx.screenShake || 0) + 3 * 0.5, 6); ctx.shakeCooldown = 10; }
     this._emitHitSparks(cx, cy, 12);
     Sound.ionBeamBurst();
   }

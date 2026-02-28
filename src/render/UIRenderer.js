@@ -369,7 +369,7 @@ function drawLoading(ctx) {
   ctx.fillText('加载中...', cx, barY + 22);
 }
 
-function drawSkillChoice(ctx, sprites, choices, upgrades, title) {
+function drawSkillChoice(ctx, sprites, choices, upgrades, title, game) {
   const sw = Config.SCREEN_WIDTH, sh = Config.SCREEN_HEIGHT, cx = sw / 2;
   ctx.fillStyle = 'rgba(0, 0, 0, 0.8)'; ctx.fillRect(0, 0, sw, sh);
   const isLevelUp = (title || '').indexOf('LEVEL') >= 0;
@@ -420,6 +420,33 @@ function drawSkillChoice(ctx, sprites, choices, upgrades, title) {
     _drawTextWrap(ctx, c.desc, ccx, cardY + cardH * 0.62, cardW - 8, 14);
     if (c.level && c.maxLevel) _drawLevelDots(ctx, ccx, cardY + cardH * 0.82, c.level - 1, c.maxLevel, c.color);
     c._hitArea = { x: cardX, y: cardY, w: cardW, h: cardH };
+  }
+
+  // ── 刷新按钮（广告刷新三选一） ──
+  _refreshBtnArea = null;
+  if (game) {
+    var maxFree = 1;  // 每次三选一免费刷新1次
+    var totalUsed = (game._refreshCount || 0);
+    var adUsed = (game._adRefreshUsed || 0);
+    var maxAd = (game._maxAdRefresh || 3);
+    var isFree = totalUsed < maxFree;
+    var canRefresh = isFree || adUsed < maxAd;
+    if (canRefresh) {
+      var btnW = 120, btnH = 32;
+      var btnX = cx - btnW / 2, btnY = startY + cardH + 16;
+      // 按钮背景
+      ctx.fillStyle = isFree ? 'rgba(0, 200, 100, 0.25)' : 'rgba(255, 180, 0, 0.25)';
+      ctx.beginPath(); ctx.roundRect(btnX, btnY, btnW, btnH, 8); ctx.fill();
+      ctx.strokeStyle = isFree ? '#00CC66' : '#FFAA00';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect(btnX, btnY, btnW, btnH, 8); ctx.stroke();
+      // 文字
+      ctx.fillStyle = isFree ? '#00FF88' : '#FFCC00';
+      ctx.font = 'bold 13px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      var label = isFree ? '🔄 免费刷新' : '🎬 看广告刷新 (' + (maxAd - adUsed) + ')';
+      ctx.fillText(label, cx, btnY + btnH / 2);
+      _refreshBtnArea = { x: btnX, y: btnY, w: btnW, h: btnH, needAd: !isFree };
+    }
   }
 }
 
@@ -554,4 +581,7 @@ function handleAgeTipTap(tap) {
   return false;
 }
 
-module.exports = { drawTitle, drawLoading, drawSkillChoice, drawGameOver, drawBossWarning, drawPauseDialog, drawChapterClear, handleAgeTipTap };
+var _refreshBtnArea = null;
+function getRefreshBtnArea() { return _refreshBtnArea; }
+
+module.exports = { drawTitle, drawLoading, drawSkillChoice, drawGameOver, drawBossWarning, drawPauseDialog, drawChapterClear, handleAgeTipTap, getRefreshBtnArea };

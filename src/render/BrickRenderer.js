@@ -24,10 +24,10 @@ function drawBrick(ctx, brick) {
   const dangerDist = dangerY - (y + height);
   const dangerRatio = dangerDist < 80 ? 1 - dangerDist / 80 : 0;
 
-  // 受击闪白
+  // 受击高亮（底色+半透明白叠加，不遮挡HP数字）
   if (brick.flashTimer > 0) {
     brick.flashTimer--;
-    ctx.fillStyle = '#FFFFFF';
+    ctx.fillStyle = color; // 保留底色
   } else if (dangerRatio > 0.5) {
     const pulse = 0.5 + Math.sin(Date.now() * 0.01) * 0.3;
     ctx.fillStyle = 'rgba(255, ' + Math.floor(50 * (1 - dangerRatio)) + ', ' + Math.floor(50 * (1 - dangerRatio)) + ', ' + (0.7 + pulse * 0.3) + ')';
@@ -43,6 +43,16 @@ function drawBrick(ctx, brick) {
   ctx.beginPath();
   ctx.roundRect(x, y, width, height, 3);
   ctx.fill();
+
+  // 受击白色叠加（半透明，不遮挡底色）
+  if (brick.flashTimer > 0) {
+    ctx.globalAlpha = 0.45;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.roundRect(x, y, width, height, 3);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
 
   // === 砖块类型特殊视觉 ===
 
@@ -152,20 +162,21 @@ function drawBricksBatch(ctx, bricks) {
     if (b.flashTimer > 0) {
       b.flashTimer--;
       flashBricks.push(b);
-      continue;
     }
 
     // 危险区变红
     const dangerDist = dangerY - (b.y + b.height);
-    if (dangerDist < 40) {
-      flashBricks.push(b);
-      continue;
+    if (dangerDist < 40 && b.flashTimer <= 0) {
+      // 危险区砖块用红色
+      const dc = 'rgba(255,50,50,0.85)';
+      if (!groups[dc]) groups[dc] = [];
+      groups[dc].push(b);
+    } else {
+      // 按颜色分组（flash砖块也画底色）
+      const c = b.color;
+      if (!groups[c]) groups[c] = [];
+      groups[c].push(b);
     }
-
-    // 按颜色分组
-    const c = b.color;
-    if (!groups[c]) groups[c] = [];
-    groups[c].push(b);
 
     // 收集需要边框的
     if (b.type === 'shield' && b.shieldHp > 0) shieldBricks.push(b);
@@ -184,8 +195,9 @@ function drawBricksBatch(ctx, bricks) {
     ctx.fill();
   }
 
-  // Pass 2: 画闪白/危险砖块
+  // Pass 2: 受击半透明白色叠加（不遮挡底色）
   if (flashBricks.length > 0) {
+    ctx.globalAlpha = 0.45;
     ctx.fillStyle = '#FFFFFF';
     ctx.beginPath();
     for (let i = 0; i < flashBricks.length; i++) {
@@ -193,6 +205,7 @@ function drawBricksBatch(ctx, bricks) {
       ctx.rect(b.x, b.y, b.width, b.height);
     }
     ctx.fill();
+    ctx.globalAlpha = 1;
   }
 
   // Pass 3: 画护盾边框

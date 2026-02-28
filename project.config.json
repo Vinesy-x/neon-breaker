@@ -1,8 +1,10 @@
 {
-  "description": "霓虹碎核：赛博回响",
+  "description": "无限飞机",
   "packOptions": {
     "ignore": [
-      { "type": "folder", "value": "cloudfunctions" }
+      { "type": "folder", "value": "cloudfunctions" },
+      { "type": "folder", "value": "tools" },
+      { "type": "folder", "value": "docs" }
     ],
     "include": []
   },

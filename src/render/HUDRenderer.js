@@ -12,7 +12,7 @@ function formatNum(n) {
   return n.toString();
 }
 
-function drawChapterHUD(ctx, chapter, score, combo, playerLevel, elapsedMs, soundEnabled) {
+function drawChapterHUD(ctx, chapter, score, combo, playerLevel, elapsedMs, soundEnabled, timeScale) {
   const top = Config.SAFE_TOP;
 
   // 暂停按钮
@@ -41,19 +41,23 @@ function drawChapterHUD(ctx, chapter, score, combo, playerLevel, elapsedMs, soun
   ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = '12px monospace'; ctx.textAlign = 'right';
   ctx.fillText(min + ':' + (s < 10 ? '0' : '') + s, Config.SCREEN_WIDTH - 8, top + 16);
 
-  // Combo（暂停按钮右边）
-  if (combo > 1) {
-    ctx.fillStyle = Config.NEON_YELLOW;
-    ctx.font = 'bold 14px monospace'; ctx.textAlign = 'left';
-    ctx.fillText('x' + combo, 46, top + 16);
-  }
+
 
   // 音效
   ctx.fillStyle = soundEnabled ? 'rgba(255,255,255,0.5)' : 'rgba(255,50,50,0.5)';
   ctx.font = '14px monospace'; ctx.textAlign = 'left';
   ctx.fillText(soundEnabled ? '♪' : '♪̶', 10, Config.SCREEN_HEIGHT - Config.SAFE_BOTTOM - 48);
 
-  return { x: pauseX, y: pauseY, w: pauseSize, h: pauseSize };
+  // 速度按钮（暂停按钮右边）
+  var ts = timeScale || 1;
+  var speedX = pauseX + pauseSize + 6, speedY = pauseY, speedW = 38, speedH = pauseSize;
+  ctx.fillStyle = ts > 1 ? 'rgba(255,255,0,0.2)' : 'rgba(255,255,255,0.1)';
+  ctx.beginPath(); ctx.roundRect(speedX, speedY, speedW, speedH, 6); ctx.fill();
+  ctx.fillStyle = ts > 1 ? Config.NEON_YELLOW : 'rgba(255,255,255,0.7)';
+  ctx.font = 'bold 11px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('x' + ts, speedX + speedW / 2, speedY + speedH / 2);
+
+  return { pauseBtn: { x: pauseX, y: pauseY, w: pauseSize, h: pauseSize }, speedBtn: { x: speedX, y: speedY, w: speedW, h: speedH } };
 }
 
 function drawExpOrbs(ctx, sprites, orbs) {

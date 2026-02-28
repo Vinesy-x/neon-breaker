@@ -37,7 +37,7 @@ class SpinBlade extends Weapon {
     }
 
     const baseAttack = ctx.getBaseAttack ? ctx.getBaseAttack() : 1;
-    const damage = this.getDamage(baseAttack);
+    const damage = this.getDamage(baseAttack, ctx);
     const giantLv = this.branches.giant || 0;
     const pierceLv = this.branches.pierce || 0;
     const rampLv = this.branches.ramp || 0;
@@ -72,7 +72,8 @@ class SpinBlade extends Weapon {
           b.x += b.vx * dt;
           b.y += b.vy * dt;
           b.angle += 0.2 * dt;
-          b.life -= dtMs;
+          var isEternal = ctx.saveManager && ctx.saveManager.hasWeaponPassive('spinBlade', 'eternal') && !b.isSplit;
+          if (!isEternal) b.life -= dtMs;
           b.aliveMs += dtMs;
           b.size = size;
 
@@ -139,6 +140,12 @@ class SpinBlade extends Weapon {
           } else if (splitLv > 0) {
             this._spawnSplitBlades(b, splitLv);
           }
+          // rebirth被动：50%概率重生
+          if (ctx.saveManager && ctx.saveManager.hasWeaponPassive('spinBlade', 'rebirth') && Math.random() < 0.5) {
+            b.life = b.maxLife * 0.5;
+            b.vx = -b.vx; b.vy = -b.vy; // 反弹
+            continue;
+          }
           this.blades.splice(i, 1);
           continue;
         } else if (b.life <= 0) {
@@ -152,10 +159,12 @@ class SpinBlade extends Weapon {
       if (b.tickTimer >= tickInterval) {
         b.tickTimer = 0;
         const hitRadius = b.size + (giantLv > 0 ? 4 : 0);
-        const rampMult = rampLv > 0 ? 1 + (b.aliveMs / 1000) * 0.12 * rampLv : 1;
+        var rampUpBonus = (ctx.saveManager && ctx.saveManager.hasWeaponPassive('spinBlade', 'rampUp')) ? 0.1 : 0;
+        const rampMult = 1 + (b.aliveMs / 1000) * (rampLv > 0 ? 0.12 * rampLv : 0) + (b.aliveMs / 1000) * rampUpBonus;
         const tickDmg = damage * rampMult;
         // 默认贯穿：每tick打所有砖块，pierce分支增加伤害
-        const pierceDmgMult = pierceLv > 0 ? 1.3 : 1;
+        var sharpBonus = (ctx.saveManager && ctx.saveManager.hasWeaponPassive('spinBlade', 'sharpEdge')) ? 0.3 : 0;
+        const pierceDmgMult = pierceLv > 0 ? (1.3 + sharpBonus) : (1 + sharpBonus);
 
         for (let j = 0; j < ctx.bricks.length; j++) {
           const brick = ctx.bricks[j];
@@ -231,7 +240,13 @@ class SpinBlade extends Weapon {
   _launch(ctx) {
     const cx = ctx.launcher.getCenterX();
     const cy = ctx.launcher.y - 30; // 从飞机上方发射
-    const durationMs = (10 + (this.branches.duration || 0) * 2) * 1000;
+    // 基础持续时间由外部养成爽点控制
+    var baseDur = 10;
+    if (ctx && ctx.saveManager) {
+      var ss = ctx.saveManager.getWeaponSweetSpot('spinBlade');
+      if (ss !== null) baseDur = ss;
+    }
+    const durationMs = (baseDur + (this.branches.duration || 0) * 2) * 1000;
     // 水平带点随机
     const hDir = Math.random() > 0.5 ? 1 : -1;
 

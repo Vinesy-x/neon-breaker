@@ -14,14 +14,16 @@ class BlizzardWeapon extends Weapon {
     this.sparks = [];     // 火花/余烬粒子
   }
 
-  getDamage(baseAttack) {
-    return Math.max(0.1, baseAttack * this.def.basePct * (1 + (this.branches.damage || 0) * 0.5));
+  getDamage(baseAttack, ctx) {
+    var shopMult = 1.0;
+    if (ctx && ctx.saveManager) shopMult = ctx.saveManager.getWeaponDmgMultiplier('blizzard');
+    return Math.max(0.1, baseAttack * this.def.basePct * shopMult * (1 + (this.branches.damage || 0) * 0.5));
   }
 
   update(dtMs, ctx) {
     const dt = dtMs / 16.67;
     this.timer += dtMs;
-    const interval = this.def.interval * Math.pow(0.85, this.branches.freq || 0);
+    const interval = this.def.interval; // CD由外部养成控制
 
     if (this.timer >= interval) {
       this.timer = 0;
@@ -29,7 +31,7 @@ class BlizzardWeapon extends Weapon {
     }
 
     const baseAttack = ctx.getBaseAttack ? ctx.getBaseAttack() : 1;
-    const damage = this.getDamage(baseAttack);
+    const damage = this.getDamage(baseAttack, ctx);
     const slowLv = this.branches.slow || 0;
     const frostbiteLv = this.branches.frostbite || 0;
     const shatterLv = this.branches.shatter || 0;
@@ -66,14 +68,18 @@ class BlizzardWeapon extends Weapon {
     // ===== 更新燃烧区域 =====
     for (let i = this.fireZones.length - 1; i >= 0; i--) {
       const z = this.fireZones[i];
-      z.life -= dtMs;
+      var isInferno = ctx.saveManager && ctx.saveManager.hasWeaponPassive('blizzard', 'inferno');
+      if (!isInferno) z.life -= dtMs;
       z.tickTimer += dtMs;
       z.flickerPhase = (z.flickerPhase || 0) + dtMs * 0.008;
 
       // 持续伤害tick
-      if (z.tickTimer >= z.tickMs) {
+      var effectiveTickMs = z.tickMs;
+      if (ctx.saveManager && ctx.saveManager.hasWeaponPassive('blizzard', 'doubleTick')) effectiveTickMs *= 0.5;
+      if (z.tickTimer >= effectiveTickMs) {
         z.tickTimer -= z.tickMs;
-        this._burnTick(z, damage, slowLv, frostbiteLv, ctx);
+        var corrosionMult = (ctx.saveManager && ctx.saveManager.hasWeaponPassive('blizzard', 'corrosionUp')) ? 2 : 1;
+        this._burnTick(z, damage * corrosionMult, slowLv, frostbiteLv, ctx);
       }
 
       // 火焰粒子
@@ -167,7 +173,13 @@ class BlizzardWeapon extends Weapon {
 
   _explode(bomb, damage, ctx) {
     const baseRadius = 50 * (1 + (this.branches.radius || 0) * 0.25);
-    const duration = 4000 + (this.branches.duration || 0) * 1500;
+    // 基础燃烧时间由外部养成爽点控制(base 3s, +0.5s per milestone)
+    var baseBurnSec = 3;
+    if (ctx && ctx.saveManager) {
+      var ss = ctx.saveManager.getWeaponSweetSpot('blizzard');
+      if (ss !== null) baseBurnSec = ss;
+    }
+    const duration = baseBurnSec * 1000 + (this.branches.duration || 0) * 1500;
     const permafrostLv = this.branches.permafrost || 0;
     const tickMs = permafrostLv > 0 ? Math.max(250, 400 - permafrostLv * 60) : 400;
 
@@ -219,7 +231,7 @@ class BlizzardWeapon extends Weapon {
     }
 
     if (ctx.particles) ctx.particles.emitBrickBreak(bomb.targetX - 15, bomb.targetY - 15, 30, 30, '#FF8833');
-    ctx.screenShake = Math.min((ctx.screenShake || 0) + 3, 8);
+    if (!ctx.shakeCooldown) { ctx.screenShake = Math.min((ctx.screenShake || 0) + 3 * 0.5, 6); ctx.shakeCooldown = 10; }
     Sound.blizzardShatter();
   }
 
@@ -319,7 +331,7 @@ class BlizzardWeapon extends Weapon {
         decay: 0.025,
       });
     }
-    ctx.screenShake = Math.min((ctx.screenShake || 0) + 2, 6);
+    if (!ctx.shakeCooldown) { ctx.screenShake = Math.min((ctx.screenShake || 0) + 2 * 0.5, 6); ctx.shakeCooldown = 10; }
   }
 
   _emitFireParticle(zone) {

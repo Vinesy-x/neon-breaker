@@ -6,13 +6,14 @@
  */
 var Weapon = require('./Weapon');
 var Config = require('../Config');
+const WB = require('../config/WeaponBalanceConfig');
 var Sound = require('../systems/SoundManager');
 
-var MAX_WALLS_BASE = 2;
+var MAX_WALLS_BASE = WB.frostStorm.maxWallsBase;
 var WALL_WIDTH_BASE = 0;   // 0表示自动跟随砖块列宽
-var WALL_HEIGHT = 22;
-var STACK_LIMIT_BASE = 3;  // 基础叠加倍数上限
-var AURA_RANGE = 80;       // 寒气场范围(像素)
+var WALL_HEIGHT = WB.frostStorm.wallHeight;
+var STACK_LIMIT_BASE = WB.frostStorm.stackLimitBase;  // 基础叠加倍数上限
+var AURA_RANGE = WB.frostStorm.auraRange;       // 寒气场范围(像素)
 
 class FrostStormWeapon extends Weapon {
   constructor() {
@@ -28,7 +29,10 @@ class FrostStormWeapon extends Weapon {
   }
 
   getMaxWalls() {
-    return MAX_WALLS_BASE + (this.branches.count || 0);
+    // 基础冰墙数由外部养成爽点控制(base 2, +1 per milestone)
+    var base = MAX_WALLS_BASE;
+    if (this._shopWallBase !== undefined) base = this._shopWallBase;
+    return base + (this.branches.count || 0);
   }
 
   getWallWidth() {
@@ -53,7 +57,12 @@ class FrostStormWeapon extends Weapon {
   update(dtMs, ctx) {
     var dt = dtMs / 16.67;
     this.timer += dtMs;
-    var interval = Math.max(2000, this.def.interval - (this.branches.freq || 0) * 1000);
+    // 更新爽点：冰墙数量
+    if (ctx && ctx.saveManager) {
+      var ss = ctx.saveManager.getWeaponSweetSpot('frostStorm');
+      if (ss !== null) this._shopWallBase = ss;
+    }
+    var interval = this.def.interval; // CD由外部养成控制
 
     // CD到 → 放墙
     if (this.timer >= interval) {
@@ -97,6 +106,27 @@ class FrostStormWeapon extends Weapon {
             wall.regenTimer -= 1000;
             var regenAmt = wall.maxHp * 0.015;
             wall.hp = Math.min(wall.maxHp, wall.hp + regenAmt);
+          }
+        }
+      }
+
+      // frostAura被动：冰墙周围80px自动叠冰缓
+      if (ctx.saveManager && ctx.saveManager.hasWeaponPassive('frostStorm', 'frostAura')) {
+        wall._auraTimer = (wall._auraTimer || 0) + dtMs;
+        if (wall._auraTimer >= 500) { // 每0.5秒
+          wall._auraTimer = 0;
+          for (var ai = 0; ai < ctx.bricks.length; ai++) {
+            var ab = ctx.bricks[ai];
+            if (!ab.alive) continue;
+            var abc = ab.getCenter();
+            if (Math.abs(abc.x - wall.x) < wall.width / 2 + 80 && Math.abs(abc.y - wall.y) < 80) {
+              ab.iceStacks = Math.min(5, (ab.iceStacks || 0) + 1);
+              ab.iceDuration = 5000;
+              // absoluteZero被动：光环内自动冻结
+              if (ab.iceStacks >= 3 && ctx.saveManager.hasWeaponPassive('frostStorm', 'absoluteZero') && !ab.frozen) {
+                ab.frozen = true; ab.frozenTimer = 2000; ab.speedMult = 0;
+              }
+            }
           }
         }
       }
@@ -380,7 +410,8 @@ class FrostStormWeapon extends Weapon {
     // 第4层：融合墙宽度加成 = 墙越宽伤害越高（宽度/基础宽度）
     var baseColW = this.getWallWidth();
     var widthMult = Math.max(1.0, wall.width / baseColW); // 融合2列=2.0x
-    var armorMult = 1.0 + frostArmorLv * 0.30;
+    var armorPassiveBonus = (ctx.saveManager && ctx.saveManager.hasWeaponPassive('frostStorm', 'frostArmor')) ? 0.30 : 0;
+    var armorMult = 1.0 + frostArmorLv * 0.30 + armorPassiveBonus;
 
     for (var i = 0; i < ctx.bricks.length; i++) {
       var brick = ctx.bricks[i];
@@ -400,7 +431,8 @@ class FrostStormWeapon extends Weapon {
         brick[cdKey] = now;
 
         // ① 叠冰缓
-        var stacksToAdd = 1 + freezeLv + frostArmorLv;
+        var frostStackBonus = (ctx.saveManager && ctx.saveManager.hasWeaponPassive('frostStorm', 'frostStack')) ? 1 : 0;
+        var stacksToAdd = 1 + freezeLv + frostArmorLv + frostStackBonus;
         brick.iceStacks = Math.min(5, (brick.iceStacks || 0) + stacksToAdd);
         brick.iceDuration = 5000;
 
@@ -419,7 +451,9 @@ class FrostStormWeapon extends Weapon {
         var dmg = Math.min(brick.hp, rawDmg);
 
         // ④ 互扣（墙只扣基础值，不受增伤影响）
-        wall.hp -= wall.maxHp * HIT_RATIO;
+        // permafrostHP被动：冻结砖块碰撞不扣冰墙HP
+        var skipHpCost = (brick.frozen && ctx.saveManager && ctx.saveManager.hasWeaponPassive('frostStorm', 'permafrostHP'));
+        if (!skipHpCost) wall.hp -= wall.maxHp * HIT_RATIO;
         ctx.damageBrick(brick, dmg, 'frostStorm', 'ice');
         hadHit = true;
 
@@ -469,7 +503,9 @@ class FrostStormWeapon extends Weapon {
           var bossIceMult = 1.0 + (ctx.boss.iceStacks || 0) * 0.20;
           var bossDmg = wall.maxHp * HIT_RATIO * bossIceMult * armorMult * widthMult;
           ctx.damageBoss(bossDmg, 'frostStorm');
-          wall.hp -= wall.maxHp * HIT_RATIO;
+          // permafrostHP被动：冻结砖块碰撞不扣冰墙HP
+        var skipHpCost = (brick.frozen && ctx.saveManager && ctx.saveManager.hasWeaponPassive('frostStorm', 'permafrostHP'));
+        if (!skipHpCost) wall.hp -= wall.maxHp * HIT_RATIO;
           hadHit = true;
         }
       }
@@ -574,7 +610,7 @@ class FrostStormWeapon extends Weapon {
     }
 
     // 强屏震
-    ctx.screenShake = Math.min((ctx.screenShake || 0) + 5 + shatterLv * 2, 12);
+    if (!ctx.shakeCooldown) { ctx.screenShake = Math.min((ctx.screenShake || 0) + 5 + shatterLv * 2 * 0.5, 6); ctx.shakeCooldown = 10; }
   }
 
   // ===== 粒子特效 =====

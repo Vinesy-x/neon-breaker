@@ -4,6 +4,7 @@
  * 从 Game.js 提取
  */
 const Config = require('../Config');
+const UIRenderer = require('../render/UIRenderer');
 const Sound = require('./SoundManager');
 
 class UIController {
@@ -65,13 +66,56 @@ class UIController {
       }
     }
     var r = g.renderer.getUpgradeShopHit(t);
-    if (r && typeof r === 'string') { if (g.saveManager.upgradeLevel(r)) Sound.selectSkill(); }
+    if (r && typeof r === 'string') {
+      if (g.saveManager.upgradeLevel(r)) {
+        Sound.selectSkill();
+        g.renderer.triggerUpgradeEffect(r);
+        wx.vibrateShort({ type: 'light' });
+      }
+    }
   }
 
   // ===== 武器商店 =====
 
   updateWeaponShop() {
     var g = this.game;
+    var r_chapter = g.renderer;
+
+    // === 弹性惯性滚动 ===
+    // 确定当前滚动目标
+    var scrollKey = null, maxScroll = 0;
+    if (r_chapter._weaponDetailKey) {
+      scrollKey = r_chapter._weaponDetailTab === 0 ? '_attrScrollY' : '_skillTreeScrollY';
+    } else {
+      scrollKey = '_weaponListScrollY';
+    }
+
+    // 计算maxScroll（近似值，实际由渲染时精确计算）
+    // 用缓存的值（渲染时会更新）
+    if (scrollKey === '_attrScrollY') maxScroll = r_chapter._attrMaxScroll || 0;
+    else if (scrollKey === '_skillTreeScrollY') maxScroll = r_chapter._skillTreeMaxScroll || 0;
+    else maxScroll = r_chapter._weaponListMaxScroll || 0;
+
+    var scrollY = r_chapter[scrollKey] || 0;
+
+    if (!g._scrolling) {
+      // 惯性
+      if (g._scrollVelocity) {
+        scrollY += g._scrollVelocity;
+        g._scrollVelocity *= 0.92;
+        if (Math.abs(g._scrollVelocity) < 0.3) g._scrollVelocity = 0;
+      }
+      // 弹性回弹（仅松手后）
+      if (scrollY < 0) {
+        scrollY += (0 - scrollY) * 0.25;
+        if (Math.abs(scrollY) < 0.5) scrollY = 0;
+      } else if (maxScroll > 0 && scrollY > maxScroll) {
+        scrollY += (maxScroll - scrollY) * 0.25;
+        if (Math.abs(scrollY - maxScroll) < 0.5) scrollY = maxScroll;
+      }
+    }
+    r_chapter[scrollKey] = scrollY;
+
     var t = g.input.consumeTap();
     if (!t) return;
     var r = g.renderer.getWeaponShopHit(t);
@@ -80,12 +124,16 @@ class UIController {
       if (r.tabIdx !== undefined) {
         g.renderer._weaponDetailTab = r.tabIdx;
         g.renderer._skillTreeScrollY = 0;
+        g.renderer._attrScrollY = 0;
+        g._scrollVelocity = 0;
       } else if (r.tab === 'battle') g.state = Config.STATE.CHAPTER_SELECT;
       else if (r.tab === 'upgrade') g.state = Config.STATE.UPGRADE_SHOP;
     } else if (r.action === 'detail') {
       g.renderer._weaponDetailKey = r.key;
       g.renderer._weaponDetailTab = 0;
       g.renderer._skillTreeScrollY = 0;
+      g.renderer._attrScrollY = 0;
+      g._scrollVelocity = 0;
     } else if (r.action === 'close') {
       g.renderer._weaponDetailKey = null;
     } else if (r.action === 'upgrade') {
@@ -138,6 +186,26 @@ class UIController {
   updateSkillChoice() {
     var g = this.game;
     var t = g.input.consumeTap();
+    if (t) {
+      // Check refresh button
+      var rbtn = UIRenderer.getRefreshBtnArea();
+      if (rbtn && t.x >= rbtn.x && t.x <= rbtn.x + rbtn.w && t.y >= rbtn.y && t.y <= rbtn.y + rbtn.h) {
+        if (rbtn.needAd) {
+          // TODO: Show rewarded ad, then refresh on success
+          // For now (dev): directly refresh
+          g._adRefreshUsed++;
+          g._refreshCount++;
+          g.pendingSkillChoices = g.upgrades.generateChoices();
+          Sound.selectSkill();
+        } else {
+          // Free refresh
+          g._refreshCount++;
+          g.pendingSkillChoices = g.upgrades.generateChoices();
+          Sound.selectSkill();
+        }
+        return;
+      }
+    }
     if (t && g.pendingSkillChoices.length > 0) {
       for (var i = 0; i < g.pendingSkillChoices.length; i++) {
         var ch = g.pendingSkillChoices[i];

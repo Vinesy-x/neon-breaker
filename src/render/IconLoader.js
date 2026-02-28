@@ -14,6 +14,8 @@ class IconLoader {
       'upgrade_attack', 'upgrade_fireRate', 'upgrade_crit', 'upgrade_startLevel', 'upgrade_coinBonus',
       // 飞机分支
       'ship_attack', 'ship_speed', 'ship_multi', 'ship_pierce', 'ship_spread',
+      // 部位图标
+      'nose_icon', 'tail_icon', 'leftW_icon', 'rightW_icon', 'core_icon',
       // UI通用
       'ui_coin', 'ui_lock', 'tab_chapter', 'tab_upgrade', 'tab_weapon',
       // 飞机+副翼精灵

@@ -3,32 +3,31 @@
  * 本地 wx.Storage + 微信云开发双写
  */
 
-const SAVE_KEY = 'neon_breaker_save';
+const SAVE_KEY = 'wuxian_feiji_save';
+const WeaponUnlockConfig = require('../config/WeaponUnlockConfig');
+const ShopCurve = require('../config/ShopCurveConfig');
 var _cloudReady = false;
 var _cloudSaveTimer = null;  // 防抖定时器
 var _cloudSaving = false;    // 防并发
+var _justReset = false;      // 重置标记，跳过云端恢复
 
-const UPGRADE_CONFIG = {
-  attack:    { maxLevel: 50, costPer: 50 },
-  fireRate:  { maxLevel: 30, costPer: 80 },
-  crit:      { maxLevel: 20, costPer: 120 },
-  startLevel:{ maxLevel: 5,  costPer: 500 },
-  coinBonus: { maxLevel: 20, costPer: 150 },
-  expBonus:  { maxLevel: 20, costPer: 100 },
-};
+const UPGRADE_CONFIG = require('../config/UpgradeConfig');
 
 const DEFAULT_SAVE = {
   maxChapter: 1,
   coins: 0,
   upgrades: {
     attack: 0,
-    fireRate: 0,
     crit: 0,
+    fireDmg: 0,
+    iceDmg: 0,
+    energyDmg: 0,
+    fireRate: 0,
     startLevel: 0,
     coinBonus: 0,
     expBonus: 0,
   },
-  weaponLevels: {},  // { kunai: 0, lightning: 0, ... }
+  weaponLevels: {},  // 通过 getWeaponLevel 自动补1级
   chapterRecords: {},
 };
 
@@ -128,7 +127,11 @@ class SaveManager {
           // 用进度更高的存档：比较 maxChapter + coins 总和
           var localScore = (self._data.maxChapter || 1) * 1000 + (self._data.coins || 0);
           var cloudScore = (cloudData.maxChapter || 1) * 1000 + (cloudData.coins || 0);
-          if (cloudScore > localScore) {
+          if (_justReset) {
+            // 刚重置过，上传默认存档到云端
+            self._cloudSave();
+            console.log('[Cloud] 重置后覆盖云端');
+          } else if (cloudScore > localScore) {
             // 云端存档更好，覆盖本地
             self._data = Object.assign({}, JSON.parse(JSON.stringify(DEFAULT_SAVE)), cloudData);
             for (var k in DEFAULT_SAVE.upgrades) {
@@ -275,9 +278,17 @@ class SaveManager {
     return this.getUpgrade('attack');
   }
 
-  /** 射速加成比例 (0~0.6)，每级-2% */
+  /** 射速加成比例：永久升级(每级+2%) + 飞机爽点属性(每5级+8%) */
   getFireRateBonus() {
-    return this.getUpgrade('fireRate') * 0.02;
+    var base = this.getUpgrade('fireRate') * 0.02;
+    var ShopDefs = require('../config/WeaponShopDefs');
+    var shipLevel = this.getWeaponLevel('ship');
+    var sweetSpotMult = ShopDefs.getSweetSpotValue('ship', shipLevel);
+    var shopBonus = sweetSpotMult ? (sweetSpotMult - 1.0) : 0;
+    // overclockEng被动：射速额外+50%
+    var ShopDefs2 = require('../config/WeaponShopDefs');
+    var overclockBonus = (ShopDefs2.getUnlockedPassives('ship', shipLevel).indexOf('overclockEng') >= 0) ? 0.5 : 0;
+    return base + shopBonus + overclockBonus;
   }
 
   /** 暴击率加成 (0~0.2)，每级+1% */
@@ -304,17 +315,29 @@ class SaveManager {
 
   /** 获取武器等级 */
   getWeaponLevel(key) {
-    return this._data.weaponLevels[key] || 0;
+    var lv = this._data.weaponLevels[key] || 0;
+    // 已解锁的武器最低1级
+    if (lv === 0 && this._isWeaponUnlocked(key)) {
+      this._data.weaponLevels[key] = 1;
+      lv = 1;
+    }
+    return lv;
+  }
+
+  _isWeaponUnlocked(key) {
+    var cfg = WeaponUnlockConfig[key];
+    var req = cfg ? cfg.unlockChapter : 999;
+    return (this._data.maxChapter || 1) >= req;
   }
 
   /** 武器最高等级 */
-  getWeaponMaxLevel() { return 15; }
+  getWeaponMaxLevel() { return 30; }
 
   /** 武器升级费用：金币 + 蓝晶（蓝晶暂用金币代替） */
   getWeaponUpgradeCost(key) {
     var lv = this.getWeaponLevel(key);
-    var coins = Math.floor(100 * Math.pow(1.3, lv));
-    var crystals = Math.floor(50 * Math.pow(1.25, lv));
+    var coins = Math.floor(ShopCurve.weaponUpgradeCostBase * Math.pow(ShopCurve.weaponUpgradeCostScale, lv));
+    var crystals = Math.floor(ShopCurve.crystalCostBase * Math.pow(ShopCurve.crystalCostScale, lv));
     return { coins: coins, crystals: crystals };
   }
 
@@ -335,46 +358,83 @@ class SaveManager {
     return true;
   }
 
-  /** 全局暴击伤害加成（所有武器等级之和 × 2%） */
+  /** 全局暴击伤害加成（递进曲线，单武器满级+100%，11个全满+1100%） */
   getWeaponCritDamageBonus() {
+    var ShopDefs = require('../config/WeaponShopDefs');
     var total = 0;
     for (var k in this._data.weaponLevels) {
-      total += this._data.weaponLevels[k];
+      total += ShopDefs.getTotalCritBonus(this._data.weaponLevels[k]);
     }
-    return total * 0.02;
+    return total;
   }
 
-  /** 获取武器在某等级解锁的分支列表 */
+  /** 获取武器在某商店等级解锁的战斗分支列表（新系统） */
   static getWeaponUnlocks(weaponKey) {
-    var WEAPON_TREES = require('../config/WeaponDefs');
-    var SHIP_TREE = require('../config/ShipDefs');
-    var tree, branchSource;
-    if (weaponKey === 'ship') {
-      // 飞机：分支定义直接是 SHIP_TREE 本身（不是 tree.branches）
-      branchSource = SHIP_TREE;
-    } else {
-      tree = WEAPON_TREES[weaponKey];
-      if (!tree) return [];
-      branchSource = tree.branches;
-    }
-    // 按requires复杂度分配解锁等级
-    var branches = Object.keys(branchSource);
+    var ShopDefs = require('../config/WeaponShopDefs');
+    var def = ShopDefs.WEAPON_SHOP[weaponKey];
+    if (!def) return [];
     var unlocks = [];
-    for (var i = 0; i < branches.length; i++) {
-      var bk = branches[i];
-      var bDef = branchSource[bk];
-      // 无前置 = 初始可用, 有前置 = 根据requires深度分配等级
-      if (!bDef.requires) continue;
-      // 计算前置总等级需求
-      var reqTotal = 0;
-      for (var rk in bDef.requires) reqTotal += bDef.requires[rk];
-      // 映射到解锁等级: 2,4,6,8,10...
-      var unlockLv = Math.min(15, Math.max(2, reqTotal * 2));
-      unlocks.push({ level: unlockLv, branchKey: bk, branchName: bDef.name, desc: bDef.desc });
+    var branches = def.unlockBranches;
+    for (var lv in branches) {
+      unlocks.push({ level: parseInt(lv), branchKey: branches[lv] });
     }
     unlocks.sort(function(a, b) { return a.level - b.level; });
     return unlocks;
   }
+
+  /** 获取武器伤害倍率（基于商店等级） */
+  getWeaponDmgMultiplier(key) {
+    var ShopDefs = require('../config/WeaponShopDefs');
+    return ShopDefs.getDmgMultiplier(this.getWeaponLevel(key));
+  }
+
+  /** 获取武器爽点属性值（基于商店等级） */
+  getWeaponSweetSpot(key) {
+    var ShopDefs = require('../config/WeaponShopDefs');
+    return ShopDefs.getSweetSpotValue(key, this.getWeaponLevel(key));
+  }
+
+  /** 检查武器某被动是否已解锁 */
+  hasWeaponPassive(weaponKey, passiveKey) {
+    var ShopDefs = require('../config/WeaponShopDefs');
+    var unlocked = ShopDefs.getUnlockedPassives(weaponKey, this.getWeaponLevel(weaponKey));
+    return unlocked.indexOf(passiveKey) >= 0;
+  }
+
+  /** 检查武器某战斗分支是否已解锁 */
+  isWeaponBranchUnlocked(weaponKey, branchKey) {
+    var ShopDefs = require('../config/WeaponShopDefs');
+    return ShopDefs.isBranchUnlocked(weaponKey, branchKey, this.getWeaponLevel(weaponKey));
+  }
+
+  resetSave(onDone) {
+    _justReset = true;
+    // 重置内存数据
+    this._data = JSON.parse(JSON.stringify(DEFAULT_SAVE));
+    // 清本地+写回默认
+    try { wx.removeStorageSync('wuxian_feiji_save'); } catch(e) {}
+    try { wx.removeStorageSync('neon_breaker_save'); } catch(e) {}
+    wx.setStorageSync(SAVE_KEY, this._data);
+    console.log('[SaveManager] 本地存档已重置');
+    // 强制同步云存档（等完成后再回调）
+    if (_cloudReady) {
+      var self = this;
+      _cloudSaving = true;
+      wx.cloud.callFunction({
+        name: 'saveGame',
+        data: { save: self._data },
+        success: function() { console.log('[SaveManager] 云存档已重置'); },
+        fail: function(e) { console.warn('[SaveManager] 云存档重置失败', e); },
+        complete: function() {
+          _cloudSaving = false;
+          if (onDone) onDone();
+        }
+      });
+    } else {
+      if (onDone) onDone();
+    }
+  }
+
 }
 
 // 导出升级配置供外部读取

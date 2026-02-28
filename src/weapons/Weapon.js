@@ -38,9 +38,14 @@ class Weapon {
     return true;
   }
 
-  /** 武器伤害 = baseAttack * (basePct + damageLv * 0.5) */
-  getDamage(baseAttack) {
-    return Math.max(0.1, baseAttack * (this.def.basePct + (this.branches.damage || 0) * 0.5));
+  /** 武器伤害 = baseAttack * basePct * shopDmgMult * (1 + damageLv * 0.5) */
+  getDamage(baseAttack, ctx) {
+    // 商店等级伤害倍率
+    var shopMult = 1.0;
+    if (ctx && ctx.saveManager) {
+      shopMult = ctx.saveManager.getWeaponDmgMultiplier(this.key);
+    }
+    return Math.max(0.1, baseAttack * this.def.basePct * shopMult * (1 + (this.branches.damage || 0) * 0.5));
   }
 
   getTotalLevel() {
