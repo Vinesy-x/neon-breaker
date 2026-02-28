@@ -285,7 +285,10 @@ class SaveManager {
     var shipLevel = this.getWeaponLevel('ship');
     var sweetSpotMult = ShopDefs.getSweetSpotValue('ship', shipLevel);
     var shopBonus = sweetSpotMult ? (sweetSpotMult - 1.0) : 0;
-    return base + shopBonus;
+    // overclockEng被动：射速额外+50%
+    var ShopDefs2 = require('../config/WeaponShopDefs');
+    var overclockBonus = (ShopDefs2.getUnlockedPassives('ship', shipLevel).indexOf('overclockEng') >= 0) ? 0.5 : 0;
+    return base + shopBonus + overclockBonus;
   }
 
   /** 暴击率加成 (0~0.2)，每级+1% */

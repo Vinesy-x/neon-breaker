@@ -224,7 +224,11 @@ var WEAPON_SHOP = {
       18: 'thunderBullet',  // 雷电弹
     },
     passives: {
-      22: { key: 'ricochetDmg', name: '弹射增伤', desc: '每次弹射伤害+20%' },
+      6:  { key: 'pierceOne',    name: '穿透+1',   desc: '子弹默认穿透+1' },
+      14: { key: 'elemAffinity', name: '元素亲和', desc: '元素弹伤害+30%' },
+      22: { key: 'ricochetDmg',  name: '弹射增伤', desc: '每次弹射伤害+20%' },
+      26: { key: 'spreadPlus',   name: '散射+1',   desc: '额外+1散射弹道' },
+      30: { key: 'overclockEng', name: '超频引擎', desc: '射速额外+50%' },
     },
   },
 };

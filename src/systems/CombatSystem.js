@@ -125,12 +125,14 @@ class CombatSystem {
   fireBullets() {
     var g = this.game;
     var sp = g.upgrades.getSpreadBonus();
-    var count = 1 + sp;
+    var spreadPlusBonus = (g.saveManager && g.saveManager.hasWeaponPassive('ship', 'spreadPlus')) ? 1 : 0;
+    var count = 1 + sp + spreadPlusBonus;
     var spread = count > 1 ? (count - 1) * 0.12 : 0;
     var cx = g.launcher.getCenterX(), sy = g.launcher.y - 5;
     var bulletCoef = 1.0;
     var dmg = Math.max(0.1, g.getBaseAttack() * bulletCoef * g.upgrades.getAttackMult());
     var pierce = g.upgrades.getPierceCount();
+    if (g.saveManager && g.saveManager.hasWeaponPassive('ship', 'pierceOne')) pierce += 1;
     var element = g.upgrades.getElementType();
     var elementLv = g.upgrades.getElementLevel();
 
@@ -141,6 +143,7 @@ class CombatSystem {
       bul.pierce = pierce;
       bul.element = element;
       bul.elementLv = elementLv;
+      if (element && g.saveManager && g.saveManager.hasWeaponPassive('ship', 'elemAffinity')) bul.damage *= 1.3;
       // 反弹系统
       // 弹射弹道：反弹砖块+边界
       var ricochetLv = g.upgrades.shipTree.ricochet || 0;
