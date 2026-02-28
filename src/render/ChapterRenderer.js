@@ -649,11 +649,13 @@ class ChapterRenderer {
 
         rowIdx++;
       } else {
-        // 固定冷却
-        const interval = (wDef.interval / 1000).toFixed(1);
-        ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.textAlign = 'left'; ctx.fillText('冷却时间', labelX, aY + rowIdx * 24);
-        ctx.fillStyle = '#FFFFFF'; ctx.textAlign = 'right'; ctx.fillText(interval + 's', valRight, aY + rowIdx * 24);
-        rowIdx++;
+        // 固定冷却（fireRate类型不显示，避免重复）
+        if (!showSeparateCd) { /* skip */ } else {
+          const interval = (wDef.interval / 1000).toFixed(1);
+          ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.textAlign = 'left'; ctx.fillText('冷却时间', labelX, aY + rowIdx * 24);
+          ctx.fillStyle = '#FFFFFF'; ctx.textAlign = 'right'; ctx.fillText(interval + 's', valRight, aY + rowIdx * 24);
+          rowIdx++;
+        }
         
         // 爽点属性单独一行
         if (shopDef2) {
