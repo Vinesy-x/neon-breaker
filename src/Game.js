@@ -101,7 +101,7 @@ class Game {
     this._devPauseFire = false;
     this._devPauseLevelUp = false;
     this.devPanel = Config.DEV_MODE ? new DevPanel() : null;
-    this.autoBattle = new AutoBattle(this);
+    this.autoBattle = new AutoBattle(this, Config);
     // 注册全局控制接口
     GameGlobal.__autoBattle = (strategy) => { this.autoBattle.start(strategy); };
     GameGlobal.__stopAuto = () => { this.autoBattle.stop(); };

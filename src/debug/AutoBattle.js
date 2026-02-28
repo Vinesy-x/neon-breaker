@@ -10,11 +10,10 @@
  * 自动行为：飞机巡航、自动选技能、实时DPS、结束报告
  */
 
-const Config = require('../config/Config');
-
 class AutoBattle {
-  constructor(game) {
+  constructor(game, Config) {
     this.game = game;
+    this.Config = Config;
     this.enabled = false;
     this.strategy = 'dps';
     this.moveDir = 1;
@@ -49,12 +48,12 @@ class AutoBattle {
     var state = g.state;
 
     // 自动移动
-    if (state === Config.STATE.PLAYING || state === Config.STATE.BOSS) {
+    if (state === this.Config.STATE.PLAYING || state === this.Config.STATE.BOSS) {
       this._autoMove();
     }
 
     // 自动选技能
-    if (state === Config.STATE.LEVEL_UP || state === Config.STATE.SKILL_CHOICE) {
+    if (state === this.Config.STATE.LEVEL_UP || state === this.Config.STATE.SKILL_CHOICE) {
       this._autoChoiceDelay++;
       if (this._autoChoiceDelay > 10) {
         this._autoSelectSkill();
@@ -65,7 +64,7 @@ class AutoBattle {
     }
 
     // 自动过关结算
-    if (state === Config.STATE.CHAPTER_CLEAR) {
+    if (state === this.Config.STATE.CHAPTER_CLEAR) {
       this._autoChoiceDelay++;
       if (this._autoChoiceDelay > 30) {
         this._autoTapClear();
@@ -80,7 +79,7 @@ class AutoBattle {
     }
 
     // 游戏结束
-    if (state === Config.STATE.GAME_OVER) {
+    if (state === this.Config.STATE.GAME_OVER) {
       this._printReport();
       this.enabled = false;
       console.log('🤖 AutoBattle: 游戏结束');
@@ -123,11 +122,11 @@ class AutoBattle {
       g.expSystem.consumeLevelUp();
       g.pendingSkillChoices = g.upgrades.generateChoices();
       if (g.pendingSkillChoices.length === 0) {
-        g.state = g._preChoiceState || Config.STATE.PLAYING;
+        g.state = g._preChoiceState || this.Config.STATE.PLAYING;
         g._preChoiceState = null;
       }
     } else {
-      g.state = g._preChoiceState || Config.STATE.PLAYING;
+      g.state = g._preChoiceState || this.Config.STATE.PLAYING;
       g._preChoiceState = null;
     }
   }
