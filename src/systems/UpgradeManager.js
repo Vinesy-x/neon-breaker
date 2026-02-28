@@ -198,10 +198,10 @@ class UpgradeManager {
       if (shipGated[sk] && shipShopLevel < shipGated[sk]) continue;
       const def = Config.SHIP_TREE[sk];
       const curLv = this.shipTree[sk];
-      // 品质影响优先级
+      // 品质影响优先级（元素弹不额外加权，避免霸占三选一）
       let priority = curLv === 0 ? 2 : 1;
-      if (def.quality === 'rare') priority = curLv === 0 ? 3 : 2;
       if (def.quality === 'exclusive') priority = curLv === 0 ? 3 : 2;
+      // rare(元素弹)保持普通权重，通过随机公平出现
 
       pool.push({
         type: 'shipBranch', key: sk,
