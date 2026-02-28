@@ -611,8 +611,8 @@ class ChapterRenderer {
       // 计算属性行数（伤害系数+冷却/爽点+伤害类型）= 基础3行 + 爽点可能替代冷却
       var attrRows = 2; // 伤害系数、爽点/冷却
       var showSeparateCd = true;
-      if (shopDef2 && shopDef2.sweetSpot.type === 'cd') {
-        showSeparateCd = false; // 爽点就是CD，不重复显示
+      if (shopDef2 && (shopDef2.sweetSpot.type === 'cd' || shopDef2.sweetSpot.type === 'fireRate')) {
+        showSeparateCd = false; // 爽点就是CD或射速，不重复显示冷却行
       } else if (shopDef2) {
         attrRows = 3; // 伤害系数、冷却、爽点属性
       }
