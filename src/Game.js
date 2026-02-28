@@ -22,6 +22,7 @@ const Renderer = require('./Renderer');
 const InputManager = require('./input/InputManager');
 const Sound = require('./systems/SoundManager');
 const DevPanel = require('./DevPanel');
+const AutoBattle = require('./debug/AutoBattle');
 
 // 系统模块
 const CombatSystem = require('./systems/CombatSystem');
@@ -100,6 +101,10 @@ class Game {
     this._devPauseFire = false;
     this._devPauseLevelUp = false;
     this.devPanel = Config.DEV_MODE ? new DevPanel() : null;
+    this.autoBattle = new AutoBattle(this);
+    // 注册全局控制接口
+    GameGlobal.__autoBattle = (strategy) => { this.autoBattle.start(strategy); };
+    GameGlobal.__stopAuto = () => { this.autoBattle.stop(); };
     this.damageStats = {};
     this.statsExpanded = false;
     this._statsArea = null;
@@ -572,6 +577,8 @@ class Game {
         });
         break;
     }
+    // AutoBattle
+    if (this.autoBattle) this.autoBattle.update();
     // Dev panel 最后绘制（在最上层）
     if (this.devPanel) this.devPanel.draw(this.renderer.ctx, this);
   }
