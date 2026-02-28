@@ -68,6 +68,8 @@ class Game {
     this.elementSystem = new ElementSystem(this);
     this.dotSystem = new DotSystem(this);
     this.buffSystem = new BuffSystem(this);
+    this._burstQueue = 0;     // 连射剩余子弹数
+    this._burstTimer = 0;     // 连射间隔计时
     this.combat = new CombatSystem(this);
     this.collision = new CollisionSystem(this);
     this.ui = new UIController(this);
@@ -308,6 +310,18 @@ class Game {
       if (this.fireTimer >= this.launcher.getFireInterval()) {
         this.fireTimer -= this.launcher.getFireInterval();
         this.combat.fireBullets();
+        // 连射：额外子弹入队
+        var burstLv = this.upgrades.shipTree.burst || 0;
+        if (burstLv > 0) { this._burstQueue = burstLv; this._burstTimer = 0; }
+      }
+      // 连射队列处理
+      if (this._burstQueue > 0) {
+        this._burstTimer += dtMs;
+        if (this._burstTimer >= 150) {
+          this._burstTimer -= 150;
+          this._burstQueue--;
+          this.combat.fireBullets();
+        }
       }
     }
 

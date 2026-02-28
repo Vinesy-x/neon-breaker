@@ -219,16 +219,12 @@ var WEAPON_SHOP = {
     name: '飞机',
     sweetSpot: { type: 'fireRate', base: 1.0, delta: 0.08, unit: '' },
     unlockBranches: {
-      2:  'spread',   // 散射+（从ShipDefs中）
-      10: 'barrage',  // 弹幕风暴
-      18: 'wallBounce', // 弹壁反弹
+      2:  'fireBullet',     // 火焰弹
+      10: 'iceBullet',      // 寒冰弹
+      18: 'thunderBullet',  // 雷电弹
     },
     passives: {
-      6:  { key: 'pierceOne',   name: '穿透+1', desc: '子弹默认穿透+1' },
-      14: { key: 'elemAffinity',name: '元素亲和', desc: '元素弹伤害+30%' },
-      22: { key: 'ricochet',    name: '弹射', desc: '碰砖后弹向附近目标' },
-      26: { key: 'spreadPlus',  name: '散射+1', desc: '额外+1散射弹道' },
-      30: { key: 'overclockEng',name: '超频引擎', desc: '射速额外+50%' },
+      22: { key: 'ricochetDmg', name: '弹射增伤', desc: '每次弹射伤害+20%' },
     },
   },
 };

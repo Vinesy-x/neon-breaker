@@ -125,15 +125,12 @@ class CombatSystem {
   fireBullets() {
     var g = this.game;
     var sp = g.upgrades.getSpreadBonus();
-    var spreadPlusBonus = (g.saveManager && g.saveManager.hasWeaponPassive('ship', 'spreadPlus')) ? 1 : 0;
-    var count = 1 + sp + spreadPlusBonus;
+    var count = 1 + sp;
     var spread = count > 1 ? (count - 1) * 0.12 : 0;
     var cx = g.launcher.getCenterX(), sy = g.launcher.y - 5;
     var bulletCoef = 1.0;
     var dmg = Math.max(0.1, g.getBaseAttack() * bulletCoef * g.upgrades.getAttackMult());
     var pierce = g.upgrades.getPierceCount();
-    // pierceOne被动：默认穿透+1
-    if (g.saveManager && g.saveManager.hasWeaponPassive('ship', 'pierceOne')) pierce += 1;
     var element = g.upgrades.getElementType();
     var elementLv = g.upgrades.getElementLevel();
 
@@ -143,21 +140,16 @@ class CombatSystem {
       var bul = new Bullet(cx, sy, Math.cos(a) * Config.BULLET_SPEED, Math.sin(a) * Config.BULLET_SPEED, dmg);
       bul.pierce = pierce;
       bul.element = element;
-      // elemAffinity被动：元素弹伤害+30%
-      if (element && g.saveManager && g.saveManager.hasWeaponPassive('ship', 'elemAffinity')) {
-        bul.damage *= 1.3;
-      }
       bul.elementLv = elementLv;
       // 反弹系统
-      var wallBounceLv = g.upgrades.shipTree.wallBounce || 0;
+      // 弹射弹道：反弹砖块+边界
       var ricochetLv = g.upgrades.shipTree.ricochet || 0;
-      if (wallBounceLv > 0) {
-        bul.wallBounce = wallBounceLv + 1;
-        bul.bounceDmgMult = 0.25;
-      }
-      var ricochetPassive = (g.saveManager && g.saveManager.hasWeaponPassive('ship', 'ricochet')) ? 1 : 0;
-      if (ricochetLv > 0 || ricochetPassive > 0) {
-        bul.ricochet = ricochetLv + ricochetPassive;
+      if (ricochetLv > 0) {
+        bul.wallBounce = ricochetLv;   // 边界反弹
+        bul.ricochet = ricochetLv;     // 砖块弹射
+        // 弹射增伤被动：每次弹射+20%
+        var ricochetDmgPassive = (g.saveManager && g.saveManager.hasWeaponPassive('ship', 'ricochetDmg'));
+        bul.bounceDmgMult = ricochetDmgPassive ? 0.20 : 0;
       }
       g.bullets.push(bul);
     }

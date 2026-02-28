@@ -113,8 +113,8 @@ class UpgradeManager {
   /** 散射额外弹道数 */
   getSpreadBonus() { return this.shipTree.spread || 0; }
 
-  /** 穿透层数 */
-  getPierceCount() { return this.shipTree.pierce || 0; }
+  /** 穿透层数（已移除pierce分支，基础为0） */
+  getPierceCount() { return 0; }
 
   /** 基础攻击力 = floor(10 * attackMult) */
   getBaseAttack() { return Math.max(1, 10 * this.getAttackMult()); }
@@ -193,10 +193,11 @@ class UpgradeManager {
     for (const u of shipUnlocks) shipGated[u.branchKey] = u.level;
 
     for (const sk in Config.SHIP_TREE) {
-      if (!this.canUpgradeShip(sk)) continue;
-      // 商店等级门槛
-      if (shipGated[sk] && shipShopLevel < shipGated[sk]) continue;
       const def = Config.SHIP_TREE[sk];
+      if (def.hidden) continue;  // 隐藏分支不出现在技能选择
+      if (!this.canUpgradeShip(sk)) continue;
+      // shopGated分支需要商店解锁
+      if (def.shopGated && shipGated[sk] && shipShopLevel < shipGated[sk]) continue;
       const curLv = this.shipTree[sk];
       // 品质三档权重：normal最常见，rare适中，exclusive(元素弹)最稀有
       //   normal:    首次=3, 继续=2
