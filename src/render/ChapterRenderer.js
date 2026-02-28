@@ -597,14 +597,14 @@ class ChapterRenderer {
       const ssVal = ShopDefs.getSweetSpotValue(weaponKey, lv);
       const nextSsVal = maxed ? ssVal : ShopDefs.getSweetSpotValue(weaponKey, lv + 1);
       const ssChanged = !maxed && nextSsVal !== ssVal;
-      const ssTypeNames = { cd: '冷却时间', chains: '闪电链数', pierce: '穿透数', bombs: '载弹量', duration: '持续时间', count: '数量', fireRate: '射速加成' };
+      const ssTypeNames = { cd: '冷却时间', chains: '闪电链数', pierce: '穿透数', bombs: '载弹量', duration: '持续时间', count: '数量', fireRate: '射速' };
       const ssLabel = shopDef2 ? (ssTypeNames[shopDef2.sweetSpot.type] || shopDef2.sweetSpot.type) : '';
       
       // 根据爽点类型格式化显示值
       function fmtSs(val, type, unit) {
         if (type === 'cd') return (val / 1000).toFixed(1) + 's';
         if (type === 'duration') return val.toFixed(1) + 's';
-        if (type === 'fireRate') return (val * 100).toFixed(0) + '%';
+        if (type === 'fireRate') { var baseMs = 800; var actualMs = baseMs * (1 - val); var rps = 1000 / Math.max(80, actualMs); return rps.toFixed(1) + '发/秒'; }
         return val + unit;
       }
       
