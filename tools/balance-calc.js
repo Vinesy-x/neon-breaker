@@ -47,7 +47,7 @@ const WEAPONS = {
     cd: 6,
     mechDesc: 'AOE 1.2列, 直接伤害',
     // 有效倍率 = hits × decayMult × mechCoef
-    hits: () => aoeHits(1.2, 'avg'),   // 函数：自动查表
+    hits: 5,                            // 实测第一关密度修正(模型8→5)
     decayMult: 1.0,
     mechCoef: 1.0,
   },
@@ -59,7 +59,7 @@ const WEAPONS = {
     mechDesc: '3链, 每跳衰减10%, 自动瞄准+10%',
     hits: 1,
     decayMult: 1 + 0.9 + 0.81,        // 3链衰减总和
-    mechCoef: 1.1,                      // 自动瞄准加成
+    mechCoef: 1.3,                      // 自动瞄准+不空(实测1.1→1.3)
   },
 
   missile: {
@@ -69,7 +69,7 @@ const WEAPONS = {
     mechDesc: '5穿, 每穿衰减20%, 单列限制×0.7',
     hits: 1,
     decayMult: 1 + 0.8 + 0.64 + 0.51 + 0.41,  // 5穿衰减总和
-    mechCoef: 0.7,                      // 单列位置限制
+    mechCoef: 0.85,                     // 单列限制(实测穿透稳定,0.7→0.85)
   },
 
   meteor: {

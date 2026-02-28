@@ -13,7 +13,7 @@
 module.exports = {
   // ===== 寒冰弹 =====
   kunai: {
-    basePct: 3.0,
+    basePct: 5,
     interval: 6000,
     damageType: 'ice',
     aoeRadius: 1.2,              // AOE半径(列宽单位)，1.2列≈64px
@@ -33,7 +33,7 @@ module.exports = {
 
   // ===== 闪电链 =====
   lightning: {
-    basePct: 5.5,
+    basePct: 4.5,
     interval: 4000,
     damageType: 'lightning',
     branchDmgScale: 0.5,
@@ -52,7 +52,7 @@ module.exports = {
 
   // ===== 穿甲弹 =====
   missile: {
-    basePct: 14.0,
+    basePct: 11,
     interval: 8000,
     damageType: 'physical',
     branchDmgScale: 0.5,
