@@ -253,14 +253,26 @@ function calcDPS(wk, plan) {
         var pen = b.penalty ? Math.max(0.2, 1 + curLv * b.penalty) : 1;
         zoneB = (baseBullets + added) / baseBullets * pen;
       } else if (b.type === 'aoeRadius') {
-        // 范围增→命中数²增长（但有上限）
+        // 真实命中数查表（基于屏幕砖块密度）
+        // 不用²公式，直接用π×r²/砖块面积×填充率，cap到60
         var rMult = 1 + curLv * b.perLevel;
-        zoneC *= Math.min(rMult * rMult, 12); // cap避免爆炸
+        zoneC *= rMult; // 先累积半径倍率，最后统一算命中
       } else if (b.zone === 'D' || b.type === 'multiply') {
         zoneD *= (1 + curLv * b.perLevel);
       }
     }
 
+    // zoneC是半径累积倍率，转为真实命中数倍率
+    if (zoneC !== 1.0) {
+      var baseRadiusCol = (wk === 'meteor') ? 0.5 : (wk === 'blizzard') ? 0.6 : 1.2;
+      var realRadius = baseRadiusCol * zoneC;
+      var colW = 53, brickH = 20, fillRate = 0.70, maxBricks = 60;
+      var rpx = realRadius * colW;
+      var realHits = Math.min(Math.round(Math.PI * rpx * rpx / (colW * brickH) * fillRate), maxBricks);
+      var baseRpx = baseRadiusCol * colW;
+      var baseHits = Math.max(1, Math.min(Math.round(Math.PI * baseRpx * baseRpx / (colW * brickH) * fillRate), maxBricks));
+      zoneC = realHits / baseHits;
+    }
     var totalMult = zoneA * zoneB * zoneC * zoneD;
     var dps = basePct * totalMult * model.baseHits / model.cd;
 
