@@ -604,7 +604,7 @@ class ChapterRenderer {
       function fmtSs(val, type, unit) {
         if (type === 'cd') return (val / 1000).toFixed(1) + 's';
         if (type === 'duration') return val.toFixed(1) + 's';
-        if (type === 'fireRate') { var baseMs = 800; var actualMs = baseMs * (1 - val); return (Math.max(80, actualMs) / 1000).toFixed(2) + '秒'; }
+        if (type === 'fireRate') { var baseMs = 800; var bonus = val - 1.0; var actualMs = baseMs * (1 - bonus); return (Math.max(80, actualMs) / 1000).toFixed(2) + '秒'; }
         return val + unit;
       }
       
