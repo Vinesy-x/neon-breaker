@@ -105,6 +105,7 @@ class Game {
     // 注册全局控制接口
     GameGlobal.__autoBattle = (strategy) => { this.autoBattle.start(strategy); };
     GameGlobal.__stopAuto = () => { this.autoBattle.stop(); };
+    GameGlobal.__setSpeed = (n) => { this.autoBattle.setSpeed(n); };
     this.damageStats = {};
     this.statsExpanded = false;
     this._statsArea = null;

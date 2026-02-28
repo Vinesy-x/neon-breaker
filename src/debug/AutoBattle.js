@@ -7,7 +7,11 @@
  *   GameGlobal.__autoBattle('balanced')→ 均衡策略（雨露均沾）
  *   GameGlobal.__stopAuto()            → 停止
  * 
- * 自动行为：飞机巡航、自动选技能、实时DPS、结束报告
+ * 倍速控制：
+ *   GameGlobal.__setSpeed(3)           → 3倍速
+ *   GameGlobal.__setSpeed(1)           → 恢复原速
+ * 
+ * 自动行为：智能巡航（优先最近砖列）、自动选技能、实时DPS、结束报告
  */
 
 class AutoBattle {
@@ -16,14 +20,13 @@ class AutoBattle {
     this.Config = Config;
     this.enabled = false;
     this.strategy = 'dps';
-    this.moveDir = 1;
-    this.moveSpeed = 3;
-    this.moveTimer = 0;
-    this.changeInterval = 60;
-    this.reportInterval = 600;   // 每10秒
+    this.moveSpeed = 4;
+    this.reportInterval = 600;   // 每10秒（原速下）
     this.frameCount = 0;
     this.lastReportFrame = 0;
     this._autoChoiceDelay = 0;
+    this._targetX = -1;          // 智能巡航目标X
+    this._retargetCd = 0;        // 重新选目标冷却
   }
 
   start(strategy) {
@@ -31,14 +34,24 @@ class AutoBattle {
     this.enabled = true;
     this.frameCount = 0;
     this.lastReportFrame = 0;
+    this._targetX = -1;
     console.log('🤖 AutoBattle ON | 策略: ' + this.strategy);
     console.log('   停止: GameGlobal.__stopAuto()');
+    console.log('   倍速: GameGlobal.__setSpeed(N)  例: __setSpeed(3)');
   }
 
   stop() {
     this.enabled = false;
-    console.log('🤖 AutoBattle OFF');
+    // 恢复原速
+    this.game._devTimeScale = 1;
+    console.log('🤖 AutoBattle OFF（已恢复1x速度）');
     this._printReport();
+  }
+
+  setSpeed(n) {
+    n = Math.max(0.5, Math.min(n || 1, 10));
+    this.game._devTimeScale = n;
+    console.log('🤖 倍速: ' + n + 'x');
   }
 
   update() {
@@ -47,9 +60,9 @@ class AutoBattle {
     var g = this.game;
     var state = g.state;
 
-    // 自动移动
+    // 自动移动（智能巡航）
     if (state === this.Config.STATE.PLAYING || state === this.Config.STATE.BOSS) {
-      this._autoMove();
+      this._smartMove();
     }
 
     // 自动选技能
@@ -82,22 +95,94 @@ class AutoBattle {
     if (state === this.Config.STATE.GAME_OVER) {
       this._printReport();
       this.enabled = false;
-      console.log('🤖 AutoBattle: 游戏结束');
+      this.game._devTimeScale = 1;
+      console.log('🤖 AutoBattle: 游戏结束（已恢复1x速度）');
     }
   }
 
-  _autoMove() {
+  /**
+   * 智能巡航：找最靠近危险线的砖块列，移过去打
+   * - 每30帧重新选目标
+   * - Boss战时追踪Boss X
+   */
+  _smartMove() {
     var g = this.game;
     if (!g.launcher) return;
-    this.moveTimer++;
-    if (this.moveTimer >= this.changeInterval) {
-      this.moveDir *= -1;
-      this.moveTimer = 0;
-      this.changeInterval = 40 + Math.floor(Math.random() * 40);
-    }
     var cx = g.launcher.getCenterX();
-    if (cx < 30 || cx > g.gameWidth - 30) this.moveDir *= -1;
-    g.launcher.setX(cx + this.moveDir * this.moveSpeed);
+    var gw = g.gameWidth;
+
+    this._retargetCd--;
+
+    // Boss战：追踪Boss中心
+    if (g.state === this.Config.STATE.BOSS && g.boss) {
+      this._targetX = g.boss.x + (g.boss.width || 0) / 2;
+      this._retargetCd = 5;
+    }
+
+    // 普通战：找最危险的列
+    if (this._retargetCd <= 0) {
+      this._targetX = this._findDangerousColumn(g);
+      this._retargetCd = 30;
+    }
+
+    // 移向目标
+    if (this._targetX < 0) this._targetX = gw / 2;
+    var dx = this._targetX - cx;
+    var speed = this.moveSpeed;
+
+    if (Math.abs(dx) < speed) {
+      g.launcher.setX(this._targetX);
+    } else {
+      g.launcher.setX(cx + (dx > 0 ? speed : -speed));
+    }
+
+    // 边界保护
+    cx = g.launcher.getCenterX();
+    if (cx < 20) g.launcher.setX(20);
+    if (cx > gw - 20) g.launcher.setX(gw - 20);
+  }
+
+  /**
+   * 找最危险的列（最接近底部的砖块所在X位置）
+   * 如果有多个同高度的，选砖块密度最高的列
+   */
+  _findDangerousColumn(g) {
+    var bricks = g.bricks;
+    if (!bricks || bricks.length === 0) return g.gameWidth / 2;
+
+    // 把屏幕分成若干列，统计每列砖块的最大Y和数量
+    var cols = 8;
+    var colW = g.gameWidth / cols;
+    var colMaxY = [];
+    var colCount = [];
+    var colCenterX = [];
+    for (var c = 0; c < cols; c++) {
+      colMaxY[c] = 0;
+      colCount[c] = 0;
+      colCenterX[c] = (c + 0.5) * colW;
+    }
+
+    for (var i = 0; i < bricks.length; i++) {
+      var b = bricks[i];
+      if (b.dead) continue;
+      var ci = Math.floor((b.x + (b.width || 40) / 2) / colW);
+      if (ci < 0) ci = 0;
+      if (ci >= cols) ci = cols - 1;
+      var by = b.y + (b.height || 20);
+      if (by > colMaxY[ci]) colMaxY[ci] = by;
+      colCount[ci]++;
+    }
+
+    // 找最危险的列：最大Y最大的；平手选数量多的
+    var bestCol = 0, bestY = 0, bestCount = 0;
+    for (var c2 = 0; c2 < cols; c2++) {
+      if (colMaxY[c2] > bestY || (colMaxY[c2] === bestY && colCount[c2] > bestCount)) {
+        bestY = colMaxY[c2];
+        bestCount = colCount[c2];
+        bestCol = c2;
+      }
+    }
+    return colCenterX[bestCol];
   }
 
   _autoSelectSkill() {
@@ -114,7 +199,6 @@ class AutoBattle {
     var picked = choices[bestIdx];
     console.log('🤖 选择: ' + picked.name + ' (Lv' + picked.level + '/' + picked.maxLevel + ') [' + picked.type + ']');
 
-    // 直接调用升级逻辑
     g.upgrades.applyChoice(picked);
     g._syncLauncherStats();
 
@@ -164,7 +248,6 @@ class AutoBattle {
 
   _autoTapClear() {
     var g = this.game;
-    // 尝试调用下一章逻辑
     if (typeof g.startNextChapter === 'function') {
       g.startNextChapter();
     } else if (typeof g._startChapter === 'function') {
@@ -184,7 +267,8 @@ class AutoBattle {
     }
     lines.sort(function(a, b) { return b.dps - a.dps; });
     var lvl = g.expSystem ? g.expSystem.playerLevel : '?';
-    console.log('📊 [' + elapsed.toFixed(0) + 's] Lv' + lvl + ' | 总DPS:' + (total / elapsed).toFixed(1) + ' | ' +
+    var spd = g._devTimeScale || 1;
+    console.log('📊 [' + elapsed.toFixed(0) + 's] ' + spd + 'x | Lv' + lvl + ' | 总DPS:' + (total / elapsed).toFixed(1) + ' | ' +
       lines.map(function(l) { return l.name + ':' + l.dps.toFixed(0); }).join(' '));
   }
 
@@ -218,7 +302,6 @@ class AutoBattle {
       for (var b = 0; b < Math.round(l.dmg / total * 20); b++) bar += '█';
       console.log('  ' + padEnd(l.name, 10) + ' | ' + padStart(l.dmg.toFixed(0), 6) + ' (' + padStart(pct, 5) + '%) | DPS:' + padStart(dps, 6) + ' | ' + bar);
     }
-    // 武器等级
     if (g.upgrades) {
       console.log('  ─────────────────────────────');
       console.log('  武器等级:');
