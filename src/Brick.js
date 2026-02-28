@@ -25,70 +25,36 @@ class Brick {
     this.speedMult = 1.0;     // 快速砖块 = 2.0
     this.isSplitChild = false; // 是否分裂后的子砖块
 
-    // ===== 元素状态 =====
-    this.iceStacks = 0;       // 冰缓层数(0-5)，每层减速10%
-    this.iceDuration = 0;     // 冰缓剩余ms
-    this.frozen = false;      // 是否冻结
-    this.frozenTimer = 0;     // 冻结剩余ms
-    this.shockStacks = 0;     // 感电层数(0-3)
-    this.shockDuration = 0;   // 感电剩余ms
+    // ===== Buff状态（由BuffSystem管理） =====
+    this._buffs = {};         // BuffSystem管理的buff数据
+    this._frozen = false;     // 冻结状态
+    this._freezeTimer = 0;    // 冻结剩余ms
+    this._freezeCount = 0;    // Boss冻结次数（衰减用）
     this._baseSpeedMult = 1.0; // 基础速度（type决定）
   }
 
-  /** 更新元素状态 */
+  /** 更新砖块状态（buff由BuffSystem统一管理） */
   updateStatus(dtMs) {
-    // 冻结
-    if (this.frozen) {
-      this.frozenTimer -= dtMs;
-      if (this.frozenTimer <= 0) {
-        this.frozen = false;
-        this.frozenTimer = 0;
-        this.iceStacks = 0; // 冻结结束清冰缓
-        this.iceDuration = 0;
-      }
-      this.speedMult = 0;
-      return;
-    }
-    // 冰缓消退
-    if (this.iceStacks > 0) {
-      this.iceDuration -= dtMs;
-      if (this.iceDuration <= 0) {
-        this.iceStacks = Math.max(0, this.iceStacks - 1);
-        this.iceDuration = this.iceStacks > 0 ? 3000 : 0;
-      }
-    }
-    // 感电消退
-    if (this.shockStacks > 0) {
-      this.shockDuration -= dtMs;
-      if (this.shockDuration <= 0) {
-        this.shockStacks = Math.max(0, this.shockStacks - 1);
-        this.shockDuration = this.shockStacks > 0 ? 3000 : 0;
-      }
-    }
-    // 速度计算
-    this.speedMult = this._baseSpeedMult * (1.0 - this.iceStacks * 0.10);
-    // 碎甲标记倒计时
+    // 碎甲标记倒计时（穿甲弹专属，暂留）
     if (this.shatterMark > 0) {
       this.shatterMark -= dtMs;
       if (this.shatterMark <= 0) { this.shatterMark = 0; this.shatterBonus = 0; }
     }
   }
 
-  /** 冻结期间受伤倍率 */
+  /** 受伤倍率（碎甲标记，冻结增伤由BuffSystem提供） */
   getDamageMult(damageType) {
-    // 冻结增伤：只对冰属性(ice)伤害+50%
-    var iceMult = (this.frozen && damageType === 'ice') ? 1.5 : 1.0;
-    // 碎甲标记额外乘算
     var shatterMult = (this.shatterMark > 0) ? (1 + (this.shatterBonus || 0)) : 1.0;
-    return iceMult * shatterMult;
+    return shatterMult;
   }
 
-  /** 统计当前砖块身上的DOT层数（给穿甲弹烈性反应用） */
+  /** 统计当前砖块身上的buff层数（给穿甲弹烈性反应用） */
   dotCount() {
-    let count = 0;
-    if (this.fireDuration > 0) count++;
-    if (this.shockStacks > 0) count++;
-    if (this.bleedDuration > 0) count++;
+    var count = 0;
+    if (this._buffs) {
+      if (this._buffs.burn && this._buffs.burn.stacks > 0) count += this._buffs.burn.stacks;
+      if (this._buffs.shock && this._buffs.shock.stacks > 0) count += this._buffs.shock.stacks;
+    }
     return count;
   }
 

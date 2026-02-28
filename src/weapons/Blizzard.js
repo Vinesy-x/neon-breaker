@@ -245,8 +245,8 @@ class BlizzardWeapon extends Weapon {
 
       ctx.damageBrick(brick, damage, 'blizzard', 'fire');
 
-      if (slowLv > 0 && brick.alive) {
-        brick.speedMult = Math.max(0.1, brick.speedMult * (1 - slowLv * 0.15));
+      if (slowLv > 0 && brick.alive && ctx.game && ctx.game.buffSystem) {
+        ctx.game.buffSystem.applyChill(brick, slowLv);
       }
       if (frostbiteLv > 0 && brick.alive && ctx.addDot) {
         ctx.addDot(brick, Math.max(0.1, damage * 0.08 * frostbiteLv), 2000, 'frostbite');

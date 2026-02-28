@@ -34,19 +34,15 @@ class CombatSystem {
       }
     }
     
-    // 冻结增伤
+    // 碎甲标记增伤
     var mult = brick.getDamageMult ? brick.getDamageMult(damageType) : 1.0;
-    // 超导标记：感电砖受攻击额外能量伤害
-    var shockBonus = 0;
-    if (brick.shockStacks > 0 && this.game.upgrades.shipTree.shockMark > 0) {
-      shockBonus = damage * 0.15 * brick.shockStacks;
-    }
-    var finalDmg = damage * mult + shockBonus;
-    // 感电触发电弧（15%概率，防重入）— 从20%降到15%
-    if (brick.shockStacks > 0 && !brick._shockArcLock && Math.random() < 0.15) {
-      brick._shockArcLock = true;
-      this.game.elementSystem.triggerShockArc(brick, finalDmg * 0.1 * brick.shockStacks);  // 0.15→0.1
-      brick._shockArcLock = false;
+    // BuffSystem: 冻结增伤
+    var bs = this.game.buffSystem;
+    if (bs) mult *= bs.getFreezeDamageMult(brick, damageType);
+    var finalDmg = damage * mult;
+    // BuffSystem: 能量伤害触发感电电弧
+    if (bs && damageType === 'energy') {
+      bs.onEnergyHit(brick, finalDmg);
     }
     // 记录伤害统计
     const key = source || 'unknown';
@@ -108,7 +104,7 @@ class CombatSystem {
     g.dotSystem.spreadFire(brick, c.x, c.y);
 
     // 碎冰迸射：冻结砖被毁，碎裂伤害周围
-    if (brick.frozen && g.upgrades.shipTree.iceShatter > 0) {
+    if (brick._frozen && g.upgrades.shipTree.iceShatter > 0) {
       var iceDmg = brick.maxHp * 0.06 * g.upgrades.shipTree.iceShatter;
       for (var ii = 0; ii < g.bricks.length; ii++) {
         var ib = g.bricks[ii];

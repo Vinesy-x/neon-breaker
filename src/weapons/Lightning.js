@@ -140,9 +140,9 @@ class LightningWeapon extends Weapon {
       }
       ctx.damageBrick(nearest.brick, damage, 'lightning', 'energy');
 
-      // 麻痹：减速
-      if (paralyzeLv > 0 && nearest.brick.alive) {
-        nearest.brick.speedMult = Math.max(0.3, nearest.brick.speedMult * (1 - paralyzeLv * 0.15));
+      // 麻痹：叠加感电（通过BuffSystem）
+      if (paralyzeLv > 0 && nearest.brick.alive && ctx.game && ctx.game.buffSystem) {
+        ctx.game.buffSystem.applyShock(nearest.brick, paralyzeLv);
       }
 
       // 感电：DOT (通过ctx.addDot传递)

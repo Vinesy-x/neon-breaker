@@ -130,27 +130,19 @@ class DotSystem {
   spreadFire(brick, cx, cy) {
     if (this.game.upgrades.shipTree.fireSpread <= 0) return;
 
-    var hasBurn = false;
-    for (var bi = this.dots.length - 1; bi >= 0; bi--) {
-      if (this.dots[bi].brickRef === brick && this.dots[bi].type === 'fire') {
-        hasBurn = true;
-        break;
-      }
-    }
-    if (!hasBurn) return;
+    // 检查是否有灼烧（通过BuffSystem）
+    var bs = this.game.buffSystem;
+    if (!bs || bs.getStacks(brick, 'burn') <= 0) return;
 
-    var spreadDmg = Math.max(0.1, this.game.getBaseAttack() * 0.15 * this.game.upgrades.shipTree.fireSpread);
+    // 蔓延：给周围砖块叠灼烧
+    var spreadStacks = this.game.upgrades.shipTree.fireSpread || 1;
     for (var ni = 0; ni < this.game.bricks.length; ni++) {
       var nb = this.game.bricks[ni];
       if (!nb.alive) continue;
       var nc2 = nb.getCenter();
       var nd = Math.sqrt((nc2.x - cx) * (nc2.x - cx) + (nc2.y - cy) * (nc2.y - cy));
       if (nd < 80) {
-        this.dots.push({
-          brickRef: nb, x: nc2.x, y: nc2.y,
-          damage: spreadDmg, remaining: 1500, tickMs: 500, tickTimer: 0,
-          type: 'fire',
-        });
+        bs.applyBurn(nb, spreadStacks);
         this.game.particles.emitHitSpark(nc2.x, nc2.y, '#FF4400');
       }
     }

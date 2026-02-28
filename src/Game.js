@@ -29,6 +29,7 @@ const CombatSystem = require('./systems/CombatSystem');
 const CollisionSystem = require('./systems/CollisionSystem');
 const ElementSystem = require('./systems/ElementSystem');
 const DotSystem = require('./systems/DotSystem');
+const BuffSystem = require('./systems/BuffSystem');
 const UIController = require('./systems/UIController');
 
 class Game {
@@ -66,6 +67,7 @@ class Game {
     // 战斗系统（初始化顺序：element/dot 先于 combat，因为 combat 依赖它们）
     this.elementSystem = new ElementSystem(this);
     this.dotSystem = new DotSystem(this);
+    this.buffSystem = new BuffSystem(this);
     this.combat = new CombatSystem(this);
     this.collision = new CollisionSystem(this);
     this.ui = new UIController(this);
@@ -196,6 +198,7 @@ class Game {
     this.upgrades.setChapter(Math.max(this.currentChapter, this.saveManager ? this.saveManager.getMaxChapter() : 1));
     this.expSystem.reset();
     this.dotSystem.reset();
+    // 重置buff系统（所有buff存在brick._buffs上，新砖块自然干净）
     this.damageStats = {};
 
     this.launcher.permFireRateBonus = this.saveManager.getFireRateBonus();
@@ -311,8 +314,17 @@ class Game {
     // 砖块状态
     this._scrollBricks(dt);
     BrickFactory.updateSpecialBricks(this.bricks, dtMs);
+    // Buff系统统一更新（灼烧/冰缓/冻结/感电）
+    var buffTargets = this.bricks.slice();
+    if (this.boss && this.boss.alive) buffTargets.push(this.boss);
+    this.buffSystem.update(dtMs, buffTargets);
+    // 砖块自身状态（碎甲等）+ 速度计算
     for (var si = 0; si < this.bricks.length; si++) {
-      if (this.bricks[si].alive && this.bricks[si].updateStatus) this.bricks[si].updateStatus(dtMs);
+      if (this.bricks[si].alive) {
+        if (this.bricks[si].updateStatus) this.bricks[si].updateStatus(dtMs);
+        // 速度：基础速度 × 冰缓减速
+        this.bricks[si].speedMult = this.bricks[si]._baseSpeedMult * this.buffSystem.getSlowMult(this.bricks[si]);
+      }
       // 衰减黑洞禁融合标记
       var brick = this.bricks[si];
       if (brick._noMerge) {
