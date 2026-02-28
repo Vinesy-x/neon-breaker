@@ -450,7 +450,15 @@ function drawSkillChoice(ctx, sprites, choices, upgrades, title, game) {
   }
 }
 
-function drawGameOver(ctx, score, playerLevel, ownedList) {
+function drawGameOver(ctx, scoreOrOpts, playerLevel, ownedList) {
+  // 兼容对象传参: drawGameOver(ctx, {score, level, weapons, ...})
+  var score = scoreOrOpts, opts = null;
+  if (typeof scoreOrOpts === "object" && scoreOrOpts !== null) {
+    opts = scoreOrOpts;
+    score = opts.score || 0;
+    playerLevel = opts.level || 1;
+    ownedList = opts.weapons || [];
+  }
   const sw = Config.SCREEN_WIDTH, sh = Config.SCREEN_HEIGHT, cx = sw / 2, cy = sh / 2;
   ctx.fillStyle = 'rgba(0, 0, 0, 0.85)'; ctx.fillRect(0, 0, sw, sh);
   ctx.fillStyle = Config.NEON_PINK; ctx.font = 'bold 28px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
