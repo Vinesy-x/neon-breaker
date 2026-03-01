@@ -45,10 +45,6 @@ class MissileWeapon extends Weapon {
     const decayRate = Math.max(0, this.def.decayRate - pierceLv * 0.15);
     // 基础穿透由外部养成爽点控制
     var basePierce = this.def.basePierce;
-    if (ctx && ctx.saveManager) {
-      var ss = ctx.saveManager.getWeaponSweetSpot('missile');
-      if (ss !== null) basePierce = ss;
-    }
     var extraPierce = (ctx && ctx.saveManager && ctx.saveManager.hasWeaponPassive('missile', 'pierceBonus')) ? 3 : 0;
     const maxPierce = basePierce + (this.branches.deepPierce || 0) * 3 + extraPierce;
     const hyperLv = this.branches.hyperVelocity || 0;
@@ -79,10 +75,10 @@ class MissileWeapon extends Weapon {
             if (!(ctx.saveManager && ctx.saveManager.hasWeaponPassive('missile', 'pierceNoDecay')))
               dmg *= Math.pow(1 - decayRate, sh.hitCount - 1);
           }
-          // 烈性反应：DOT加成
-          if (dotExploitLv > 0 && brick.dotCount) {
-            const dots = brick.dotCount();
-            dmg *= (1 + dots * dotExploitLv * 0.2);
+          // 烈性反应：异常状态增伤（每种异常+1层，不叠层数）
+          if (dotExploitLv > 0 && brick.debuffCount) {
+            const debuffs = brick.debuffCount();
+            dmg *= (1 + debuffs * dotExploitLv * 0.25);
           }
 
           // armorBreak被动：降防标记
@@ -154,8 +150,13 @@ class MissileWeapon extends Weapon {
     const lcx = ctx.launcher.getCenterX();
     const launcherW = ctx.launcher.width;
     const twinLv = this.branches.twinCannon || 0;
-    const salvoLv = this.branches.salvo || 0;
-    const totalShots = 1 + salvoLv;
+    // 齐射数由外部养成爽点控制（每5级+1发）
+    var salvoCount = 1;
+    if (ctx && ctx.saveManager) {
+      var ss = ctx.saveManager.getWeaponSweetSpot('missile');
+      if (ss !== null) salvoCount = ss;
+    }
+    const totalShots = salvoCount;
 
     // 发射位置：单管从中心，双管从两侧
     const offset = 20 + twinLv * 4;
@@ -169,13 +170,15 @@ class MissileWeapon extends Weapon {
     this.salvoQueue = [];
     this.salvoTimer = 0;
 
+    // 同列连射：所有弹瞄准最密集列，有时间差让后发打更深
+    var bestColX = this._findDensestColumn(ctx) || lcx;
+    // 第一发立即，后续放入连射队列（200ms间隔）
     for (let s = 0; s < totalShots; s++) {
       for (const side of sides) {
-        const colX = sideOffsets[side];
         if (s === 0) {
-          this._launchShell(colX, side, ctx);
+          this._launchShell(bestColX, side, ctx);
         } else {
-          this.salvoQueue.push({ delay: s * 200, colX, side });
+          this.salvoQueue.push({ delay: s * 200, colX: bestColX, side });
         }
       }
     }
@@ -224,6 +227,27 @@ class MissileWeapon extends Weapon {
     });
   }
 
+  /** 找砖块最密集的一列x坐标 */
+  _findDensestColumn(ctx) {
+    var colMap = {};
+    for (var i = 0; i < ctx.bricks.length; i++) {
+      var b = ctx.bricks[i];
+      if (!b.alive) continue;
+      var cx = Math.round(b.getCenter().x);
+      var col = Math.round(cx / 53);
+      if (!colMap[col]) colMap[col] = { x: cx, count: 0 };
+      colMap[col].count++;
+    }
+    var best = null, bestCount = 0;
+    for (var k in colMap) {
+      if (colMap[k].count > bestCount) {
+        bestCount = colMap[k].count;
+        best = colMap[k].x;
+      }
+    }
+    return best;
+  }
+
   getRenderData(lcx, lcy) {
     return {
       shells: this.shells,
@@ -233,10 +257,6 @@ class MissileWeapon extends Weapon {
   }
 
   _getInterval(ctx) {
-    if (ctx && ctx.saveManager) {
-      var ss = ctx.saveManager.getWeaponSweetSpot('missile');
-      if (ss !== null) return this.def.interval; // missile sweetspot is pierce, not CD
-    }
     return this.def.interval;
   }
 

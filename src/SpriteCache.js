@@ -72,7 +72,7 @@ class SpriteCache {
     this._createWeaponIcons();
   }
 
-  // ===== 寒冰弹 =====
+  // ===== 冰爆弹 =====
   _createMortarShell() {
     // 基础尺寸的炮弹（scale=1）
     const w = 24, h = 16;
@@ -264,7 +264,7 @@ class SpriteCache {
   _createWeaponIcons() {
     const S = 32, C = 16;
 
-    // --- 寒冰弹：弹体 ---
+    // --- 冰爆弹：弹体 ---
     this.getOrCreate('wicon_kunai', S, S, C, C, (ctx) => {
       ctx.fillStyle = '#00FFFF';
       ctx.beginPath();

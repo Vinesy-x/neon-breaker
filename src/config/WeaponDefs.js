@@ -7,17 +7,17 @@ const B = require('./WeaponBalanceConfig');
 
 const WEAPON_TREES = {
   kunai: {
-    name: '寒冰弹', desc: '发射寒冰弹命中爆炸，范围AOE寒冰伤害',
+    name: '冰爆弹', desc: '发射冰爆弹命中爆炸，范围AOE寒冰伤害',
     icon: '💣', color: '#00FFFF', basePct: B.kunai.basePct, interval: B.kunai.interval,
     damageType: B.kunai.damageType,
     branches: {
       damage:      { name: '伤害', desc: '+50%基础伤害', max: 10, requires: null },
       count:       { name: '弹数', desc: '+1发炮弹，每发伤害-20%', max: 3, requires: null },
-      aoe:         { name: '爆炸范围', desc: '+30%爆炸半径，弹体变大', max: 3, requires: null },
+      aoe:         { name: '爆炸范围', desc: '+30%爆炸半径，弹体变大', max: 4, requires: null },
       pierce:      { name: '穿透', desc: '穿透砖块+1，每穿1个伤害衰减20%', max: 2, requires: null },
       pierceBlast: { name: '穿透爆炸', desc: '每次穿透都爆炸', max: 1, requires: { pierce: 2 } },
       chain:       { name: '连锁爆炸', desc: '击杀砖块爆炸(初始-50%伤害,每级+50%)', max: 2, requires: null, shopGated: true },
-      splitBomb:   { name: '分裂弹', desc: '爆炸后产生小寒冰弹(初始2个各25%伤,每级+1)', max: 3, requires: null, shopGated: true },
+      splitBomb:   { name: '分裂弹', desc: '爆炸后产生小冰爆弹(初始2个各25%伤,每级+1)', max: 3, requires: null, shopGated: true },
       giant:       { name: '巨型弹头', desc: '弹体+爆炸范围翻倍', max: 1, requires: null, shopGated: true },
     },
   },
@@ -44,7 +44,7 @@ const WEAPON_TREES = {
       damage:        { name: '穿甲强化', desc: '+50%基础伤害，弹体变大', max: 10, requires: null },
       pierce:        { name: '贯穿', desc: '穿透衰减-15%(30%→15%→0%)', max: 2, requires: null },
       salvo:         { name: '连射', desc: '+1发连射(同列间隔200ms)', max: 3, requires: null },
-      dotExploit:    { name: '烈性反应', desc: '对有DOT砖块每层+20%伤害', max: 3, requires: { damage: 2 } },
+      dotExploit:    { name: '烈性反应', desc: '每种异常状态+25%伤害(灼烧/冰缓/冻结/感电)', max: 1, requires: { damage: 2 } },
       twinCannon:    { name: '双管炮', desc: '飞机左右侧翼各一管', max: 2, requires: { salvo: 2 } },
       shockwave:     { name: '冲击波', desc: '穿透时横向溅射50%伤害', max: 2, requires: { damage: 2, pierce: 1 } },
       deepPierce:    { name: '深度贯穿', desc: '+3穿透数(5→8→11)', max: 2, requires: null, shopGated: true },

@@ -11,7 +11,7 @@
  */
 
 module.exports = {
-  // ===== 寒冰弹 =====
+  // ===== 冰爆弹 =====
   kunai: {
     basePct: 5,
     interval: 6000,
@@ -33,8 +33,8 @@ module.exports = {
 
   // ===== 闪电链 =====
   lightning: {
-    basePct: 4.5,
-    interval: 4000,
+    basePct: 5.0,
+    interval: 3800,
     damageType: 'lightning',
     branchDmgScale: 0.5,
     baseChains: 3,                // 基础链数
@@ -47,21 +47,21 @@ module.exports = {
     chainDecayBase: 0.15,         // 链跳衰减15%
     boltFadeRate: 0.025,          // 闪电消散速度
     explosionFadeRate: 0.05,      // 爆炸消散速度
-    thorInterval: 30000,          // 雷神降临间隔(ms)
+    thorInterval: 60000,          // 雷神降临间隔(ms)
   },
 
   // ===== 穿甲弹 =====
   missile: {
-    basePct: 11,
-    interval: 8000,
+    basePct: 32,
+    interval: 4500,
     damageType: 'physical',
     branchDmgScale: 0.5,
-    basePierce: 5,                // 基础穿透数
-    decayRate: 0.15,              // 穿透衰减率
+    basePierce: 8,                // 基础穿透数
+    decayRate: 0.08,              // 穿透衰减率
     deepPiercePerLv: 3,           // 深度贯穿每级+3穿
     hyperVelocityScale: 0.2,     // 超速弹每穿+20%伤害
     salvoDelay: 200,              // 连射间隔(ms)
-    dotExploitScale: 0.2,         // 烈性反应每层DOT+20%
+    dotExploitScale: 0.25,        // 烈性反应每种异常状态+25%
     shockwavePct: 0.3,            // 冲击波溅射50%→被动后100%
     shockwaveUpPct: 1.0,          // 冲击波强化后溅射100%
     shatterMarkDuration: 3000,    // 碎甲标记持续3秒

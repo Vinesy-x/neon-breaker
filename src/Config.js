@@ -68,9 +68,9 @@ const Config = {
 
   // 伤害类型
   DAMAGE_TYPES: {
-    PHYSICAL: 'physical',  // 子弹、旋刃、导弹直击、寒冰弹弹体
+    PHYSICAL: 'physical',  // 子弹、旋刃、导弹直击、冰爆弹弹体
     FIRE: 'fire',          // 火焰弹、白磷弹、陨石、爆炸类
-    ICE: 'ice',            // 寒冰弹
+    ICE: 'ice',            // 冰爆弹
     ENERGY: 'energy',      // 雷电弹、闪电链、离子射线、无人机激光
   },
   DAMAGE_TYPE_COLORS: {

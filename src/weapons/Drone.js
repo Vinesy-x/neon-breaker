@@ -19,7 +19,7 @@ class DroneWeapon extends Weapon {
     this._assignTimer = 0;
   }
 
-  _syncDrones() {
+  _syncDrones(ctx) {
     var extraDrones = (ctx && ctx.saveManager && ctx.saveManager.hasWeaponPassive('drone', 'matrixPlus')) ? 2 : 0;
     const count = 2 + (this.branches.count || 0) + extraDrones;
     while (this.drones.length < count) {
@@ -46,7 +46,7 @@ class DroneWeapon extends Weapon {
       }
     }
     const dt = dtMs / 16.67;
-    this._syncDrones();
+    this._syncDrones(ctx);
 
     const speedLv = 0; // speed分支已移除，机动由外部养成控制
     const arcLv = this.branches.arc || 0;

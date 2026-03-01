@@ -40,7 +40,7 @@ function generateZigzag(points) {
   return result;
 }
 
-// ===== 寒冰弹(Kunai) =====
+// ===== 冰爆弹(Kunai) =====
 function drawKunai(ctx, sprites, data) {
   const { knives, explosions, splitBombs, color } = data;
 
@@ -156,7 +156,7 @@ function drawKunai(ctx, sprites, data) {
     ctx.globalAlpha = 1;
   }
 
-  // 分裂弹小寒冰弹
+  // 分裂弹小冰爆弹
   if (splitBombs) {
     for (const sb of splitBombs) {
       const progress = 1 - sb.life / sb.maxLife;

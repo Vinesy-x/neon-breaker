@@ -53,7 +53,7 @@ function getDmgMultiplier(lv) {
 // ===== 各武器定义 =====
 var WEAPON_SHOP = {
   kunai: {
-    name: '寒冰弹',
+    name: '冰爆弹',
     // 爽点属性：CD缩短
     sweetSpot: { type: 'cd', base: 2700, delta: -150, unit: 'ms' },
     // 商店解锁选项（加入战斗三选一池）
@@ -89,7 +89,7 @@ var WEAPON_SHOP = {
   },
   missile: {
     name: '穿甲弹',
-    sweetSpot: { type: 'pierce', base: 5, delta: 1, unit: '穿' },
+    sweetSpot: { type: 'salvo', base: 1, delta: 1, unit: '发' },
     unlockBranches: {
       2:  'deepPierce',     // 深度贯穿
       10: 'hyperVelocity',  // 超速弹
@@ -105,7 +105,7 @@ var WEAPON_SHOP = {
   },
   meteor: {
     name: '轰炸机',
-    sweetSpot: { type: 'bombs', base: 4, delta: 1, unit: '弹' },
+    sweetSpot: { type: 'cd', base: 12000, delta: -1500, unit: 'ms' },
     unlockBranches: {
       2:  'escort',      // 护航编队
       10: 'incendiary',  // 燃烧风暴

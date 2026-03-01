@@ -27,6 +27,7 @@ class AutoBattle {
     this._autoChoiceDelay = 0;
     this._targetX = -1;          // 智能巡航目标X
     this._retargetCd = 0;        // 重新选目标冷却
+    this._reported = false;
   }
 
   start(strategy) {
@@ -35,6 +36,7 @@ class AutoBattle {
     this.frameCount = 0;
     this.lastReportFrame = 0;
     this._targetX = -1;
+    this._reported = false;
     console.log('🤖 AutoBattle ON | 策略: ' + this.strategy);
     console.log('   停止: GameGlobal.__stopAuto()');
     console.log('   倍速: GameGlobal.__setSpeed(N)  例: __setSpeed(3)');
@@ -77,13 +79,24 @@ class AutoBattle {
     }
 
     // 自动过关结算
-    if (state === this.Config.STATE.CHAPTER_CLEAR) {
-      this._autoChoiceDelay++;
-      if (this._autoChoiceDelay > 30) {
-        this._autoTapClear();
-        this._autoChoiceDelay = 0;
+    // 关卡通关 → 打印报告并停止
+    if (state === this.Config.STATE.CHAPTER_CLEAR || state === this.Config.STATE.CHAPTER_SELECT) {
+      if (!this._reported) {
+        this._reported = true;
+        this.enabled = false;
+        this.game._devTimeScale = 1;
+        try { this._printReport(); } catch(e) { console.error('AutoBattle report error:', e); }
+        console.log("🤖 AutoBattle: 关卡通关（已恢复1x速度）");
       }
+      return;
     }
+
+
+
+
+
+
+
 
     // 定期DPS
     if (this.frameCount - this.lastReportFrame >= this.reportInterval) {
@@ -93,9 +106,9 @@ class AutoBattle {
 
     // 游戏结束
     if (state === this.Config.STATE.GAME_OVER) {
-      this._printReport();
       this.enabled = false;
       this.game._devTimeScale = 1;
+      try { this._printReport(); } catch(e) { console.error('AutoBattle report error:', e); }
       console.log('🤖 AutoBattle: 游戏结束（已恢复1x速度）');
     }
   }
@@ -128,7 +141,7 @@ class AutoBattle {
     // 移向目标
     if (this._targetX < 0) this._targetX = gw / 2;
     var dx = this._targetX - cx;
-    var speed = this.moveSpeed;
+    var speed = this.moveSpeed * (this.game._devTimeScale || 1);
 
     if (Math.abs(dx) < speed) {
       g.launcher.setX(this._targetX);
@@ -231,17 +244,33 @@ class AutoBattle {
       return level === 1 ? 70 : (50 - level * 5);
     }
 
-    // dps: 模拟最优DPS
+    // dps: 专注策略 — 优先把伤害类分支堆满，再铺面
     if (type === 'newWeapon') return 95;
+
+    // 找当前伤害最低的武器，优先升它
+    var focusBonus = 0;
+    if (type === 'weaponBranch' && choice.weaponKey) {
+      var g = this.game;
+      var weapons = g.upgrades.weapons;
+      var minLv = Infinity, minKey = null;
+      for (var wk in weapons) {
+        var w = weapons[wk];
+        if (!w) continue;
+        var dmgLv = w.branches.damage || 0;
+        if (dmgLv < minLv) { minLv = dmgLv; minKey = wk; }
+      }
+      if (choice.weaponKey === minKey) focusBonus = 30;
+    }
+
     if (type === 'weaponBranch') {
-      if (key && key.includes('damage')) return 85 - level * 2;
-      if (key && (key.includes('count') || key.includes('salvo') || key.includes('storm') || key.includes('bombs'))) return 75 - level * 3;
-      if (key && (key.includes('aoe') || key.includes('radius') || key.includes('giant'))) return 70 - level * 3;
-      return 55 - level * 3;
+      if (key && key.includes('damage')) return 85 - level * 2 + focusBonus;
+      if (key && (key.includes('count') || key.includes('salvo') || key.includes('bombs'))) return 70 - level * 3 + focusBonus;
+      if (key && (key.includes('aoe') || key.includes('radius'))) return 65 - level * 3;
+      return 50 - level * 3;
     }
     if (type === 'shipBranch') {
-      if (key && (key.includes('attack') || key.includes('fireRate'))) return 60 - level * 3;
-      return 40 - level * 3;
+      if (key && key.includes('attack')) return 80 - level * 2;
+      return 45 - level * 3;
     }
     return 20;
   }
@@ -302,7 +331,7 @@ class AutoBattle {
       for (var b = 0; b < Math.round(l.dmg / total * 20); b++) bar += '█';
       console.log('  ' + padEnd(l.name, 10) + ' | ' + padStart(l.dmg.toFixed(0), 6) + ' (' + padStart(pct, 5) + '%) | DPS:' + padStart(dps, 6) + ' | ' + bar);
     }
-    if (g.upgrades) {
+    if (g.upgrades && g.upgrades.weaponLevels) {
       console.log('  ─────────────────────────────');
       console.log('  武器等级:');
       var owned = g.upgrades.getOwnedWeapons();

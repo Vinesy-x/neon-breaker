@@ -49,14 +49,19 @@ class Brick {
   }
 
   /** 统计当前砖块身上的buff层数（给穿甲弹烈性反应用） */
-  dotCount() {
+  debuffCount() {
     var count = 0;
     if (this._buffs) {
-      if (this._buffs.burn && this._buffs.burn.stacks > 0) count += this._buffs.burn.stacks;
-      if (this._buffs.shock && this._buffs.shock.stacks > 0) count += this._buffs.shock.stacks;
+      if (this._buffs.burn && this._buffs.burn.stacks > 0) count++;
+      if (this._buffs.shock && this._buffs.shock.stacks > 0) count++;
+      if (this._buffs.chill && this._buffs.chill.stacks > 0) count++;
+      if (this._frozen) count++;
     }
     return count;
   }
+
+  /** @deprecated 兼容旧调用 */
+  dotCount() { return this.debuffCount(); }
 
   /**
    * 受击处理

@@ -20,7 +20,7 @@ const DAMAGE_NAMES = {
   'ionBeam_path': '离子球沿途', 'ionBeam_burn': '离子灼烧',
   'frostStorm': '寒冰发生器', 'frostStorm_splash': '寒冰溅射', 'frostStorm_shatter': '碎冰爆炸',
   'frost': '寒冰DOT', 'ice_shatter': '碎冰迸射',
-  'kunai': '寒冰弹', 'kunai_aoe': '寒冰爆炸', 'kunai_chain': '寒冰连锁',
+  'kunai': '冰爆弹', 'kunai_aoe': '冰爆扩散', 'kunai_chain': '冰爆连锁',
   'gravityWell': '奇点引擎', 'gravityWell_pctHp': '事件视界',
   'negaBrick': '湮灭', 'negaBrick_splash': '湮灭冲击',
 };

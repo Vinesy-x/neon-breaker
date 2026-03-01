@@ -292,6 +292,8 @@ class Game {
       case Config.STATE.CHAPTER_CLEAR: this.ui.updateChapterClear(); break;
       case Config.STATE.GAME_OVER: this.ui.updateGameOver(); break;
     }
+    // AutoBattle（放在update末尾，不受render异常影响）
+    if (this.autoBattle) this.autoBattle.update();
   }
 
   // ===== 战斗更新 =====
@@ -332,6 +334,7 @@ class Game {
     var buffTargets = this.bricks.slice();
     if (this.boss && this.boss.alive) buffTargets.push(this.boss);
     this.buffSystem.update(dtMs, buffTargets);
+    if (this._sandboxUpdate) this._sandboxUpdate(dtMs);
     // 砖块自身状态（碎甲等）+ 速度计算
     for (var si = 0; si < this.bricks.length; si++) {
       if (this.bricks[si].alive) {
@@ -605,7 +608,7 @@ class Game {
         break;
     }
     // AutoBattle
-    if (this.autoBattle) this.autoBattle.update();
+
     // Dev panel 最后绘制（在最上层）
     if (this.devPanel) this.devPanel.draw(this.renderer.ctx, this);
   }

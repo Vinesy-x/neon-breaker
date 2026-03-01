@@ -20,7 +20,11 @@ class MeteorWeapon extends Weapon {
   update(dtMs, ctx) {
     const dt = dtMs / 16.67;
     this.timer += dtMs;
-    const interval = this.def.interval; // CD由外部养成控制
+    var interval = this.def.interval;
+    if (ctx && ctx.saveManager) {
+      var ss = ctx.saveManager.getWeaponSweetSpot("meteor");
+      if (ss !== null) interval = ss;
+    }
 
     if (this.timer >= interval) {
       this.timer = 0;
@@ -204,10 +208,6 @@ class MeteorWeapon extends Weapon {
     const bombsLv = this.branches.bombs || 0;
     // 基础投弹数由外部养成爽点控制
     var baseBombs = this.def.baseBombs;
-    if (ctx && ctx.saveManager) {
-      var ss = ctx.saveManager.getWeaponSweetSpot('meteor');
-      if (ss !== null) baseBombs = ss;
-    }
     var doubleMult = (ctx && ctx.saveManager && ctx.saveManager.hasWeaponPassive('meteor', 'doublePass')) ? 2 : 1;
     const totalBombs = Math.min((baseBombs + bombsLv * 2) * (b52Lv > 0 ? 2 : 1) * doubleMult, 30);
 

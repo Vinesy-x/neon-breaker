@@ -23,10 +23,11 @@ class LightningWeapon extends Weapon {
     // thorGod被动：每30秒全屏闪电
     if (ctx && ctx.saveManager && ctx.saveManager.hasWeaponPassive('lightning', 'thorGod')) {
       this._thorTimer = (this._thorTimer || 0) + dtMs;
-      if (this._thorTimer >= 30000) {
+      var thorCD = (this.def.thorInterval || 60000);
+        if (this._thorTimer >= thorCD) {
         this._thorTimer = 0;
         // 全屏闪电：对所有砖块造成1次伤害
-        var thorDmg = this.getDamage(ctx.getBaseAttack(), ctx) * 2;
+        var thorDmg = this.getDamage(ctx.getBaseAttack(), ctx) * 1;
         for (var ti = 0; ti < ctx.bricks.length; ti++) {
           if (ctx.bricks[ti].alive) ctx.damageBrick(ctx.bricks[ti], thorDmg, 'lightning_thor', 'energy');
         }
@@ -141,14 +142,13 @@ class LightningWeapon extends Weapon {
       ctx.damageBrick(nearest.brick, damage, 'lightning', 'energy');
 
       // 麻痹：叠加感电（通过BuffSystem）
-      if (paralyzeLv > 0 && nearest.brick.alive && ctx.game && ctx.game.buffSystem) {
-        ctx.game.buffSystem.applyShock(nearest.brick, paralyzeLv);
+      if (paralyzeLv > 0 && nearest.brick.alive && ctx.buffSystem) {
+        ctx.buffSystem.applyShock(nearest.brick, paralyzeLv);
       }
 
-      // 感电：DOT (通过ctx.addDot传递)
-      if (shockLv > 0 && nearest.brick.alive && ctx.addDot) {
-        const dotDamage = Math.floor(baseDamage * 0.2 * shockLv);
-        ctx.addDot(nearest.brick, dotDamage, 3000, 'shock'); // 3秒DOT
+      // 感电：统一走BuffSystem（电弧触发+穿甲弹烈性反应）
+      if (shockLv > 0 && nearest.brick.alive && ctx.buffSystem) {
+        ctx.buffSystem.applyShock(nearest.brick, shockLv);
       }
 
       lastX = bc.x; lastY = bc.y;

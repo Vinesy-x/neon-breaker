@@ -33,7 +33,7 @@ class ElementSystem {
         break;
 
       case 'ice':
-        // 寒冰弹：叠冰缓（满层自动冻结由BuffSystem处理）
+        // 冰爆弹：叠冰缓（满层自动冻结由BuffSystem处理）
         bs.applyChill(brick, Math.max(1, elementLv));
         if (this.game.particles) {
           this.game.particles.emitHitSpark(brick.getCenter().x, brick.getCenter().y, '#44DDFF');

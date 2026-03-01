@@ -24,8 +24,8 @@ class ChapterConfig {
       // ===== 第一层：章节难度（跨度×2） =====
       baseHP: baseHP,
       chapterScale: chapterScale,
-      scrollSpeed: Math.min(0.6, 0.18 + (chapter - 1) * 0.005),  // ch100=0.6
-      spawnInterval: Math.max(800, 2000 - (chapter - 1) * 15),   // ch100=800
+      scrollSpeed: Math.min(0.4, 0.12 + (chapter - 1) * 0.004),  // ch100=0.4 (降速：起步0.12, 上限0.4)
+      spawnInterval: Math.max(1000, 2500 - (chapter - 1) * 18),  // ch100=1000 (降频：起步2500, 下限1000)
       gapChance: Math.max(0.02, 0.12 - (chapter - 1) * 0.0015),  // ch100=0.02
 
       // Boss（跨度×2）

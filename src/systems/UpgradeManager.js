@@ -23,7 +23,7 @@ class UpgradeManager {
     this.saveManager = saveManager || null; // 武器商店等级检查
   }
 
-  // 武器解锁章节映射（寒冰弹和闪电链默认拥有）
+  // 武器解锁章节映射（冰爆弹和闪电链默认拥有）
   // 武器解锁配置统一在 WeaponUnlockConfig.js
 
   setChapter(chapter) { this.currentChapter = chapter; }
