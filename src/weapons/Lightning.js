@@ -20,11 +20,11 @@ class LightningWeapon extends Weapon {
   }
 
   update(dtMs, ctx) {
-    // thorGod被动：每30秒全屏闪电
+    // thorGod被动：每60秒全屏闪电（读配置thorInterval）
     if (ctx && ctx.saveManager && ctx.saveManager.hasWeaponPassive('lightning', 'thorGod')) {
       this._thorTimer = (this._thorTimer || 0) + dtMs;
       var thorCD = (this.def.thorInterval || 60000);
-        if (this._thorTimer >= thorCD) {
+      if (this._thorTimer >= thorCD) {
         this._thorTimer = 0;
         // 全屏闪电：对所有砖块造成1次伤害
         var thorDmg = this.getDamage(ctx.getBaseAttack(), ctx) * 1;

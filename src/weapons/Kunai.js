@@ -271,7 +271,7 @@ class Kunai extends Weapon {
     this._addExplosionVisual(x, y, radius, 400, this.def.color, false);
 
     // 2. 伤害即时结算
-    const splashDmg = Math.max(0.1, damage * 0.6);
+    const splashDmg = Math.max(0.1, damage * 0.55);
     const killedBricks = [];
 
     for (let j = 0; j < ctx.bricks.length; j++) {
@@ -324,7 +324,7 @@ class Kunai extends Weapon {
     const splitLv = this.branches.splitBomb || 0;
     if (splitLv > 0 && this.splitBombs.length < 20) {
       const splitCount = 1 + splitLv;
-      const splitDmg = damage * 0.25;
+      const splitDmg = damage * (WB.kunai.splitBombDmgPct || 0.18);
       for (let s = 0; s < splitCount; s++) {
         const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.8;
         const spd = 3 + Math.random() * 2;

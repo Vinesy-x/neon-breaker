@@ -170,16 +170,30 @@ class MissileWeapon extends Weapon {
     this.salvoQueue = [];
     this.salvoTimer = 0;
 
-    // 同列连射：所有弹瞄准最密集列，有时间差让后发打更深
-    var bestColX = this._findDensestColumn(ctx) || lcx;
-    // 第一发立即，后续放入连射队列（200ms间隔）
-    for (let s = 0; s < totalShots; s++) {
-      for (const side of sides) {
-        if (s === 0) {
-          this._launchShell(bestColX, side, ctx);
-        } else {
-          this.salvoQueue.push({ delay: s * 200, colX: bestColX, side });
+    // 渐进扩列：每2发扩1列，最多4列
+    var maxCols = Math.min(4, Math.ceil(totalShots / 2));
+    var targetCols = this._findDensestColumns(maxCols, ctx, lcx);
+    // 按密度分配弹数：第1列最多，依次递减
+    var shellsPerCol = [];
+    var remaining = totalShots;
+    for (var ci = 0; ci < targetCols.length; ci++) {
+      var share = Math.ceil(remaining / (targetCols.length - ci));
+      shellsPerCol.push(share);
+      remaining -= share;
+    }
+    // 发射：每列的弹有200ms间隔连射
+    var globalDelay = 0;
+    for (var ci = 0; ci < targetCols.length; ci++) {
+      var colX = targetCols[ci];
+      for (var si = 0; si < shellsPerCol[ci]; si++) {
+        for (const side of sides) {
+          if (globalDelay === 0) {
+            this._launchShell(colX, side, ctx);
+          } else {
+            this.salvoQueue.push({ delay: globalDelay, colX: colX, side });
+          }
         }
+        globalDelay += 150; // 每发150ms间隔
       }
     }
   }
@@ -227,8 +241,8 @@ class MissileWeapon extends Weapon {
     });
   }
 
-  /** 找砖块最密集的一列x坐标 */
-  _findDensestColumn(ctx) {
+  /** 找砖块最密集的N列x坐标（按密度排序） */
+  _findDensestColumns(n, ctx, fallbackX) {
     var colMap = {};
     for (var i = 0; i < ctx.bricks.length; i++) {
       var b = ctx.bricks[i];
@@ -238,14 +252,15 @@ class MissileWeapon extends Weapon {
       if (!colMap[col]) colMap[col] = { x: cx, count: 0 };
       colMap[col].count++;
     }
-    var best = null, bestCount = 0;
-    for (var k in colMap) {
-      if (colMap[k].count > bestCount) {
-        bestCount = colMap[k].count;
-        best = colMap[k].x;
-      }
+    var cols = Object.values(colMap);
+    cols.sort(function(a, b) { return b.count - a.count; });
+    var result = [];
+    for (var i = 0; i < Math.min(n, cols.length); i++) {
+      result.push(cols[i].x);
     }
-    return best;
+    // 不足n列用fallback填充
+    while (result.length < n) result.push(fallbackX);
+    return result;
   }
 
   getRenderData(lcx, lcy) {

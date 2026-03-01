@@ -130,7 +130,10 @@ class CombatSystem {
     var spread = count > 1 ? (count - 1) * 0.12 : 0;
     var cx = g.launcher.getCenterX(), sy = g.launcher.y - 5;
     var bulletCoef = 1.0;
-    var dmg = Math.max(0.1, g.getBaseAttack() * bulletCoef * g.upgrades.getAttackMult());
+    // 外部养成伤害倍率（商店等级）
+    var ShopDefs = require('../config/WeaponShopDefs');
+    var shipShopMult = ShopDefs.getDmgMultiplier(g.saveManager ? g.saveManager.getWeaponLevel('ship') : 1);
+    var dmg = Math.max(0.1, g.getBaseAttack() * bulletCoef * g.upgrades.getAttackMult() * shipShopMult);
     var pierce = g.upgrades.getPierceCount();
     if (g.saveManager && g.saveManager.hasWeaponPassive('ship', 'pierceOne')) pierce += 1;
     var element = g.upgrades.getElementType();

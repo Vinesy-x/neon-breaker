@@ -597,7 +597,7 @@ class ChapterRenderer {
       const ssVal = ShopDefs.getSweetSpotValue(weaponKey, lv);
       const nextSsVal = maxed ? ssVal : ShopDefs.getSweetSpotValue(weaponKey, lv + 1);
       const ssChanged = !maxed && nextSsVal !== ssVal;
-      const ssTypeNames = { cd: '冷却时间', chains: '闪电链数', pierce: '穿透数', bombs: '载弹量', duration: '持续时间', count: '数量', fireRate: '射击间隔' };
+      const ssTypeNames = { cd: '冷却时间', chains: '闪电链数', pierce: '穿透数', bombs: '载弹量', duration: '持续时间', count: '数量', cd: '射击间隔' };
       const ssLabel = shopDef2 ? (ssTypeNames[shopDef2.sweetSpot.type] || shopDef2.sweetSpot.type) : '';
       
       // 根据爽点类型格式化显示值

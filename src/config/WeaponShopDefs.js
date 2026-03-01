@@ -217,7 +217,7 @@ var WEAPON_SHOP = {
   },
   ship: {
     name: '飞机',
-    sweetSpot: { type: 'fireRate', base: 1.0, delta: 0.08, unit: '' },
+    sweetSpot: { type: 'cd', base: 800, delta: -80, unit: 'ms' },
     unlockBranches: {
       2:  'fireBullet',     // 火焰弹
       10: 'iceBullet',      // 寒冰弹

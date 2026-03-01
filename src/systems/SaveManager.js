@@ -278,17 +278,21 @@ class SaveManager {
     return this.getUpgrade('attack');
   }
 
-  /** 射速加成比例：永久升级(每级+2%) + 飞机爽点属性(每5级+8%) */
+  /** 飞机射击CD(ms)：爽点直接给CD值，永久升级和被动再缩短 */
   getFireRateBonus() {
-    var base = this.getUpgrade('fireRate') * 0.02;
+    // 旧接口保持兼容，返回的是减CD百分比(0~1)
     var ShopDefs = require('../config/WeaponShopDefs');
     var shipLevel = this.getWeaponLevel('ship');
-    var sweetSpotMult = ShopDefs.getSweetSpotValue('ship', shipLevel);
-    var shopBonus = sweetSpotMult ? (sweetSpotMult - 1.0) : 0;
-    // overclockEng被动：射速额外+50%
-    var ShopDefs2 = require('../config/WeaponShopDefs');
-    var overclockBonus = (ShopDefs2.getUnlockedPassives('ship', shipLevel).indexOf('overclockEng') >= 0) ? 0.5 : 0;
-    return base + shopBonus + overclockBonus;
+    var ssCD = ShopDefs.getSweetSpotValue('ship', shipLevel); // CD型：800,-80/5级
+    if (ssCD === null) ssCD = 800;
+    // 永久升级每级再-2%
+    var upgradeBonus = this.getUpgrade('fireRate') * 0.02;
+    // overclockEng被动：CD再×0.67（相当于射速+50%）
+    var overclock = (ShopDefs.getUnlockedPassives('ship', shipLevel).indexOf('overclockEng') >= 0) ? 0.67 : 1.0;
+    // 最终CD
+    var finalCD = Math.max(80, ssCD * (1 - upgradeBonus) * overclock);
+    // 转换为旧接口的bonus: bonus = 1 - finalCD/800
+    return 1 - finalCD / 800;
   }
 
   /** 暴击率加成 (0~0.2)，每级+1% */

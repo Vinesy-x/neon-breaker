@@ -16,7 +16,7 @@ module.exports = {
     basePct: 5,
     interval: 6000,
     damageType: 'ice',
-    aoeRadius: 1.2,              // AOE半径(列宽单位)，1.2列≈64px
+    aoeRadius: 1.1,              // AOE半径(列宽单位)，1.2列≈64px
     branchDmgScale: 0.5,         // 伤害分支每级+50%
     countPenalty: 0.2,            // 多弹时每发伤害-20%
     aoeRadiusScale: 0.3,         // 爆炸范围分支每级+30%
@@ -25,7 +25,7 @@ module.exports = {
     chainDmgPerLv: 0.5,          // 连锁每级+50%
     splitBombCount: 2,            // 分裂弹初始2个
     splitBombCountPerLv: 1,       // 每级+1
-    splitBombDmgPct: 0.25,        // 分裂弹伤害25%
+    splitBombDmgPct: 0.18,        // 分裂弹伤害25%
     trailFadeRate: 0.06,          // 拖尾衰减
     trailInterval: 40,            // 拖尾间隔(ms)
     tickInterval: 50,             // 碰撞检测间隔(ms)
