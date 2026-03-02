@@ -735,7 +735,7 @@ class ChapterRenderer {
       const gatedBranches = {};
       for (const u of unlocks) gatedBranches[u.branchKey] = u.level;
 
-      const branches = Object.keys(wDef.branches).filter(function(bk){ return !wDef.branches[bk].hidden; });
+      const branches = Object.keys(wDef.branches).filter(function(bk){ return !wDef.branches[bk].hidden; }).sort(function(a, b) { return (gatedBranches[a] || 0) - (gatedBranches[b] || 0); });
       const cardH = 58, cardGap = 5;
       const totalH = branches.length * (cardH + cardGap);
       const viewH = contentBottom - cy;
