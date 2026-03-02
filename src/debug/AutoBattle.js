@@ -70,7 +70,9 @@ class AutoBattle {
     // 自动选技能
     if (state === this.Config.STATE.LEVEL_UP || state === this.Config.STATE.SKILL_CHOICE) {
       this._autoChoiceDelay++;
-      if (this._autoChoiceDelay > 10) {
+      // 沙盒模式下立即选择，不等延迟
+      var choiceThreshold = this.game._devTimeScale > 1 ? 1 : 10;
+      if (this._autoChoiceDelay > choiceThreshold) {
         this._autoSelectSkill();
         this._autoChoiceDelay = 0;
       }

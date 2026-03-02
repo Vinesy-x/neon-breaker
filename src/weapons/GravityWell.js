@@ -121,7 +121,7 @@ class GravityWellWeapon extends Weapon {
               }
             }
             if (!merged) {
-              this._spawnNegaBrick(well.x, well.y, negaHp, darkMatterLv);
+              this._spawnNegaBrick(well.x, well.y, negaHp, darkMatterLv, ctx);
             }
           }
         }
@@ -302,7 +302,7 @@ class GravityWellWeapon extends Weapon {
     negaBrick.flashTimer = 200; // 闪白反馈
   }
 
-  _spawnNegaBrick(x, y, negaHp, darkMatterLv) {
+  _spawnNegaBrick(x, y, negaHp, darkMatterLv, ctx) {
     var sizeMult = NEGA_BRICK_SIZE + darkMatterLv * 0.3;
     var lifetime = darkMatterLv >= 2 ? Infinity : NEGA_LIFETIME;
     this.negaBricks.push({

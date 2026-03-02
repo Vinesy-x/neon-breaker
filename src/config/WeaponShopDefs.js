@@ -55,7 +55,7 @@ var WEAPON_SHOP = {
   kunai: {
     name: '冰爆弹',
     // 爽点属性：CD缩短
-    sweetSpot: { type: 'cd', base: 2700, delta: -150, unit: 'ms' },
+    sweetSpot: { type: 'cd', base: 6000, delta: -500, unit: 'ms' },
     // 商店解锁选项（加入战斗三选一池）
     unlockBranches: {
       2:  'chain',       // 连锁爆炸

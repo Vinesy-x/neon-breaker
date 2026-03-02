@@ -47,6 +47,7 @@ class CombatSystem {
     // 记录伤害统计
     const key = source || 'unknown';
     this.game.damageStats[key] = (this.game.damageStats[key] || 0) + finalDmg;
+    if (typeof brick.hit !== "function") { console.warn("[Combat] brick.hit missing:", brick); return; }
     if (brick.hit(finalDmg)) {
       Sound.brickBreak();
       this._onBrickDestroyed(brick);
@@ -95,10 +96,13 @@ class CombatSystem {
       g.bricks = g.bricks.concat(BrickFactory.spawnSplitChildren(brick));
     }
     g._bricksKilled = (g._bricksKilled || 0) + 1;
+    // 沙盒模式下跳过掉落物（减少性能开销），经验球保留（触发升级选技能）
+    if (!g._sandboxMode) {
+      var drops = generateDrops(c.x, c.y, g.lastCrateTime, g.elapsedMs);
+      for (var i = 0; i < drops.items.length; i++) g.powerUps.push(drops.items[i]);
+      if (drops.crateDropped) g.lastCrateTime = g.elapsedMs;
+    }
     g.expSystem.spawnOrbs(c.x, c.y, g.expSystem.calcBrickExp(brick) + (brick.bonusExp || 0), g.saveManager.getExpMultiplier());
-    var drops = generateDrops(c.x, c.y, g.lastCrateTime, g.elapsedMs);
-    for (var i = 0; i < drops.items.length; i++) g.powerUps.push(drops.items[i]);
-    if (drops.crateDropped) g.lastCrateTime = g.elapsedMs;
 
     // 引燃蔓延
     g.dotSystem.spreadFire(brick, c.x, c.y);

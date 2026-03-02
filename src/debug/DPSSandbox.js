@@ -45,9 +45,15 @@ class DPSSandbox {
     // 1. 启动游戏
     g._initGame(30);
     g._devInvincible = true;
+    g._sandboxMode = true;
     g._devTimeScale = speed;
     
-    // 2. 武器锁定
+    // 2. 沙盒模式解除武器上限
+    var origMaxWeapons = Config.MAX_WEAPONS;
+    Config.MAX_WEAPONS = 99;
+    this._cleanups.push(function() { Config.MAX_WEAPONS = origMaxWeapons; });
+
+    // 武器锁定
     var allowedWeapons = weaponFilter === 'all' ? null : weaponFilter.split(',');
     if (allowedWeapons) {
       for (var w of allowedWeapons) {
@@ -412,6 +418,7 @@ class DPSSandbox {
     this._cleanups = [];
     this.game._devTimeScale = 1;
     this.game._devInvincible = false;
+    this.game._sandboxMode = false;
     var report = this._generateReport();
     console.log(report);
     this._lastReport = report;
