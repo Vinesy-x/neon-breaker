@@ -43,13 +43,25 @@ DPS = basePct × baseAttack × shopDmgMult × (局内总乘数) × frequency
 ### 1.4 无分支Lv1基础DPS标定
 
 ```
-设计目标：所有武器的无分支Lv1 DPS ≈ 1.5
+设计目标：所有武器的无分支Lv1 DPS = 1.0
 ```
 
 | 参考系 | interval | effHits | DPS | 说明 |
 |--------|----------|---------|-----|------|
-| 飞机子弹 | 800ms | 1 | 1.25 | 最低参照线 |
-| **武器标准** | — | — | **1.5** | 设计锚点 |
+| 飞机子弹 | 800ms | 1 | ~1.25 | 最低参照线 |
+
+**basePct 反推**：
+```
+basePct = 目标DPS × (interval_ms / 1000)
+```
+
+| 武器 | interval | basePct | 验证DPS |
+|------|----------|---------|---------|
+| 冰爆弹 | 6000ms | 6.0 | 6.0/6=1.0 ✅ |
+| 闪电链 | 3800ms | 3.8 | 3.8/3.8=1.0 ✅ |
+| 穿甲弹 | 4500ms | 4.5 | 4.5/4.5=1.0 ✅ |
+| 轰炸机 | 12000ms | 12.0 | 12.0/12=1.0 ✅ |
+| **武器标准** | — | — | **1.0** | 设计锚点 |
 
 这是一个**设计输入**，不是从武器参数算出的结果。
 确定 1.5 之后，各武器的 basePct 由公式反推：
@@ -296,11 +308,11 @@ Lv2/10/18 解锁的分支进入局内三选一池。它们不直接加DPS，但*
 ### 4.3 如何使用
 
 ```
-某武器的预测DPS = 无分支Lv1基础DPS × 总成长倍率
+某武器的预测DPS = 无分支Lv1基础DPS(=1.0) × 总成长倍率
 
-例：某武器无分支Lv1 DPS = 10，n=1.28，25点
-  → Lv1满分支预测 = 10 × 479 = 4,790
-  → Lv30满分支预测 = 10 × 12,930 = 129,300
+例：某武器无分支Lv1 DPS = 1.0，n=1.25，25点
+  → Lv1满分支预测 = 1.0 × 264.7 = 265
+  → Lv30满分支预测 = 1.0 × 264.7 × 27 = 7,147
 ```
 
 **验证流程**：
@@ -325,7 +337,7 @@ Lv2/10/18 解锁的分支进入局内三选一池。它们不直接加DPS，但*
 
 | 参数 | 值 | 来源 |
 |------|-----|------|
-| basePct | 12.0 | WeaponBalanceConfig |
+| basePct | 6.0 | WeaponBalanceConfig |
 | interval | 6000ms（仅初始参考） | WeaponBalanceConfig |
 | 爽点 | CD缩短: base=6000, delta=-500/5级 | WeaponShopDefs |
 | CD下限 | 3000ms | Kunai.js:372 |
@@ -344,7 +356,7 @@ Lv2/10/18 解锁的分支进入局内三选一池。它们不直接加DPS，但*
 
 | 参数 | 值 | 来源 |
 |------|-----|------|
-| basePct | 9.0 | WeaponBalanceConfig |
+| basePct | 3.8 | WeaponBalanceConfig |
 | interval | 3800ms（固定） | WeaponBalanceConfig |
 | 爽点 | 链数: base=3, delta=+1/5商店级 | WeaponShopDefs |
 | 分支chains | +2链/分支点 | Lightning.js:85 |
@@ -364,7 +376,7 @@ Lv2/10/18 解锁的分支进入局内三选一池。它们不直接加DPS，但*
 
 | 参数 | 值 | 来源 |
 |------|-----|------|
-| basePct | 32 | WeaponBalanceConfig |
+| basePct | 4.5 | WeaponBalanceConfig |
 | interval | 4500ms（固定） | WeaponBalanceConfig |
 | 爽点 | 齐射数: base=1, delta=+1/5级 | WeaponShopDefs |
 | 穿透衰减 | 8%/穿 | decayRate=0.08 |
@@ -383,7 +395,7 @@ Lv2/10/18 解锁的分支进入局内三选一池。它们不直接加DPS，但*
 
 | 参数 | 值 | 来源 |
 |------|-----|------|
-| basePct | 12 | WeaponBalanceConfig |
+| basePct | 12.0 | WeaponBalanceConfig |
 | interval | 12000ms（仅初始参考） | WeaponBalanceConfig |
 | 爽点 | CD缩短: base=12000, delta=-1500/5级 | WeaponShopDefs |
 | CD下限 | 3000ms | 30级刚好=3000 |
