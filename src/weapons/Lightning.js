@@ -101,7 +101,9 @@ class LightningWeapon extends Weapon {
 
     for (let c = 0; c < chains; c++) {
       // 蓄能：每次链跳伤害递增
-      const chainMult = 1 + c * chargeLv * 0.25;
+      // chainNoDecay被动：每跳伤害+5%
+      const hasChainBoost = ctx && ctx.saveManager && ctx.saveManager.hasWeaponPassive('lightning', 'chainNoDecay');
+      const chainMult = (1 + c * chargeLv * 0.25) * (hasChainBoost ? (1 + c * 0.05) : 1.0);
       const damage = Math.round(baseDamage * chainMult * 10) / 10;
 
       let nearest = null, bestScore = -Infinity;
