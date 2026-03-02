@@ -13,7 +13,7 @@
 module.exports = {
   // ===== 冰爆弹 =====
   kunai: {
-    basePct: 1.8,
+    basePct: 2.6,
     interval: 6000,
     damageType: 'ice',
     aoeRadius: 1.1,              // AOE半径(列宽单位)，1.2列≈64px

@@ -362,7 +362,7 @@ class Kunai extends Weapon {
     const baseLv = this.branches.aoe || 0;
     const isGiant = (this.branches.giant || 0) > 0;
     let r = baseR + baseLv * (baseR * (WB.kunai.aoeRadiusScale || 0.3));
-    if (isGiant) r *= 2;
+    if (isGiant) r *= 1.5;
     return r;
   }
 
