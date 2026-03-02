@@ -122,7 +122,7 @@ class MeteorWeapon extends Weapon {
             this.fireZones.push({
               x: b.x, y: b.targetY, radius: b.radius * 0.6,
               life: fbLife, maxLife: fbLife, tickTimer: 0,
-              damage: b.damage * 0.2, isStrip: false,
+              damage: b.damage * 0.4, isStrip: false,
             });
           }
         }
