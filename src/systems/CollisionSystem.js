@@ -23,50 +23,44 @@ class CollisionSystem {
 
     for (var i = g.bullets.length - 1; i >= 0; i--) {
       var b = g.bullets[i];
-      b.update(dt);
+      // 高速补偿：分步移动+检测，防止穿透
+      var _steps = Math.max(1, Math.ceil(Math.abs(b.vy * dt) / 18));
+      var _subDt = dt / _steps;
+      var _hitInStep = false;
+      for (var _s = 0; _s < _steps; _s++) {
+        b.update(_subDt);
+        if (b.isOutOfBounds(g.gameWidth, g.gameHeight)) { g.bullets.splice(i, 1); _hitInStep = true; break; }
+        // 每步检测砖块碰撞
+        for (var _j = 0; _j < g.bricks.length; _j++) {
+          var _bk = g.bricks[_j];
+          if (!_bk.alive || (_bk.type === 'stealth' && !_bk.visible)) continue;
+          if (b.collideBrick(_bk)) {
+            var _cm = (Math.random() < critChance) ? critMult : 1;
+            var _fd = Math.max(0.1, b.damage * _cm);
+            var _dt2 = b.element === 'fire' ? 'fire' : b.element === 'ice' ? 'ice' : b.element === 'thunder' ? 'energy' : 'physical';
+            g.combat.damageBrick(_bk, _fd, 'bullet', _dt2);
+            if (_cm > 1) { Sound.crit(); g._addFloatingText('暴击!', _bk.getCenter().x, _bk.getCenter().y - 10, Config.NEON_RED, 14); }
+            if (b.element && _bk.alive) g.elementSystem.applyElement(b.element, _bk, b.elementLv, _fd);
+            if (b.ricochet > 0) {
+              b.ricochet--; b.bounceCount++; b.damage *= (1 + b.bounceDmgMult);
+              var _bc = _bk.getCenter();
+              var _dx = b.x - _bc.x, _dy = b.y - _bc.y;
+              if (Math.abs(_dx) / (_bk.width / 2) > Math.abs(_dy) / (_bk.height / 2)) { b.vx = -b.vx; } else { b.vy = -b.vy; }
+            } else if (b.pierce > 0) { b.pierce--; } else {
+              g.bullets.splice(i, 1); _hitInStep = true; break;
+            }
+          }
+        }
+        if (_hitInStep) break;
+      }
+      if (_hitInStep) continue;
       if (b.isOutOfBounds(g.gameWidth, g.gameHeight)) { g.bullets.splice(i, 1); continue; }
       // 激光Boss的激光区域销毁子弹
       if (g.boss && g.boss.alive && g.boss.type === 'laser' && g.boss.isInLaserZone && g.boss.isInLaserZone(b.x, b.y)) {
         g.bullets.splice(i, 1); continue;
       }
 
-      var rm = false;
-      for (var j = 0; j < g.bricks.length; j++) {
-        var bk = g.bricks[j];
-        if (!bk.alive || (bk.type === 'stealth' && !bk.visible)) continue;
-        if (b.collideBrick(bk)) {
-          var cm = (Math.random() < critChance) ? critMult : 1;
-          var finalDmg = Math.max(0.1, b.damage * cm);
-          var bulletDmgType = b.element === 'fire' ? 'fire' : b.element === 'ice' ? 'ice' : b.element === 'thunder' ? 'energy' : 'physical';
-          g.combat.damageBrick(bk, finalDmg, 'bullet', bulletDmgType);
-          if (cm > 1) {
-            Sound.crit();
-            g._addFloatingText('暴击!', bk.getCenter().x, bk.getCenter().y - 10, Config.NEON_RED, 14);
-          }
-          // 元素效果
-          if (b.element && bk.alive) {
-            g.elementSystem.applyElement(b.element, bk, b.elementLv, finalDmg);
-          }
-          // 弹射反弹优先 → 穿透次之 → 消失
-          if (b.ricochet > 0) {
-            b.ricochet--;
-            b.bounceCount++;
-            b.damage *= (1 + b.bounceDmgMult);
-            var bc3 = bk.getCenter();
-            var dx = b.x - bc3.x, dy = b.y - bc3.y;
-            if (Math.abs(dx) / (bk.width / 2) > Math.abs(dy) / (bk.height / 2)) {
-              b.vx = -b.vx;
-            } else {
-              b.vy = -b.vy;
-            }
-          } else if (b.pierce > 0) {
-            b.pierce--;
-          } else {
-            g.bullets.splice(i, 1); rm = true; break;
-          }
-        }
-      }
-      if (rm) continue;
+
       // Boss碰撞
       if (g.boss && g.boss.alive) {
         if (g.boss.type === 'guardian' && g.boss.hitShield && g.boss.hitShield(b.x, b.y, b.radius)) {

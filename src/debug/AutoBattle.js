@@ -123,25 +123,37 @@ class AutoBattle {
     if (!g.launcher) return;
     var cx = g.launcher.getCenterX();
     var gw = g.gameWidth;
+    var gh = g.gameHeight || 800;
 
     this._retargetCd--;
 
-    // Boss战：追踪Boss中心
+    // Boss战：追踪Boss中心 + 左右闪避
     if (g.state === this.Config.STATE.BOSS && g.boss) {
-      this._targetX = g.boss.x + (g.boss.width || 0) / 2;
-      this._retargetCd = 5;
+      var bx = g.boss.x + (g.boss.width || 0) / 2;
+      // 小幅左右摆动避弹
+      this._dodgePhase = (this._dodgePhase || 0) + 0.05;
+      this._targetX = bx + Math.sin(this._dodgePhase) * 40;
+      this._retargetCd = 3;
     }
 
-    // 普通战：找最危险的列
+    // smart策略：综合考虑危险+经验球+掉落物
     if (this._retargetCd <= 0) {
-      this._targetX = this._findDangerousColumn(g);
-      this._retargetCd = 30;
+      if (this.strategy === 'smart') {
+        this._targetX = this._smartTarget(g, cx);
+      } else {
+        this._targetX = this._findDangerousColumn(g);
+      }
+      this._retargetCd = 15; // 更频繁重选(原30)
     }
 
     // 移向目标
     if (this._targetX < 0) this._targetX = gw / 2;
     var dx = this._targetX - cx;
-    var speed = this.moveSpeed * (this.game._devTimeScale || 1);
+    var speed = this.moveSpeed;
+
+    // 紧急闪避：如果有砖块快到底了，加速
+    var urgentBrick = this._findUrgentBrick(g, cx, gh);
+    if (urgentBrick) speed *= 1.5;
 
     if (Math.abs(dx) < speed) {
       g.launcher.setX(this._targetX);
@@ -153,6 +165,71 @@ class AutoBattle {
     cx = g.launcher.getCenterX();
     if (cx < 20) g.launcher.setX(20);
     if (cx > gw - 20) g.launcher.setX(gw - 20);
+  }
+
+  /**
+   * smart策略：综合目标选择
+   * 权重：危险砖块60% + 砖块密集区20% + 经验球/掉落物20%
+   */
+  _smartTarget(g, cx) {
+    var gw = g.gameWidth;
+    var gh = g.gameHeight || 800;
+    var cols = 8;
+    var colW = gw / cols;
+    var scores = [];
+    for (var c = 0; c < cols; c++) scores[c] = 0;
+
+    // 危险度评分：砖块越接近底部分越高
+    var bricks = g.bricks || [];
+    for (var i = 0; i < bricks.length; i++) {
+      var b = bricks[i];
+      if (b.dead) continue;
+      var ci = Math.min(cols - 1, Math.max(0, Math.floor((b.x + (b.width||40)/2) / colW)));
+      var danger = (b.y + (b.height||20)) / gh; // 0~1, 越大越危险
+      scores[ci] += danger * danger * 60; // 二次方加权，底部砖块权重极高
+    }
+
+    // 经验球吸附：靠近经验球加分
+    if (g.expSystem && g.expSystem.orbs) {
+      for (var j = 0; j < g.expSystem.orbs.length; j++) {
+        var orb = g.expSystem.orbs[j];
+        var oci = Math.min(cols - 1, Math.max(0, Math.floor(orb.x / colW)));
+        scores[oci] += 15; // 经验球吸引力
+      }
+    }
+
+    // 掉落物吸附
+    if (g.powerUps) {
+      for (var k = 0; k < g.powerUps.length; k++) {
+        var pu = g.powerUps[k];
+        var pci = Math.min(cols - 1, Math.max(0, Math.floor(pu.x / colW)));
+        scores[pci] += (pu.type === 'skillCrate' ? 40 : 10); // 宝箱高优先
+      }
+    }
+
+    // 微调：略偏向当前位置（减少无意义抖动）
+    var curCol = Math.min(cols - 1, Math.max(0, Math.floor(cx / colW)));
+    scores[curCol] += 5;
+
+    // 选最高分列
+    var best = 0;
+    for (var c2 = 1; c2 < cols; c2++) {
+      if (scores[c2] > scores[best]) best = c2;
+    }
+    return (best + 0.5) * colW;
+  }
+
+  /**
+   * 找紧急砖块：底部60px内有砖块就紧急
+   */
+  _findUrgentBrick(g, cx, gh) {
+    var bricks = g.bricks || [];
+    var dangerY = gh - 60;
+    for (var i = 0; i < bricks.length; i++) {
+      var b = bricks[i];
+      if (!b.dead && b.y + (b.height||20) > dangerY) return b;
+    }
+    return null;
   }
 
   /**

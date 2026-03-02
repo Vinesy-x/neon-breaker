@@ -175,8 +175,21 @@ class CombatSystem {
       g._addFloatingText('+' + v, pu.x, pu.y, '#FFD700', 12);
     } else if (pu.type === 'skillCrate') {
       Sound.powerUp();
-      g._addFloatingText('技能宝箱!', pu.x, pu.y, Config.NEON_PINK, 16);
-      if (!g._devPauseLevelUp) g._triggerChoice('crate');
+      // 双倍/三倍宝箱判定
+      var roll = Math.random();
+      var crateCount = 1;
+      if (roll < Config.SKILL_CRATE_TRIPLE_CHANCE) {
+        crateCount = 3;
+        g._addFloatingText('★★★ 三倍宝箱!', pu.x, pu.y, '#FFD700', 18);
+      } else if (roll < Config.SKILL_CRATE_TRIPLE_CHANCE + Config.SKILL_CRATE_DOUBLE_CHANCE) {
+        crateCount = 2;
+        g._addFloatingText('★★ 双倍宝箱!', pu.x, pu.y, '#FF69B4', 16);
+      } else {
+        g._addFloatingText('技能宝箱!', pu.x, pu.y, Config.NEON_PINK, 16);
+      }
+      if (!g._devPauseLevelUp) {
+        for (var ci = 0; ci < crateCount; ci++) g._triggerChoice('crate');
+      }
     }
   }
 }

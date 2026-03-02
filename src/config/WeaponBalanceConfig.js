@@ -122,7 +122,7 @@ module.exports = {
     dronesPerLv: 1,               // 每级+1
     laserWidthScale: 0.4,         // 光束分支每级+40%判定
     deployRadiusBonus: 25,        // 部署分支每级半径+25
-    overchargeMulti: 2,           // 过载交叉点伤害×2
+    overchargeMulti: 0.5,         // 过载交叉点伤害+50%/级
     arcRangeBonus: 20,            // 电弧扩展范围
     focusLowHpBonus: 0.8,         // 聚焦低HP+80%
     pulseCycleSec: 4,             // 脉冲周期(s)
@@ -173,15 +173,16 @@ module.exports = {
     sparkInterval: 150,           // 火花间隔(ms)
     spreadInterval: 1500,         // 蔓延间隔(ms)
     spreadDmgPct: 0.5,            // 蔓延伤害50%
-    slowPct: 0.15,                // 灼烧减速15%
+    burnWoundPctPerLv: 0.05,      // 灼伤每层+5%伤害/级
+    burnAttachChance: 0.25,        // 灼烧附着基础概率25%
   },
 
   // ===== 离子射线 =====
   ionBeam: {
-    basePct: 75.0,
+    basePct: 25.0,
     interval: 7000,
     damageType: 'energy',
-    branchDmgScale: 0.7,         // 伤害分支+70%/级（比其他高）
+    branchDmgScale: 0.5,         // 伤害分支+70%/级（比其他高）
     baseBeamSec: 2,               // 基础射击时间(s)
     durationPerLv: 1000,          // 每级+1秒
     markDmgScale: 0.08,           // 标记每层+8%伤害

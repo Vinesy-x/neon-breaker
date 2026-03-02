@@ -68,18 +68,16 @@ class BlizzardWeapon extends Weapon {
     // ===== 更新燃烧区域 =====
     for (let i = this.fireZones.length - 1; i >= 0; i--) {
       const z = this.fireZones[i];
-      var isInferno = ctx.saveManager && ctx.saveManager.hasWeaponPassive('blizzard', 'inferno');
-      if (!isInferno) z.life -= dtMs;
+      z.life -= dtMs;
       z.tickTimer += dtMs;
       z.flickerPhase = (z.flickerPhase || 0) + dtMs * 0.008;
 
       // 持续伤害tick
       var effectiveTickMs = z.tickMs;
-      if (ctx.saveManager && ctx.saveManager.hasWeaponPassive('blizzard', 'doubleTick')) effectiveTickMs *= 0.5;
-      if (z.tickTimer >= effectiveTickMs) {
+            if (z.tickTimer >= effectiveTickMs) {
         z.tickTimer -= z.tickMs;
-        var corrosionMult = (ctx.saveManager && ctx.saveManager.hasWeaponPassive('blizzard', 'corrosionUp')) ? 2 : 1;
-        this._burnTick(z, damage * corrosionMult, slowLv, frostbiteLv, ctx);
+        var burnBoostMult = (ctx.saveManager && ctx.saveManager.hasWeaponPassive('blizzard', 'burnBoost')) ? 1.5 : 1;
+        this._burnTick(z, damage * burnBoostMult, slowLv, frostbiteLv, ctx);
       }
 
       // 火焰粒子
@@ -99,7 +97,11 @@ class BlizzardWeapon extends Weapon {
       }
 
       if (z.life <= 0) {
-        // 最终爆燃
+        // 白磷溅射被动：区域结束时爆炸
+        if (ctx.saveManager && ctx.saveManager.hasWeaponPassive('blizzard', 'burnBlast')) {
+          this._finalBurst(z, damage * 2.0, ctx);
+        }
+        // 最终爆燃（引燃分支）
         if (shatterLv > 0) {
           this._finalBurst(z, damage * (0.6 + shatterLv * 0.3), ctx);
         }
@@ -120,7 +122,9 @@ class BlizzardWeapon extends Weapon {
   }
 
   _launch(ctx) {
-    const count = 1 + (this.branches.count || 0);
+    var extraOne = (ctx.saveManager && ctx.saveManager.hasWeaponPassive('blizzard', 'extraCount')) ? 1 : 0;
+    var extraBombs = (ctx.saveManager && ctx.saveManager.hasWeaponPassive('blizzard', 'burnExtra')) ? 2 : 0;
+    const count = 1 + (this.branches.count || 0) + extraOne + extraBombs;
     const targets = this._findTargets(ctx, count);
 
     for (let i = 0; i < targets.length; i++) {
@@ -237,19 +241,31 @@ class BlizzardWeapon extends Weapon {
 
   _burnTick(zone, damage, slowLv, frostbiteLv, ctx) {
     const r = zone.radius;
+    const B = require('../config/WeaponBalanceConfig').blizzard;
     for (let i = 0; i < ctx.bricks.length; i++) {
       const brick = ctx.bricks[i];
       if (!brick.alive) continue;
       const bc = brick.getCenter();
       if (Math.sqrt((bc.x - zone.x) ** 2 + (bc.y - zone.y) ** 2) > r) continue;
 
-      ctx.damageBrick(brick, damage, 'blizzard', 'fire');
-
-      if (slowLv > 0 && brick.alive && ctx.game && ctx.game.buffSystem) {
-        ctx.game.buffSystem.applyChill(brick, slowLv);
+      // 灼伤(slow分支): 对灼烧砖块每层额外+5%伤害/级
+      var burnWoundBonus = 0;
+      if (slowLv > 0 && brick._burnStacks > 0) {
+        burnWoundBonus = brick._burnStacks * (B.burnWoundPctPerLv || 0.05) * slowLv;
       }
-      if (frostbiteLv > 0 && brick.alive && ctx.addDot) {
-        ctx.addDot(brick, Math.max(0.1, damage * 0.08 * frostbiteLv), 2000, 'frostbite');
+      var finalDmg = damage * (1 + burnWoundBonus);
+
+      ctx.damageBrick(brick, finalDmg, 'blizzard', 'fire');
+
+      // 灼烧附着(frostbite分支): 概率给砖块灼烧状态
+      if (frostbiteLv > 0 && brick.alive) {
+        var attachChance = (B.burnAttachChance || 0.25) * frostbiteLv;
+        if (Math.random() < attachChance) {
+          brick._burnStacks = Math.min((brick._burnStacks || 0) + 1, 5); // 灼烧最多5层
+          // 视觉标记
+          brick._burning = true;
+          brick._burnTimer = 3000;
+        }
       }
     }
     if (ctx.boss && ctx.boss.alive) {

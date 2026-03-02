@@ -33,7 +33,7 @@ class BossBase {
     this._fireTrails = [];
     this._laserData = null;
 
-    this.descendSpeed = 0.08 + cycle * 0.01;
+    this.descendSpeed = 0.39;  // 固定：30s到达底线
     this.parts = [{ ox: 0, oy: 0, w: this.width, h: this.height }];
   }
 

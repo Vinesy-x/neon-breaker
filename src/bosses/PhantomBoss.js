@@ -19,6 +19,8 @@ class PhantomBoss extends BossBase {
   }
   getPhaseColor() { return '#DDDDDD'; }
   update(dtMs) {
+    // 沙盒简化模式：只左右移动+缓慢下移
+    if (this._simpleBoss) { var dt=dtMs/16.67; if(this.flashTimer>0)this.flashTimer-=dtMs; this._moveLeftRight(dt,1); this._descend(dt); this._checkPhaseChange(); return; }
     var dt = dtMs / 16.67;
     if (this.flashTimer > 0) this.flashTimer -= dtMs;
     this._descend(dt);

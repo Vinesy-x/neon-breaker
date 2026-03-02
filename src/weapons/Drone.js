@@ -21,7 +21,8 @@ class DroneWeapon extends Weapon {
 
   _syncDrones(ctx) {
     var extraDrones = (ctx && ctx.saveManager && ctx.saveManager.hasWeaponPassive('drone', 'matrixPlus')) ? 2 : 0;
-    const count = 2 + (this.branches.count || 0) + extraDrones;
+    var droneExtraPassive = (ctx && ctx.saveManager && ctx.saveManager.hasWeaponPassive('drone', 'droneExtra')) ? 1 : 0;
+    const count = 2 + (this.branches.count || 0) + extraDrones + droneExtraPassive;
     while (this.drones.length < count) {
       this.drones.push({
         x: Config.SCREEN_WIDTH / 2 + (Math.random() - 0.5) * 60,
@@ -103,16 +104,9 @@ class DroneWeapon extends Weapon {
       this._tickTimer = 0;
       const baseAttack = ctx.getBaseAttack ? ctx.getBaseAttack() : 1;
       var rawDamage = this.getDamage(baseAttack, ctx);
-      // overload被动：砖块到达70%危险线时伤害×2
-      var dangerLine = Config.SCREEN_HEIGHT * 0.65;
-      var hasDangerBricks = false;
-      for (var di = 0; di < ctx.bricks.length; di++) {
-        if (ctx.bricks[di].alive && ctx.bricks[di].getCenter().y > dangerLine) { hasDangerBricks = true; break; }
-      }
-      var overloadMult = (hasDangerBricks && ctx.saveManager && ctx.saveManager.hasWeaponPassive('drone', 'overload')) ? 2 : 1;
-      const damage = rawDamage * overloadMult;
+      const damage = rawDamage;
       const widthLv = this.branches.width || 0;
-      var annihilateMult = (ctx.saveManager && ctx.saveManager.hasWeaponPassive('drone', 'annihilate')) ? 2 : 1;
+      var annihilateMult = (ctx.saveManager && ctx.saveManager.hasWeaponPassive('drone', 'annihilate')) ? 1.5 : 1;
       const laserWidth = (10 + widthLv * 8) * annihilateMult;
       const overchargeLv = this.branches.overcharge || 0;
       const focusLv = this.branches.focus || 0;
@@ -206,7 +200,7 @@ class DroneWeapon extends Weapon {
       if (overchargeLv > 0 && this.drones.length >= 3) {
         const cx = this.drones.reduce((s, d) => s + d.x, 0) / this.drones.length;
         const cy = this.drones.reduce((s, d) => s + d.y, 0) / this.drones.length;
-        const overDmg = damage * 2;
+        const overDmg = damage * (1 + 0.5 * overchargeLv);
         const overRange = laserWidth * 3;
         for (let j = 0; j < ctx.bricks.length; j++) {
           const brick = ctx.bricks[j];

@@ -53,6 +53,8 @@ const Config = {
   COIN_DROP_CHANCE: GC.drop.coinChance,
   SKILL_CRATE_CHANCE: GC.drop.skillCrateChance,
   SKILL_CRATE_COOLDOWN: GC.drop.skillCrateCooldown,
+  SKILL_CRATE_DOUBLE_CHANCE: GC.drop.skillCrateDoubleChance,
+  SKILL_CRATE_TRIPLE_CHANCE: GC.drop.skillCrateTripleChance,
   POWERUP_SIZE: GC.drop.powerupSize, POWERUP_SPEED: GC.drop.powerupSpeed,
 
   // 经验系统

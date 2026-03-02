@@ -160,10 +160,12 @@ class SpinBlade extends Weapon {
         b.tickTimer = 0;
         const hitRadius = b.size + (giantLv > 0 ? 4 : 0);
         var rampUpBonus = (ctx.saveManager && ctx.saveManager.hasWeaponPassive('spinBlade', 'rampUp')) ? 0.1 : 0;
-        const rampMult = 1 + (b.aliveMs / 1000) * (rampLv > 0 ? 0.12 * rampLv : 0) + (b.aliveMs / 1000) * rampUpBonus;
+        var rampCap = (ctx.saveManager && ctx.saveManager.hasWeaponPassive('spinBlade', 'bladeFury')) ? 2.0 : 1.0;
+        const rampRaw = (b.aliveMs / 1000) * (rampLv > 0 ? 0.12 * rampLv : 0) + (b.aliveMs / 1000) * rampUpBonus;
+        const rampMult = 1 + Math.min(rampRaw, rampCap);
         const tickDmg = damage * rampMult;
         // 默认贯穿：每tick打所有砖块，pierce分支增加伤害
-        var sharpBonus = (ctx.saveManager && ctx.saveManager.hasWeaponPassive('spinBlade', 'sharpEdge')) ? 0.3 : 0;
+        var sharpBonus = 0; // sharpEdge已删除
         const pierceDmgMult = pierceLv > 0 ? (1.3 + sharpBonus) : (1 + sharpBonus);
 
         for (let j = 0; j < ctx.bricks.length; j++) {

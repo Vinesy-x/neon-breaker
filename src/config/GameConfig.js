@@ -61,7 +61,7 @@ module.exports = {
     width: 160,
     height: 40,
     speed: 2,
-    baseHP: [80, 120, 160],     // 三阶段HP
+    baseHP: [40, 60, 80],       // 三阶段HP(降低，30s输出窗口)
   },
 
   // ===== 粒子 =====
@@ -72,8 +72,10 @@ module.exports = {
   // ===== 掉落 =====
   drop: {
     coinChance: 0.6,             // 金币掉率
-    skillCrateChance: 0.05,      // 技能箱掉率
-    skillCrateCooldown: 15000,   // 技能箱冷却(ms)
+    skillCrateChance: 0.04,      // 技能箱掉率
+    skillCrateCooldown: 70000,   // 技能箱冷却(ms)
+    skillCrateDoubleChance: 0.25,  // 双倍宝箱概率(25%)
+    skillCrateTripleChance: 0.08,  // 三倍宝箱概率(8%)
     powerupSize: 18,
     powerupSpeed: 2.5,
   },
@@ -89,7 +91,7 @@ module.exports = {
 
   // ===== 战斗通用 =====
   combat: {
-    maxWeapons: 4,               // 战斗中最多携带武器数
+    maxWeapons: 3,               // 战斗中最多携带武器数
     comboScoreBase: 10,          // Combo基础分数
   },
 

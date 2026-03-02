@@ -55,12 +55,33 @@ const Game = require('./src/Game');
 // 创建游戏实例
 const game = new Game(canvas);
 
-// 游戏主循环
+// 游戏主循环（带崩溃捕获）
+var _crashCount = 0;
 function gameLoop(timestamp) {
-  game.update(timestamp);
-  game.render();
+  try {
+    game.update(timestamp);
+    game.render();
+  } catch (e) {
+    _crashCount++;
+    var msg = '[CRASH #' + _crashCount + '] ' + (e.message || e) + '\n' + (e.stack || '');
+    console.error(msg);
+    try { wx.setStorageSync('__lastCrash', msg.slice(0, 2000)); } catch(x) {}
+    if (_crashCount > 3) {
+      console.error('连续崩溃超过3次，停止游戏循环');
+      return;
+    }
+  }
   requestAnimationFrame(gameLoop);
 }
+
+// 启动时检查上次崩溃日志
+try {
+  var lastCrash = wx.getStorageSync('__lastCrash');
+  if (lastCrash) {
+    console.warn('=== 上次崩溃日志 ===\n' + lastCrash);
+    wx.setStorageSync('__lastCrash', '');
+  }
+} catch(e) {}
 
 // 启动游戏循环
 requestAnimationFrame(gameLoop);

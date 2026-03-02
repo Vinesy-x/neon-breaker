@@ -23,7 +23,7 @@ class ExpSystem {
   }
 
   _calcExpToLevel(lv) {
-    return 80 + (lv - 1) * 50 + (lv - 1) * (lv - 1) * 5;
+    return 40 + (lv - 1) * 20 + (lv - 1) * (lv - 1) * 3;  // 12min目标Lv15满级
   }
 
   /** 击碎砖块时调用，生成经验球 */
@@ -92,13 +92,15 @@ class ExpSystem {
 
   _addExp(amount) {
     this.exp += amount;
-    while (this.exp >= this.expToNext) {
+    var MAX_LEVEL = 15;
+    while (this.exp >= this.expToNext && this.playerLevel < MAX_LEVEL) {
       this.exp -= this.expToNext;
       this.playerLevel++;
       this.expToNext = this._calcExpToLevel(this.playerLevel);
       this.pendingLevelUps++;
       Sound.levelUp();
     }
+    if (this.playerLevel >= MAX_LEVEL) this.exp = 0;  // 满级不再积累
   }
 
   /** 公共接口：直接加经验（dev用） */

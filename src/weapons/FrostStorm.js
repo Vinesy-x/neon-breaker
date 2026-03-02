@@ -122,7 +122,7 @@ class FrostStormWeapon extends Weapon {
             if (Math.abs(abc.x - wall.x) < wall.width / 2 + 80 && Math.abs(abc.y - wall.y) < 80) {
               if (ctx.game && ctx.game.buffSystem) ctx.game.buffSystem.applyChill(ab, 1);
               // absoluteZero被动：光环内自动冻结
-              if ((ctx.game.buffSystem ? ctx.game.buffSystem.getStacks(ab, "chill") : 0) >= 3 && ctx.saveManager.hasWeaponPassive('frostStorm', 'absoluteZero') && !ab._frozen) {
+              if ((ctx.game && ctx.game.buffSystem ? ctx.game.buffSystem.getStacks(ab, "chill") : 0) >= 3 && ctx.saveManager.hasWeaponPassive('frostStorm', 'absoluteZero') && !ab._frozen) {
                 // 冻结由BuffSystem自动触发（满层冰缓→冻结）
               }
             }
@@ -441,7 +441,7 @@ class FrostStormWeapon extends Weapon {
         }
 
         // ③ 多层乘算伤害
-        var iceMult = 1.0 + (ctx.game.buffSystem ? ctx.game.buffSystem.getStacks(brick, "chill") : 0) * 0.20; // 冰缓层增伤
+        var iceMult = 1.0 + (ctx.game && ctx.game.buffSystem ? ctx.game.buffSystem.getStacks(brick, "chill") : 0) * 0.20; // 冰缓层增伤
         var rawDmg = wall.maxHp * HIT_RATIO * iceMult * armorMult * widthMult;
         var dmg = Math.min(brick.hp, rawDmg);
 
@@ -461,7 +461,7 @@ class FrostStormWeapon extends Weapon {
           var dx = oc.x - wall.x, dy = oc.y - wall.y;
           if (dy > WALL_HEIGHT) continue;
           if (Math.sqrt(dx * dx + dy * dy) <= SPLASH_RANGE) {
-            var otherIceMult = 1.0 + (ctx.game.buffSystem ? ctx.game.buffSystem.getStacks(other, "chill") : 0) * 0.20;
+            var otherIceMult = 1.0 + (ctx.game && ctx.game.buffSystem ? ctx.game.buffSystem.getStacks(other, "chill") : 0) * 0.20;
             ctx.damageBrick(other, wall.maxHp * HIT_RATIO * otherIceMult * armorMult * widthMult, 'frostStorm_splash', 'ice');
           }
         }
@@ -473,9 +473,9 @@ class FrostStormWeapon extends Weapon {
             y: wall.y + (Math.random() - 0.5) * 6,
             vx: (Math.random() - 0.5) * 1.5,
             vy: -0.8 - Math.random() * 0.8,
-            alpha: 0.6 + (ctx.game.buffSystem ? ctx.game.buffSystem.getStacks(brick, "chill") : 0) * 0.08,
+            alpha: 0.6 + (ctx.game && ctx.game.buffSystem ? ctx.game.buffSystem.getStacks(brick, "chill") : 0) * 0.08,
             size: 1.5 + Math.random() * 1.5,
-            color: (ctx.game.buffSystem ? ctx.game.buffSystem.getStacks(brick, "chill") : 0) >= 5 ? '#44FFFF' : (Math.random() > 0.5 ? '#FFFFFF' : '#88DDFF'),
+            color: (ctx.game && ctx.game.buffSystem ? ctx.game.buffSystem.getStacks(brick, "chill") : 0) >= 5 ? '#44FFFF' : (Math.random() > 0.5 ? '#FFFFFF' : '#88DDFF'),
             decay: 0.04 + Math.random() * 0.02,
           });
         }
@@ -494,7 +494,7 @@ class FrostStormWeapon extends Weapon {
         if (!ctx.boss[bossKey] || now - ctx.boss[bossKey] >= COOLDOWN_MS) {
           ctx.boss[bossKey] = now;
           if (ctx.game && ctx.game.buffSystem) ctx.game.buffSystem.applyChill(ctx.boss, 1 + freezeLv);
-          var bossIceMult = 1.0 + (ctx.game.buffSystem ? ctx.game.buffSystem.getStacks(ctx.boss, "chill") : 0) * 0.20;
+          var bossIceMult = 1.0 + (ctx.game && ctx.game.buffSystem ? ctx.game.buffSystem.getStacks(ctx.boss, "chill") : 0) * 0.20;
           var bossDmg = wall.maxHp * HIT_RATIO * bossIceMult * armorMult * widthMult;
           ctx.damageBoss(bossDmg, 'frostStorm');
           // permafrostHP被动：冻结砖块碰撞不扣冰墙HP

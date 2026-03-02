@@ -30,6 +30,7 @@ class InputManager {
       this.touchStartX = t.clientX;
       this.touchCurrentX = t.clientX;
       this._lastTouchY = t.clientY;
+      this._lastTouchX = t.clientX;
       this.isTouching = true;
       this._tapCandidate = { x: t.clientX, y: t.clientY };
       this._tapCancelled = false;
@@ -40,6 +41,7 @@ class InputManager {
       const t = e.touches[0];
       const prevY = this._lastTouchY || t.clientY;
       this._lastTouchY = t.clientY;
+      this._lastTouchX = t.clientX;
       this.touchCurrentX = t.clientX;
       // 如果移动了太多距离，取消 tap
       if (this._tapCandidate) {

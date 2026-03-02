@@ -34,6 +34,9 @@ class ParticleManager {
   }
 
   _add(x, y, vx, vy, color, life, size) {
+    // 高倍速下关闭粒子生成，节省CPU和内存分配
+    if (typeof window !== 'undefined' && window.__game && window.__game._devTimeScale > 2) return;
+    
     if (this.particles.length >= Config.PARTICLE_MAX) return;
     this.particles.push(new Particle(x, y, vx, vy, color, life, size));
   }

@@ -129,10 +129,10 @@ var WEAPON_SHOP = {
     },
     passives: {
       6:  { key: 'shield',      name: '能量护盾', desc: '每15秒给玩家1层护盾' },
-      14: { key: 'overload',    name: '过载模式', desc: '血量<30%时伤害×2' },
+      14: { key: 'droneExtra',  name: '增援编队', desc: '额外+1台无人机' },
       22: { key: 'crossfire',   name: '交叉火力', desc: '激光交叉点伤害+30%' },
       26: { key: 'matrixPlus',  name: '矩阵扩展', desc: '无人机上限+2台' },
-      30: { key: 'annihilate',  name: '歼灭模式', desc: '激光宽度×2+判定翻倍' },
+      30: { key: 'annihilate',  name: '歼灭模式', desc: '激光宽度×1.5' },
     },
   },
   spinBlade: {
@@ -144,11 +144,11 @@ var WEAPON_SHOP = {
       18: 'superBlade',  // 超级旋刃
     },
     passives: {
-      6:  { key: 'sharpEdge',   name: '锋锐', desc: '贯穿伤害+30%' },
-      14: { key: 'rampUp',      name: '加速旋转', desc: '每存活1秒伤害+10%' },
-      22: { key: 'shockSlash',  name: '回旋斩', desc: '弹墙释放环形刀气波' },
-      26: { key: 'rebirth',     name: '不灭旋刃', desc: '消失后50%概率重生' },
-      30: { key: 'eternal',     name: '永恒之刃', desc: '旋刃不再自动消失' },
+      6:  { key: 'rampUp',      name: '加速旋转', desc: '每存活1秒伤害+10%' },
+      14: { key: 'shockSlash',  name: '回旋斩', desc: '弹墙释放环形刀气波' },
+      22: { key: 'rebirth',     name: '不灭旋刃', desc: '消失后50%概率重生' },
+      26: { key: 'eternal',     name: '永恒之刃', desc: '旋刃不再自动消失' },
+      30: { key: 'bladeFury',   name: '刃之狂怒', desc: '蓄势伤害加成上限翻倍' },
     },
   },
   blizzard: {
@@ -162,9 +162,9 @@ var WEAPON_SHOP = {
     passives: {
       6:  { key: 'extraCount',  name: '白磷弹+1', desc: '每次多发射1颗' },
       14: { key: 'fireSpread',  name: '火焰蔓延', desc: '燃烧可引燃相邻砖块' },
-      22: { key: 'corrosionUp', name: '腐蚀强化', desc: '持续伤害翻倍' },
-      26: { key: 'doubleTick',  name: '燃烧频率×2', desc: '灼烧频率翻倍' },
-      30: { key: 'inferno',     name: '白磷地狱', desc: '燃烧区域永不熄灭' },
+      22: { key: 'burnBlast',   name: '白磷溅射', desc: '燃烧区结束时爆炸(200%伤害)' },
+      26: { key: 'burnBoost',   name: '烈焰强化', desc: '燃烧伤害+50%' },
+      30: { key: 'burnExtra',   name: '白磷覆盖', desc: '每次额外+2颗白磷弹' },
     },
   },
   ionBeam: {

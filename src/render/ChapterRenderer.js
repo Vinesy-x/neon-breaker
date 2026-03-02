@@ -415,7 +415,7 @@ class ChapterRenderer {
     const startY = top + 36;
     const totalRows = Math.ceil(allItems.length / cols);
     const contentH = totalRows * (cardH + gap) - gap;
-    const visibleH = sh - startY - 80; // 底栏留80
+    const visibleH = sh - startY - 70 - (Config.SAFE_BOTTOM || 0) - 10; // 底栏tab(70) + safeBottom + 间距
     const maxScroll = Math.max(0, contentH - visibleH);
     this._weaponListMaxScroll = maxScroll;
     if (!this._elasticMode) {
@@ -561,25 +561,27 @@ class ChapterRenderer {
     for (var dl = 0; dl < descLines.length; dl++) { ctx.fillText(descLines[dl], innerX, cy + dl * 16); }
     cy += Math.max(descLines.length, 1) * 16 + 6;
 
-    // ===== 双Tab =====
-    const tabW = innerW / 2, tabH = 32, tabY = cy;
+    // 双Tab移到底部（升级区域上方）
+    const upgradeAreaH = 90, tabH2 = 36;
+    const contentBottom = popY + popH - upgradeAreaH - tabH2 - 8;
+
+    // ===== 双Tab（底部） =====
+    const tabW = innerW / 2, tabY = popY + popH - upgradeAreaH - tabH2;
     const tabs = ['属性', '技能树'];
+    // 分隔线
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(innerX, tabY); ctx.lineTo(innerX + innerW, tabY); ctx.stroke();
     for (let i = 0; i < 2; i++) {
       const tx = innerX + i * tabW, active = this._weaponDetailTab === i;
       ctx.fillStyle = active ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0)';
-      ctx.beginPath(); ctx.roundRect(tx, tabY, tabW, tabH, [8, 8, 0, 0]); ctx.fill();
-      if (active) { ctx.fillStyle = wDef.color; ctx.fillRect(tx + 4, tabY + tabH - 2, tabW - 8, 2); }
+      ctx.beginPath(); ctx.roundRect(tx, tabY, tabW, tabH2, [0, 0, 0, 0]); ctx.fill();
+      if (active) { ctx.fillStyle = wDef.color; ctx.fillRect(tx + 4, tabY + tabH2 - 2, tabW - 8, 2); }
       ctx.fillStyle = active ? '#FFFFFF' : 'rgba(255,255,255,0.4)';
       ctx.font = active ? 'bold 13px monospace' : '13px monospace';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(tabs[i], tx + tabW / 2, tabY + tabH / 2);
-      this._weaponDetailHitAreas.push({ action: 'tab', tabIdx: i, x: tx, y: tabY, w: tabW, h: tabH });
+      ctx.fillText(tabs[i], tx + tabW / 2, tabY + tabH2 / 2);
+      this._weaponDetailHitAreas.push({ action: 'tab', tabIdx: i, x: tx, y: tabY, w: tabW, h: tabH2 });
     }
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(innerX, tabY + tabH); ctx.lineTo(innerX + innerW, tabY + tabH); ctx.stroke();
-    cy = tabY + tabH + 10;
-
-    const upgradeAreaH = 90, contentBottom = popY + popH - upgradeAreaH - 8;
 
     if (this._weaponDetailTab === 0) {
       // ===== 属性Tab =====
@@ -597,7 +599,7 @@ class ChapterRenderer {
       const ssVal = ShopDefs.getSweetSpotValue(weaponKey, lv);
       const nextSsVal = maxed ? ssVal : ShopDefs.getSweetSpotValue(weaponKey, lv + 1);
       const ssChanged = !maxed && nextSsVal !== ssVal;
-      const ssTypeNames = { cd: '冷却时间', chains: '闪电链数', pierce: '穿透数', bombs: '载弹量', duration: '持续时间', count: '数量', cd: '射击间隔' };
+      const ssTypeNames = { cd: '冷却时间', chains: '闪电链数', pierce: '穿透数', bombs: '载弹量', duration: '持续时间', count: '数量', salvo: '齐射数', fireRate: '射击间隔' };
       const ssLabel = shopDef2 ? (ssTypeNames[shopDef2.sweetSpot.type] || shopDef2.sweetSpot.type) : '';
       
       // 根据爽点类型格式化显示值
@@ -793,12 +795,16 @@ class ChapterRenderer {
         if (shopLocked) {
           ctx.fillStyle = '#FF5555';
           ctx.fillText(shopGate + '级解锁', innerX + innerW - 10, drawY + 9);
-        } else if (reqText) {
-          ctx.fillStyle = 'rgba(200,150,255,0.6)';
-          ctx.fillText(reqText, innerX + innerW - 10, drawY + 9);
         } else {
+          // 上限等级
           ctx.fillStyle = 'rgba(255,255,255,0.4)';
           ctx.fillText('上限' + bDef.max + '级', innerX + innerW - 10, drawY + 9);
+          // 前置条件（上限下方一行）
+          if (reqText) {
+            ctx.fillStyle = 'rgba(200,150,255,0.5)'; ctx.font = '11px monospace'; ctx.textAlign = 'right';
+            ctx.fillText(reqText, innerX + innerW - 10, drawY + 25);
+            ctx.font = '13px monospace';
+          }
         }
 
         // 描述

@@ -126,11 +126,20 @@ class Game {
 
       if (this.state === Config.STATE.WEAPON_SHOP) {
         var negDy = -dy; // 手指上划 dy<0 → scrollY增大
-        this._scrollVelocity = negDy;
         if (this.renderer._weaponDetailKey) {
-          var key = this.renderer._weaponDetailTab === 0 ? '_attrScrollY' : '_skillTreeScrollY';
-          this.renderer[key] = (this.renderer[key] || 0) + negDy;
+          // 武器详情页：只有从弹框内开始的拖动才滚动
+          var touchStartY = this.input._tapCandidate ? this.input._tapCandidate.y : (this.input._lastTouchY || 0);
+          // 弹框区域：与 _drawWeaponDetail 里同公式
+          var sh = this.gameHeight || 700;
+          var popH = sh * 0.65, popY = (sh - popH) / 2 - 20;
+          if (touchStartY >= popY && touchStartY <= popY + popH) {
+            this._scrollVelocity = negDy;
+            var key = this.renderer._weaponDetailTab === 0 ? '_attrScrollY' : '_skillTreeScrollY';
+            this.renderer[key] = (this.renderer[key] || 0) + negDy;
+          }
         } else {
+          // 武器列表：允许滚动
+          this._scrollVelocity = negDy;
           this.renderer._weaponListScrollY = (this.renderer._weaponListScrollY || 0) + negDy;
         }
         return;
@@ -166,6 +175,7 @@ class Game {
   }
 
   _addFloatingText(t, x, y, c, s) {
+    if (this._devTimeScale > 2) return;
     this.floatingTexts.push({ text: t, x: x, y: y, color: c || Config.NEON_YELLOW, size: s || 16, alpha: 1, vy: -1.5, life: 40 });
   }
 
@@ -223,10 +233,17 @@ class Game {
 
   update(timestamp) {
     if (this.lastTime === 0) this.lastTime = timestamp;
-    var dtMs = Math.min(timestamp - this.lastTime, 50);
+    var realDtMs = Math.min(timestamp - this.lastTime, 50);
     this.lastTime = timestamp;
-    var ts = this._devTimeScale || 1;
-    dtMs *= ts;
+    var ts = Math.floor(this._devTimeScale || 1);
+    if (ts < 1) ts = 1;
+
+    for (var i = 0; i < ts; i++) {
+      this._doUpdate(realDtMs);
+    }
+  }
+
+  _doUpdate(dtMs) {
     var dt = dtMs / 16.67;
 
     // Dev panel 优先处理点击
@@ -425,8 +442,8 @@ class Game {
     // 通用战斗tick
     this._tickCombatSystems(dt, dtMs);
 
-    // Boss/砖块越线检测（无敌模式跳过）
-    if (!this._devInvincible && this.boss && this.boss.alive && this.boss.isPastDangerLine()) {
+    // Boss越线 = 玩家死亡（通关失败）
+    if (this.boss && this.boss.alive && this.boss.isPastDangerLine()) {
       Sound.gameOver(); this.state = Config.STATE.GAME_OVER; return;
     }
     if (!this._devInvincible && this.collision.checkDangerLine()) { Sound.gameOver(); this.state = Config.STATE.GAME_OVER; return; }
@@ -564,9 +581,21 @@ class Game {
     }
   }
 
+
   // ===== 渲染 =====
 
   render() {
+    if (this._sandboxMode) return;
+
+    // 高倍速下跳帧渲染，减少性能开销
+    var ts = Math.floor(this._devTimeScale || 1);
+    if (ts > 2) {
+      this._renderSkip = (this._renderSkip || 0) + 1;
+      // ts=3~4跳1帧，5~6跳2帧，最高跳5帧（即保证至少10fps左右的视觉刷新）
+      var skipFrames = Math.min(5, Math.floor(ts / 2));
+      if (this._renderSkip % skipFrames !== 0) return;
+    }
+
     this.renderer.clear();
     switch (this.state) {
       case Config.STATE.LOADING: this.renderer.drawLoading(); break;
