@@ -17,7 +17,7 @@ class LightningWeapon extends Weapon {
   getDamage(baseAttack, ctx) {
     var shopMult = 1.0;
     if (ctx && ctx.saveManager) shopMult = ctx.saveManager.getWeaponDmgMultiplier('lightning');
-    return Math.max(0.1, baseAttack * this.def.basePct * shopMult * (1 + (this.branches.damage || 0) * 0.5));
+    return Math.max(0.1, baseAttack * this.def.basePct * shopMult * (1 + (this.branches.damage || 0) * 0.5) * (this._dualDmgMult || 1.0));
   }
 
   update(dtMs, ctx) {
@@ -194,8 +194,10 @@ class LightningWeapon extends Weapon {
     // dualChain被动：第2道闪电
     if (echoDepth === 0 && ctx.saveManager && ctx.saveManager.hasWeaponPassive('lightning', 'dualChain')) {
       if (!this._dualFired) {
+        this._dualDmgMult = 0.5;
         this._dualFired = true;
         this._fire(ctx, 1); // depth=1 防止无限
+        this._dualDmgMult = 1.0;
         this._dualFired = false;
       }
     }
