@@ -109,7 +109,7 @@ class DroneWeapon extends Weapon {
       var droneCount = this.drones.length;
       var hasShield = ctx && ctx.saveManager && ctx.saveManager.hasWeaponPassive('drone', 'shield');
       var countMult = hasShield ? 1.0 : Math.pow(0.90, Math.max(0, droneCount - 2));
-      var superMult = 1 + (this.branches.superDrone || 0) * 0.5;
+      var superMult = 1 + (this.branches.superDrone || 0) * 0.25;
       const damage = rawDamage * countMult * superMult;
       const widthLv = this.branches.width || 0;
       const laserWidth = (10 + widthLv * 8);
