@@ -53,7 +53,7 @@ __dpsSandbox({
 | `weapon` | 锁定测试武器。非该武器一律不加入，升级三选一只出该武器分支 |
 | `shopLv` | 设置商店等级 → 影响：共享伤害曲线、爽点属性值、被动技能解锁 |
 | `speed` | 游戏时间倍速。推荐10x |
-| `fullBranch` | true=满分支测理论上限；false=0分支测基线 |
+| `fullBranch` | true=点满当前 shopLv 下已解锁的所有分支（含shopGated已解锁的）；false=0分支测基线 |
 
 ---
 
@@ -69,6 +69,8 @@ __dpsSandbox({
 | **砖块自然生成** | 替换 `_updateBrickSpawn` 为空函数 | 由水位控制器接管 |
 | **掉落物生成** | `_sandboxMode = true` | 跳过经验球/道具掉落 |
 | **玩家死亡** | `_devInvincible = true` | 无敌 |
+| **三选一弹框** | fullBranch=true 时屏蔽升级选择 | 分支已满级，无需选择 |
+| **玩家等级/经验** | fullBranch=true 时直接设为满级 | 跳过升级流程 |
 | **渲染优化** | `_sandboxMode` 标志 | 高倍速不卡 |
 
 ### 4.2 必须保留
@@ -85,8 +87,8 @@ __dpsSandbox({
 | 项目 | 方式 |
 |------|------|
 | **商店等级** | 根据 `shopLv` 设置：共享曲线、爽点属性、被动技能 |
-| **武器分支** | `fullBranch=true` 时点满所有非 shopGated 分支 |
-| **飞机树** | `shipTree=true` 时点满非 shopGated/非 exclusive 分支 |
+| **武器分支** | `fullBranch=true` 时点满当前 shopLv 已解锁的所有分支（基础+商店解锁的） |
+| **飞机树** | `shipTree=true` 时点满当前条件下可用的飞机树分支 |
 | **初始砖块** | 铺约 targetAlive/2 数量的砖块 |
 
 ---
