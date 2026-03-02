@@ -40,7 +40,35 @@ DPS = basePct × baseAttack × shopDmgMult × (局内总乘数) × frequency
 | branchDmgMult | damage 分支，加法 +50%/点 | 10点 = ×6.0 |
 | effectiveHits | 武器机制命中数 | 区分武器类型 |
 
-### 1.4 武器类型与 effectiveHits 维度
+### 1.4 无分支Lv1基础DPS标定
+
+```
+设计目标：所有武器的无分支Lv1 DPS ≈ 1.5
+```
+
+| 参考系 | interval | effHits | DPS | 说明 |
+|--------|----------|---------|-----|------|
+| 飞机子弹 | 800ms | 1 | 1.25 | 最低参照线 |
+| **武器标准** | — | — | **1.5** | 设计锚点 |
+
+这是一个**设计输入**，不是从武器参数算出的结果。
+确定 1.5 之后，各武器的 basePct 由公式反推：
+
+```
+basePct = targetDPS × (CD / 1000) / effHits
+        = 1.5 × (CD / 1000) / effHits
+```
+
+| 武器 | CD(ms) | effHits | basePct(反推) |
+|------|--------|---------|--------------|
+| 冰爆弹 | 6000 | 6 | 1.50 |
+| 闪电链 | 3800 | 3 | 1.90 |
+| 穿甲弹 | 4500 | 4.26 | 1.58 |
+| 轰炸机 | 12000 | 8 | 2.25 |
+
+> basePct 的差异来自 CD 和 effHits 的不同，但最终 DPS 在 1.5 处对齐。
+
+### 1.5 武器类型与 effectiveHits 维度
 
 不同类型的武器，effectiveHits 的计算方式和标定目标不同：
 
