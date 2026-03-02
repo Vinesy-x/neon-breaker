@@ -807,10 +807,27 @@ class ChapterRenderer {
           }
         }
 
-        // 描述
+        // 描述（自动换行+垂直居中）
         ctx.fillStyle = shopLocked ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.6)';
         ctx.font = '14px monospace'; ctx.textAlign = 'left';
-        ctx.fillText(bDef.desc, innerX + 10, drawY + 30);
+        var descMaxW = innerW - 20;
+        var descLines = [];
+        var descText = bDef.desc;
+        while (descText.length > 0) {
+          var fit = descText.length;
+          while (fit > 0 && ctx.measureText(descText.substring(0, fit)).width > descMaxW) fit--;
+          if (fit <= 0) fit = 1;
+          descLines.push(descText.substring(0, fit));
+          descText = descText.substring(fit);
+        }
+        var descLineH = 16;
+        var descTotalH = descLines.length * descLineH;
+        var descAreaTop = drawY + 26;
+        var descAreaH = cardH - 26 - 2;
+        var descStartY = descAreaTop + (descAreaH - descTotalH) / 2;
+        for (var dl = 0; dl < descLines.length; dl++) {
+          ctx.fillText(descLines[dl], innerX + 10, descStartY + dl * descLineH);
+        }
 
         drawY += cardH + cardGap;
       }
