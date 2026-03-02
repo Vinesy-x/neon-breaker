@@ -77,14 +77,14 @@ var WEAPON_SHOP = {
     unlockBranches: {
       2:  'paralyze',   // 麻痹
       10: 'storm',      // 雷暴
-      18: 'overload',   // 超载
+      18: 'thorGod',    // 雷神降临
     },
     passives: {
       6:  { key: 'shockMark',     name: '感电标记', desc: '被命中砖块受伤+15%' },
       14: { key: 'residualField', name: '残留电场', desc: '链末端留电场持续伤害2秒' },
       22: { key: 'chainNoDecay',  name: '链不衰减', desc: '跳跃不再降低伤害' },
       26: { key: 'dualChain',     name: '双链释放', desc: '同时释放2道闪电' },
-      30: { key: 'thorGod',       name: '雷神降临', desc: '每30秒自动全屏闪电' },
+      30: { key: 'overload',      name: '超载引爆', desc: '链末端超载爆炸AOE' },
     },
   },
   missile: {

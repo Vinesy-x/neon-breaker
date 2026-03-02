@@ -22,7 +22,7 @@ class LightningWeapon extends Weapon {
 
   update(dtMs, ctx) {
     // thorGod被动：雷神降临 - 全屏引爆感电
-    if (ctx && ctx.saveManager && ctx.saveManager.hasWeaponPassive('lightning', 'thorGod')) {
+    if ((this.branches.thorGod || 0) > 0) {
       this._thorTimer = (this._thorTimer || 0) + dtMs;
       var thorCD = (this.def.thorInterval || 10000);
       if (this._thorTimer >= thorCD) {
@@ -108,7 +108,7 @@ class LightningWeapon extends Weapon {
     const chargeLv = this.branches.charge || 0;   // 蓄能：每跳+25%伤害
     const shockLv = this.branches.shock || 0;     // 感电：DOT
     const echoLv = this.branches.echo || 0;       // 回响：链末端再次释放
-    const overloadLv = this.branches.overload || 0;
+    const thorGodLv = this.branches.thorGod || 0;
     const paralyzeLv = this.branches.paralyze || 0;
 
     // === 奇点引擎联动：引力透镜增加跳距 ===
@@ -198,7 +198,7 @@ class LightningWeapon extends Weapon {
           }
         }
         // 超载：爆炸AOE
-        if (overloadLv > 0) {
+        if (ctx && ctx.saveManager && ctx.saveManager.hasWeaponPassive('lightning', 'overload')) {
           this._explodeAt(bc.x, bc.y, 45, damage * 0.6, ctx);
         }
         // 回响：概率再次释放
