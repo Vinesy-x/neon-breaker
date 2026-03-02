@@ -213,6 +213,13 @@ class DPSSandbox {
     g._sandboxUpdate = function(dtMs) { self._onUpdate(dtMs); };
     this._cleanups.push(function() { g._sandboxUpdate = null; });
 
+    // ========== 10b. 禁用飞机射击 ==========
+    if (opts.noShip !== false) {  // 默认禁用飞机
+      var origFire = g.combat.fireBullets.bind(g.combat);
+      g.combat.fireBullets = function() {};
+      this._cleanups.push(function() { g.combat.fireBullets = origFire; });
+    }
+
     // ========== 11. AutoBattle ==========
     if (typeof window.__autoBattle === 'function') {
       window.__autoBattle('aggressive');
