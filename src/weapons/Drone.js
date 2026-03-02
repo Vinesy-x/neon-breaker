@@ -154,7 +154,7 @@ class DroneWeapon extends Weapon {
       // === 过载：激光交汇点，每多1条线伤害+50%/+100% ===
       if (overchargeLv > 0 && lines.length >= 2) {
         var overPerLine = overchargeLv === 1 ? 0.3 : 0.6; // Lv1=+50%, Lv2=+100%
-        var crossMult = (ctx.saveManager && ctx.saveManager.hasWeaponPassive('drone', 'crossfire')) ? 3.0 : 1.0;
+        var crossMult = (ctx.saveManager && ctx.saveManager.hasWeaponPassive('drone', 'crossfire')) ? 1.3 : 1.0;
         // 对每个砖块计算被多少条线命中
         for (let j = 0; j < ctx.bricks.length; j++) {
           const brick = ctx.bricks[j];
