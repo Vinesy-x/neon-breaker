@@ -47,7 +47,7 @@ module.exports = {
     chainDecayBase: 0.15,         // 链跳衰减15%
     boltFadeRate: 0.025,          // 闪电消散速度
     explosionFadeRate: 0.05,      // 爆炸消散速度
-    thorInterval: 60000,          // 雷神降临间隔(ms)
+    thorInterval: 10000,          // 雷神降临间隔(ms)
   },
 
   // ===== 穿甲弹 =====
