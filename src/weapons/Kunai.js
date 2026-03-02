@@ -120,7 +120,7 @@ class Kunai extends Weapon {
     const count = Math.ceil((1 + countLv) * (hasDoomBarrage ? 1.5 : 1));
     const saveManager = ctx.saveManager;
     const hasNoPenalty = saveManager && saveManager.hasWeaponPassive('kunai', 'countNoPenalty');
-    this._countDmgMult = hasNoPenalty ? 1.0 : Math.max(0.2, 1 - countLv * 0.2);
+    this._countDmgMult = hasNoPenalty ? 1.0 : Math.pow(0.80, countLv);
     const cx = ctx.launcher.getCenterX();
     const cy = ctx.launcher.y - 10;
     const baseSpeed = 6;
@@ -188,7 +188,7 @@ class Kunai extends Weapon {
         knife.hitSet[j] = true;
 
         var kDmg = damage;
-        if (ctx.saveManager && ctx.saveManager.hasWeaponPassive('kunai', 'burnExploit') && brick.burnTimer > 0) kDmg *= 1.5;
+        if (ctx.saveManager && ctx.saveManager.hasWeaponPassive('kunai', 'burnExploit') && brick.burnTimer > 0) kDmg *= 2.0;
         ctx.damageBrick(brick, kDmg, 'kunai', 'ice');
         if (ctx.buffSystem) {
           ctx.buffSystem.applyChill(brick, 1);
@@ -283,7 +283,7 @@ class Kunai extends Weapon {
       if (dist <= radius) {
         const wasAlive = brick.alive;
         var sDmg = splashDmg;
-        if (ctx.saveManager && ctx.saveManager.hasWeaponPassive('kunai', 'burnExploit') && brick.burnTimer > 0) sDmg *= 1.5;
+        if (ctx.saveManager && ctx.saveManager.hasWeaponPassive('kunai', 'burnExploit') && brick.burnTimer > 0) sDmg *= 2.0;
         ctx.damageBrick(brick, sDmg, 'kunai_aoe', 'fire');
         if (wasAlive && !brick.alive && chainLv > 0) {
           killedBricks.push({ x: bc.x, y: bc.y });
@@ -313,7 +313,7 @@ class Kunai extends Weapon {
           const dist = Math.sqrt((bc.x - kb.x) ** 2 + (bc.y - kb.y) ** 2);
           if (dist <= chainRadius) {
             var cDmg = chainDmg;
-            if (ctx.saveManager && ctx.saveManager.hasWeaponPassive('kunai', 'burnExploit') && brick.burnTimer > 0) cDmg *= 1.5;
+            if (ctx.saveManager && ctx.saveManager.hasWeaponPassive('kunai', 'burnExploit') && brick.burnTimer > 0) cDmg *= 2.0;
             ctx.damageBrick(brick, cDmg, 'kunai_chain', 'fire');
           }
         }
@@ -347,9 +347,9 @@ class Kunai extends Weapon {
         var bb = ctx.bricks[bi];
         if (!bb.alive) continue;
         var bc2 = bb.getCenter();
-        if (Math.sqrt((bc2.x - x) ** 2 + (bc2.y - y) ** 2) <= radius && Math.random() < 0.2) {
+        if (Math.sqrt((bc2.x - x) ** 2 + (bc2.y - y) ** 2) <= radius && Math.random() < 0.3) {
           bb.burnTimer = Math.max(bb.burnTimer || 0, 3000);
-          bb.burnDamage = damage * 0.1;
+          bb.burnDamage = damage * 0.2;
         }
       }
     }
@@ -369,7 +369,7 @@ class Kunai extends Weapon {
   _getInterval(ctx) {
     if (ctx.saveManager) {
       var ss = ctx.saveManager.getWeaponSweetSpot('kunai');
-      if (ss !== null) return Math.max(ss, 3000); // CD下限3000ms
+      if (ss !== null) return Math.max(ss, 2400); // CD下限3000ms
     }
     return this.def.interval;
   }

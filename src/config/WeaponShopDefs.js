@@ -55,7 +55,7 @@ var WEAPON_SHOP = {
   kunai: {
     name: '冰爆弹',
     // 爽点属性：CD缩短
-    sweetSpot: { type: 'cd', base: 6000, delta: -500, unit: 'ms' },
+    sweetSpot: { type: 'cd', base: 6000, delta: -600, unit: 'ms' },
     // 商店解锁选项（加入战斗三选一池）
     unlockBranches: {
       2:  'chain',       // 连锁爆炸
@@ -65,7 +65,7 @@ var WEAPON_SHOP = {
     // 商店被动（永久生效）
     passives: {
       6:  { key: 'countNoPenalty',   name: '弹数不减伤', desc: '弹数分支不再降低每发伤害' },
-      14: { key: 'burnExploit',     name: '灼烧引爆', desc: '爆炸对受灼烧砖块额外+50%伤害' },
+      14: { key: 'burnExploit',     name: '灼烧引爆', desc: '爆炸对灼烧砖块伤害翻倍' },
       22: { key: 'burnChance',      name: '燃烧弹头', desc: '巨型弹头20%概率灼烧砖块3秒' },
       26: { key: 'pierceNoDecay',   name: '穿透不衰减', desc: '穿透不再降低伤害' },
       30: { key: 'doomBarrage',     name: '末日弹幕', desc: '炮弹发射数×2' },

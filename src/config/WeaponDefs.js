@@ -12,7 +12,7 @@ const WEAPON_TREES = {
     damageType: B.kunai.damageType,
     branches: {
       damage:      { name: '伤害', desc: '+50%基础伤害', max: 10, requires: null },
-      count:       { name: '弹数', desc: '+1发炮弹，每发伤害-20%', max: 3, requires: null },
+      count:       { name: '弹数', desc: '+1发炮弹，每发伤害×0.80', max: 3, requires: null },
       aoe:         { name: '爆炸范围', desc: '+30%爆炸半径，弹体变大', max: 4, requires: null },
       pierce:      { name: '穿透', desc: '穿透砖块+1，每穿1个伤害衰减20%', max: 2, requires: null },
       pierceBlast: { name: '穿透爆炸', desc: '每次穿透都爆炸', max: 1, requires: { pierce: 2 } },

@@ -15,7 +15,7 @@ module.exports = {
   // 暴伤：每级增加值，按段递增
   critBonusPerBracket: [0.01, 0.02, 0.03, 0.04, 0.05],
   // 伤害系数：每级增加值（5倍数级跳过）
-  dmgMultPerBracket:   [0.12, 0.20, 0.35, 0.36, 0.38],
+  dmgMultPerBracket:   [0.10, 0.20, 0.30, 0.40, 0.50],
 
   // 武器升级费用公式: floor(costBase × costScale^lv)
   weaponUpgradeCostBase: 100,
