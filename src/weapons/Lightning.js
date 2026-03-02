@@ -102,7 +102,7 @@ class LightningWeapon extends Weapon {
     for (let c = 0; c < chains; c++) {
       // 蓄能：每次链跳伤害递增
       const chainMult = 1 + c * chargeLv * 0.25;
-      const damage = Math.floor(baseDamage * chainMult);
+      const damage = Math.round(baseDamage * chainMult * 10) / 10;
 
       let nearest = null, bestScore = -Infinity;
       const dangerY = Config.SCREEN_HEIGHT * Config.BRICK_DANGER_Y;
@@ -169,7 +169,7 @@ class LightningWeapon extends Weapon {
           for (let ei = 0; ei < aliveBricks.length; ei++) {
             var ebc = aliveBricks[ei].getCenter();
             if (Math.sqrt((ebc.x - bc.x) ** 2 + (ebc.y - bc.y) ** 2) <= 60) {
-              ctx.addDot(aliveBricks[ei], Math.floor(baseDamage * 0.15), 2000, 'electric_field');
+              ctx.addDot(aliveBricks[ei], Math.round(baseDamage * 0.15 * 10) / 10, 2000, 'electric_field');
             }
           }
         }
