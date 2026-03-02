@@ -33,7 +33,7 @@ module.exports = {
 
   // ===== 闪电链 =====
   lightning: {
-    basePct: 3.8,
+    basePct: 0.91,
     interval: 3800,
     damageType: 'lightning',
     branchDmgScale: 0.5,
