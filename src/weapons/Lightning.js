@@ -192,14 +192,14 @@ class LightningWeapon extends Weapon {
           // 电场对附近砖块持续伤
           for (let ei = 0; ei < aliveBricks.length; ei++) {
             var ebc = aliveBricks[ei].getCenter();
-            if (Math.sqrt((ebc.x - bc.x) ** 2 + (ebc.y - bc.y) ** 2) <= 60) {
-              ctx.addDot(aliveBricks[ei], Math.round(baseDamage * 0.15 * 10) / 10, 2000, 'electric_field');
+            if (Math.sqrt((ebc.x - bc.x) ** 2 + (ebc.y - bc.y) ** 2) <= 80) {
+              ctx.addDot(aliveBricks[ei], Math.round(baseDamage * 0.30 * 10) / 10, 2000, 'electric_field');
             }
           }
         }
         // 超载：爆炸AOE
         if (ctx && ctx.saveManager && ctx.saveManager.hasWeaponPassive('lightning', 'overload')) {
-          this._explodeAt(bc.x, bc.y, 45, damage * 0.6, ctx);
+          this._explodeAt(bc.x, bc.y, 60, damage * 1.0, ctx);
         }
         // 回响：概率再次释放
         if (echoLv > 0 && Math.random() < echoLv * 0.2) {

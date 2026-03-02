@@ -80,8 +80,8 @@ var WEAPON_SHOP = {
       18: 'thorGod',    // 雷神降临
     },
     passives: {
-      6:  { key: 'shockMark',     name: '感电标记', desc: '被命中砖块受伤+15%' },
-      14: { key: 'residualField', name: '残留电场', desc: '链末端留电场持续伤害2秒' },
+      6:  { key: 'shockMark',     name: '感电标记', desc: '被命中砖块受伤+25%' },
+      14: { key: 'residualField', name: '残留电场', desc: '链末端留电场(30%伤)持续2秒' },
       22: { key: 'chainNoDecay',  name: '链不衰减', desc: '跳跃不再降低伤害' },
       26: { key: 'dualChain',     name: '双链释放', desc: '同时释放2道闪电' },
       30: { key: 'overload',      name: '超载引爆', desc: '链末端超载爆炸AOE' },

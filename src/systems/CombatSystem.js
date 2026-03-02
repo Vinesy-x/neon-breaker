@@ -36,6 +36,8 @@ class CombatSystem {
     
     // 碎甲标记增伤
     var mult = brick.getDamageMult ? brick.getDamageMult(damageType) : 1.0;
+    // shockMark被动：感电标记+25%伤害
+    if (brick._shockMark && this.game.elapsedMs <= brick._shockMark) mult *= 1.25;
     // BuffSystem: 冻结增伤
     var bs = this.game.buffSystem;
     if (bs) mult *= bs.getFreezeDamageMult(brick, damageType);
