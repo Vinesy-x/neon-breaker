@@ -1,23 +1,21 @@
 /**
- * DPSSandbox.js - 武器DPS精确测试沙盘 v5
+ * DPSSandbox.js v6 - 武器DPS精确测试沙盘
  * 
- * 核心：存活砖块比例控制
- *   - 每行生成 N 个砖块，统计屏幕上存活砖块数
- *   - 存活数 vs 目标数的比例决定HP调节方向
- *   - 存活少 → 打得快 → 提HP
- *   - 存活多 → 打不动 → 降HP
- *   - 水位稳定后开始正式计时测DPS
+ * 规范文档: docs/SANDBOX_SPEC.md
  * 
  * 用法:
- *   __dpsSandbox({ weapon: 'kunai' })
- *   __dpsSandbox({ weapon: 'lightning', duration: 60 })
- *   __dpsSandbox({ weapon: 'all', targetAlive: 80 })
+ *   __dpsSandbox({ weapon: 'kunai', shopLv: 1, duration: 120, speed: 10 })
  *   __stopSandbox()
- *   __sandboxReport()
+ *   __sandboxReport()    // 纯文本报告
+ *   __sandboxResult()    // 结构化JSON
  */
 
 var BrickFactory = require('../BrickFactory');
 var ConfigRef = require('../Config');
+var WSD = require('../config/WeaponShopDefs');
+var WU = require('../config/WeaponUnlockConfig');
+var WeaponDefs = require('../config/WeaponDefs');
+var SaveManager = require('../systems/SaveManager');
 
 class DPSSandbox {
   constructor(game, Config) {
@@ -25,6 +23,7 @@ class DPSSandbox {
     this.Config = Config || ConfigRef;
     this.running = false;
     this.stats = null;
+    this._result = null;
     this._lastReport = '';
     this._cleanups = [];
   }
@@ -32,35 +31,64 @@ class DPSSandbox {
   start(opts) {
     if (this.running) this.stop();
     opts = opts || {};
-    
+
     var weaponFilter = opts.weapon || 'all';
-    var duration = opts.duration || 60;
-    var speed = opts.speed || 5;
-    var warmup = opts.warmup || 20;
-    var targetAlive = opts.targetAlive || 60;  // 目标存活砖块数
+    var shopLv = opts.shopLv || 1;
+    var duration = opts.duration || 120;
+    var speed = opts.speed || 10;
+    var targetAlive = opts.targetAlive || 60;
+    var fullBranch = opts.fullBranch !== false;  // 默认true
+    var shipTree = opts.shipTree !== false;      // 默认true
 
     var g = this.game;
     var Config = this.Config;
 
-    // 1. 启动游戏
-    g._initGame(30);
+    // ========== 1. 清理环境 ==========
+    // 清存档防止旧数据污染
+    if (typeof localStorage !== 'undefined') localStorage.clear();
+
+    // ========== 2. 设置商店等级 ==========
+    // 在 _initGame 之前写入 save 数据，这样初始化时能读到正确等级
+    if (g.saveManager && g.saveManager._data) {
+      if (!g.saveManager._data.weaponLevels) g.saveManager._data.weaponLevels = {};
+      // 设置指定武器的商店等级
+      if (weaponFilter !== 'all') {
+        var weapons = weaponFilter.split(',');
+        for (var i = 0; i < weapons.length; i++) {
+          g.saveManager._data.weaponLevels[weapons[i]] = shopLv;
+        }
+      } else {
+        for (var wk in WU) {
+          g.saveManager._data.weaponLevels[wk] = shopLv;
+        }
+      }
+      // 飞机也设到同等级
+      g.saveManager._data.weaponLevels['ship'] = shopLv;
+    }
+
+    // ========== 3. 初始化游戏 ==========
+    g._initGame();
     g._devInvincible = true;
     g._sandboxMode = true;
     g._devTimeScale = speed;
-    
-    // 2. 沙盒模式解除武器上限
+
+    // ========== 4. 武器上限解除 ==========
     var origMaxWeapons = Config.MAX_WEAPONS;
     Config.MAX_WEAPONS = 99;
     this._cleanups.push(function() { Config.MAX_WEAPONS = origMaxWeapons; });
 
-    // 武器锁定
+    // ========== 5. 武器锁定 ==========
     var allowedWeapons = weaponFilter === 'all' ? null : weaponFilter.split(',');
+
     if (allowedWeapons) {
-      for (var w of allowedWeapons) {
+      // 添加指定武器
+      for (var i = 0; i < allowedWeapons.length; i++) {
+        var w = allowedWeapons[i];
         if (w !== 'ship' && !g.upgrades.weapons[w]) {
           g.upgrades.addWeapon(w);
         }
       }
+      // 删除非指定武器
       var toRemove = [];
       for (var key in g.upgrades.weapons) {
         if (allowedWeapons.indexOf(key) === -1) toRemove.push(key);
@@ -69,45 +97,100 @@ class DPSSandbox {
         delete g.upgrades.weapons[toRemove[i]];
       }
     }
-    
-    // 3. 阻止新武器
+
+    // 阻止新武器加入
     var origAddWeapon = g.upgrades.addWeapon.bind(g.upgrades);
     g.upgrades.addWeapon = function(key) {
       if (allowedWeapons && allowedWeapons.indexOf(key) === -1) return;
       origAddWeapon(key);
     };
-
     this._cleanups.push(function() { g.upgrades.addWeapon = origAddWeapon; });
 
-    // 4. 接管砖块生成
+    // ========== 6. 接管砖块生成 ==========
     var origUpdateSpawn = g._updateBrickSpawn.bind(g);
     g._updateBrickSpawn = function() {};
     this._cleanups.push(function() { g._updateBrickSpawn = origUpdateSpawn; });
-    
-    // 5. 控制器
+
+    // ========== 7. 分支满级（fullBranch） ==========
+    if (fullBranch) {
+      // 获取当前 shopLv 下已解锁的分支列表
+      var weaponsToMax = allowedWeapons || Object.keys(g.upgrades.weapons);
+      for (var i = 0; i < weaponsToMax.length; i++) {
+        var wk = weaponsToMax[i];
+        if (wk === 'ship') continue;
+        var weapon = g.upgrades.weapons[wk];
+        if (!weapon) continue;
+        var treeDef = WeaponDefs[wk];
+        if (!treeDef) continue;
+
+        // 基础分支（非shopGated）直接满
+        for (var bk in treeDef.branches) {
+          var bDef = treeDef.branches[bk];
+          if (!bDef.shopGated) {
+            weapon.branches[bk] = bDef.max || 1;
+          }
+        }
+        // shopGated分支：检查 shopLv 是否已解锁
+        var unlockedBranches = WSD.getUnlockedBranches(wk, shopLv);
+        for (var j = 0; j < unlockedBranches.length; j++) {
+          var ubk = unlockedBranches[j];
+          var ubDef = treeDef.branches[ubk];
+          if (ubDef) {
+            weapon.branches[ubk] = ubDef.max || 1;
+          }
+        }
+      }
+
+      // 飞机树
+      if (shipTree) {
+        var ST = Config.SHIP_TREE;
+        for (var sk in ST) {
+          var sb = ST[sk];
+          if (sb.exclusiveGroup) continue;
+          if (sb.shopGated) continue;  // TODO: check shopLv for ship gated branches
+          if (sb.requires) {
+            var skip = false;
+            for (var rk in sb.requires) {
+              if (ST[rk] && (ST[rk].shopGated || ST[rk].exclusiveGroup)) skip = true;
+            }
+            if (skip) continue;
+          }
+          g.upgrades.shipTree[sk] = sb.max || 5;
+        }
+        g._syncLauncherStats && g._syncLauncherStats();
+      }
+
+      // 屏蔽经验/升级系统 → 玩家直接满级
+      if (g.expSystem) {
+        g.expSystem.addExp = function() {};  // 不再获得经验
+        g.expSystem.level = 99;              // 满级
+      }
+      // 屏蔽三选一弹框
+      if (g.upgrades.generateChoices) {
+        g.upgrades.generateChoices = function() { return []; };
+      }
+    }
+
+    // ========== 8. 水位控制器 ==========
     this._ctrl = {
       targetAlive: targetAlive,
       currentHP: 1,
       spawnCd: 0,
-      baseInterval: 1000,  // ms
-      // 平滑统计
-      stableCount: 0,      // 连续"水位在±20%范围内"的次数
-      stableThreshold: 5,   // 达到5次算稳定
+      baseInterval: 1000,
+      stableCount: 0,
+      stableThreshold: 5,
     };
-    
-    // 6. 统计
-    g.damageStats = {};
+
+    // ========== 9. 统计初始化 ==========
     this.stats = {
       weapon: weaponFilter,
+      shopLv: shopLv,
       duration: duration,
       speed: speed,
-      warmup: warmup,
       targetAlive: targetAlive,
-      // 预热
+      fullBranch: fullBranch,
       warmupElapsed: 0,
       isWarmedUp: false,
-      autoWarmup: !opts.warmup, // 没指定warmup时用自动检测
-      // 正式测量
       measureElapsed: 0,
       totalDamage: 0,
       damageBySource: {},
@@ -120,103 +203,47 @@ class DPSSandbox {
       _totalElapsed: 0,
     };
     this.running = true;
+    this._result = null;
 
-    // 7. Hooks
+    // ========== 10. Hooks ==========
     this._hookDamage();
     this._hookBuffs();
 
-    // 8. 主循环回调
     var self = this;
     g._sandboxUpdate = function(dtMs) { self._onUpdate(dtMs); };
     this._cleanups.push(function() { g._sandboxUpdate = null; });
 
-    // 9. AutoBattle
+    // ========== 11. AutoBattle ==========
     if (typeof window.__autoBattle === 'function') {
       window.__autoBattle('aggressive');
     }
 
-    // 10. 直接点满所有非shopGated分支
-    // 确保初始武器已添加
-    var WU = require('../config/WeaponUnlockConfig');
-    if (allowedWeapons) {
-      // 满级指定的武器
-      var defs = require('../config/WeaponDefs');
-      for (var w of allowedWeapons) {
-        if (w !== 'ship' && defs[w]) {
-          var tree = defs[w].branches;
-          if (tree) {
-             for (var bk in tree) {
-                var max = tree[bk].max || 1;
-                for (var i = 0; i < max; i++) {
-                   g.upgrades.upgradeWeaponBranch(w, bk);
-                }
-             }
-          }
-        }
-      }
-    } else {
-      for (var uk in WU) {
-        if (uk === 'ship') continue;
-        if (WU[uk].unlockChapter <= 1 && !g.upgrades.weapons[uk]) {
-          g.upgrades.addWeapon(uk);
-        }
-      }
-    }
-    // 飞机树
-    var Config = this.Config;
-    var ST = Config.SHIP_TREE;
-    for (var sk in ST) {
-      var sb = ST[sk];
-      if (sb.shopGated || sb.exclusiveGroup) continue;
-      if (sb.requires) {
-        var skip = false;
-        for (var rk in sb.requires) { if (ST[rk] && (ST[rk].shopGated || ST[rk].exclusiveGroup)) skip = true; }
-        if (skip) continue;
-      }
-      g.upgrades.shipTree[sk] = sb.max || 5;
-    }
-    g._syncLauncherStats && g._syncLauncherStats();
-    // 武器分支
-    for (var wk in g.upgrades.weapons) {
-      var w = g.upgrades.weapons[wk];
-      if (!w || !w.def || !w.def.branches) continue;
-      var tree = w.def.branches;
-      for (var bk in tree) {
-        var bd = tree[bk];
-        if (bd.shopGated) continue;
-        w.branches[bk] = bd.max || 5;
-      }
-    }
-
-    // 11. 初始铺砖（约一半目标量）
-
-    var initRows = Math.ceil(targetAlive / 6 / 2); // 假设每行~6个
+    // ========== 12. 初始铺砖 ==========
+    var initRows = Math.ceil(targetAlive / 6 / 2);
     this._fillInitialBricks(initRows);
 
     console.log('');
     console.log('╔══════════════════════════════════════════╗');
-    console.log('║     🎯 DPS沙盘 v5 - 存活比例控制        ║');
+    console.log('║     🎯 DPS沙盘 v6                        ║');
     console.log('╚══════════════════════════════════════════╝');
-    console.log('  武器: ' + weaponFilter);
-    console.log('  目标存活: ' + targetAlive + '个砖块');
-    console.log('  预热: ' + (this.stats.autoWarmup ? '自动(水位稳定后)' : warmup + 's'));
-    console.log('  测量: ' + duration + 's | 倍速: ' + speed + 'x');
+    console.log('  武器: ' + weaponFilter + ' | 商店Lv: ' + shopLv);
+    console.log('  分支: ' + (fullBranch ? '满级(shopLv已解锁)' : '无'));
+    console.log('  目标存活: ' + targetAlive + ' | 测量: ' + duration + 's | 倍速: ' + speed + 'x');
     console.log('');
-    
-    return '沙盘已启动: ' + weaponFilter + ' @' + speed + 'x';
+
+    return '沙盘v6已启动: ' + weaponFilter + ' shopLv=' + shopLv + ' @' + speed + 'x';
   }
+
+  // ========== 砖块生成 ==========
 
   _fillInitialBricks(rows) {
     var g = this.game;
     var Config = this.Config;
-    var brickH = Config.BRICK_HEIGHT;
-    var padding = Config.BRICK_PADDING;
     var phase = { types: ['normal'], timeCurve: [1.0, 1.0], spawnMult: 1 };
     var chapterConfig = { baseHP: 1, chapterScale: 1, gapChance: 0.08 };
     for (var r = 0; r < rows; r++) {
-      var y = Config.BRICK_TOP_OFFSET + r * (brickH + padding);
-      var newBricks = BrickFactory.generateRow(g.gameWidth, y, phase, chapterConfig);
-      g.bricks = g.bricks.concat(newBricks);
+      var y = Config.BRICK_TOP_OFFSET + r * (Config.BRICK_HEIGHT + Config.BRICK_PADDING);
+      g.bricks = g.bricks.concat(BrickFactory.generateRow(g.gameWidth, y, phase, chapterConfig));
     }
   }
 
@@ -235,69 +262,54 @@ class DPSSandbox {
     var phase = { types: ['normal', 'fast'], timeCurve: [hp, hp], spawnMult: 1 };
     var chapterConfig = { baseHP: 1, chapterScale: 1, gapChance: 0.08 };
     var y = Config.BRICK_TOP_OFFSET - Config.BRICK_HEIGHT - Config.BRICK_PADDING;
-    var newBricks = BrickFactory.generateRow(g.gameWidth, y, phase, chapterConfig);
-    g.bricks = g.bricks.concat(newBricks);
+    g.bricks = g.bricks.concat(BrickFactory.generateRow(g.gameWidth, y, phase, chapterConfig));
   }
+
+  // ========== 主循环 ==========
 
   _onUpdate(dtMs) {
     if (!this.running) return;
     var st = this.stats;
     var ctrl = this._ctrl;
     st._totalElapsed += dtMs;
-    
-    // === 水位控制 ===
+
+    // 水位控制
     ctrl.spawnCd -= dtMs;
     if (ctrl.spawnCd <= 0) {
       ctrl.spawnCd = ctrl.baseInterval;
       var alive = this._countAlive();
-      var ratio = alive / ctrl.targetAlive; // <1=砖少，>1=砖多
-      
-      // ratio < 1 = 砖少(打得快), ratio > 1 = 砖多(打不动)
+      var ratio = alive / ctrl.targetAlive;
+
       var shouldSpawn = false;
-      
       if (ratio < 0.5) {
-        // 严重不足：双行补砖 + 中等提HP (缓解突变过快)
         shouldSpawn = true;
         this._spawnRow(ctrl.currentHP);
-        ctrl.currentHP *= 1.12; 
+        ctrl.currentHP *= 1.12;
       } else if (ratio < 0.8) {
-        // 偏少：补砖 + 小幅提HP
         shouldSpawn = true;
         ctrl.currentHP *= 1.05;
       } else if (ratio > 1.5) {
-        // 严重过多：停止生砖，不降HP
+        // 严重过多：停
       } else if (ratio > 1.1) {
-        // 偏多：停止生砖
+        // 偏多：停
       } else {
-        // 水位正好(0.8~1.1)：正常维持
         shouldSpawn = true;
       }
-      
       if (shouldSpawn) {
         this._spawnRow(ctrl.currentHP);
       }
-      
-      // 稳定检测（ratio在0.7~1.3持续N次）
+
       if (ratio >= 0.7 && ratio <= 1.3) {
         ctrl.stableCount++;
       } else {
         ctrl.stableCount = Math.max(0, ctrl.stableCount - 1);
       }
     }
-    
-    // === 预热期 ===
+
+    // 预热期
     if (!st.isWarmedUp) {
       st.warmupElapsed += dtMs;
-      
-      var warmupDone = false;
-      if (st.autoWarmup) {
-        // 自动模式：水位稳定就开始
-        warmupDone = ctrl.stableCount >= ctrl.stableThreshold;
-      } else {
-        warmupDone = st.warmupElapsed >= st.warmup * 1000;
-      }
-      
-      if (warmupDone) {
+      if (ctrl.stableCount >= ctrl.stableThreshold) {
         st.isWarmedUp = true;
         st.totalDamage = 0;
         st.damageBySource = {};
@@ -306,52 +318,39 @@ class DPSSandbox {
         st.dpsSnapshots = [];
         st._lastSnapshotMs = 0;
         st._lastDamage = 0;
-        
-        var alive = this._countAlive();
-        console.log('');
-        console.log('✅ 预热完成！(耗时' + Math.round(st.warmupElapsed / 1000) + 's)');
-        console.log('   存活砖: ' + alive + '/' + ctrl.targetAlive + ' | HP: ' + ctrl.currentHP.toFixed(1));
-        console.log('   开始正式测量 ' + st.duration + '秒...');
-        console.log('');
+        console.log('✅ 预热完成 (' + Math.round(st.warmupElapsed / 1000) + 's) | HP: ' + ctrl.currentHP.toFixed(1));
       }
       return;
     }
-    
-    // === 正式测量 ===
+
+    // 正式测量
     st.measureElapsed += dtMs;
     var mSec = st.measureElapsed / 1000;
-    
+
     // 每5秒快照
     if (st.measureElapsed - st._lastSnapshotMs >= 5000) {
       var intervalDmg = st.totalDamage - st._lastDamage;
       var intervalSec = (st.measureElapsed - st._lastSnapshotMs) / 1000;
       var alive = this._countAlive();
-      var snap = {
+      st.dpsSnapshots.push({
         time: Math.round(mSec),
-        totalDmg: Math.round(st.totalDamage),
-        intervalDps: intervalSec > 0 ? (intervalDmg / intervalSec) : 0,
-        avgDps: mSec > 0 ? (st.totalDamage / mSec) : 0,
-        kills: st.killCount,
+        avgDps: mSec > 0 ? +(st.totalDamage / mSec).toFixed(1) : 0,
+        intervalDps: intervalSec > 0 ? +(intervalDmg / intervalSec).toFixed(1) : 0,
         alive: alive,
-        hp: Math.round(ctrl.currentHP * 10) / 10,
-      };
-      st.dpsSnapshots.push(snap);
+        hp: +ctrl.currentHP.toFixed(1),
+        kills: st.killCount,
+      });
       st._lastSnapshotMs = st.measureElapsed;
       st._lastDamage = st.totalDamage;
-      
-      var ratio = alive / ctrl.targetAlive;
-      console.log('🎯 [' + snap.time + 's] DPS:' + snap.avgDps.toFixed(1) + 
-        ' | 区间:' + snap.intervalDps.toFixed(1) +
-        ' | 存活:' + alive + '(' + Math.round(ratio * 100) + '%)' +
-        ' | HP:' + snap.hp +
-        ' | 杀:' + snap.kills);
     }
-    
+
     if (mSec >= st.duration) {
       st.stopReason = '测量完成 (' + st.duration + 's)';
       this.stop();
     }
   }
+
+  // ========== Hooks ==========
 
   _hookDamage() {
     var combat = this.game.combat;
@@ -380,6 +379,7 @@ class DPSSandbox {
     var keys = ['burn', 'chill', 'shock'];
     for (var i = 0; i < methods.length; i++) {
       (function(method, key) {
+        if (!bs[method]) return;
         var orig = bs[method].bind(bs);
         bs[method] = function(brick, stacks) {
           if (self.running && self.stats && self.stats.isWarmedUp) {
@@ -408,10 +408,19 @@ class DPSSandbox {
     }
   }
 
+  // ========== 停止 ==========
+
   stop() {
     if (!this.running) return '沙盘未运行';
     this.running = false;
     if (typeof window.__stopAuto === 'function') window.__stopAuto();
+
+    // 生成结果
+    this._result = this._buildResult();
+    this._lastReport = this._generateReport();
+    console.log(this._lastReport);
+
+    // 清理
     for (var i = 0; i < this._cleanups.length; i++) {
       try { this._cleanups[i](); } catch(e) {}
     }
@@ -419,66 +428,71 @@ class DPSSandbox {
     this.game._devTimeScale = 1;
     this.game._devInvincible = false;
     this.game._sandboxMode = false;
-    var report = this._generateReport();
-    console.log(report);
-    this._lastReport = report;
-    return report;
+
+    return this._lastReport;
   }
 
-  _generateReport() {
+  // ========== 结构化结果 ==========
+
+  _buildResult() {
     var st = this.stats;
     var ctrl = this._ctrl;
     var sec = st.measureElapsed / 1000;
-    var avgDps = sec > 0 ? st.totalDamage / sec : 0;
-    
-    // 稳定DPS（去首尾快照）
+    var avgDps = sec > 0 ? +(st.totalDamage / sec).toFixed(1) : 0;
+
+    // 稳定DPS
     var stableSnaps = st.dpsSnapshots.slice(1, -1);
     var stableDps = 0;
     if (stableSnaps.length > 0) {
       var sum = 0;
-      for (var s = 0; s < stableSnaps.length; s++) sum += stableSnaps[s].intervalDps;
-      stableDps = sum / stableSnaps.length;
+      for (var i = 0; i < stableSnaps.length; i++) sum += stableSnaps[i].intervalDps;
+      stableDps = +(sum / stableSnaps.length).toFixed(1);
     }
-    
+
     // 峰值
     var peakDps = 0, peakTime = 0;
-    for (var p = 0; p < st.dpsSnapshots.length; p++) {
-      if (st.dpsSnapshots[p].intervalDps > peakDps) {
-        peakDps = st.dpsSnapshots[p].intervalDps;
-        peakTime = st.dpsSnapshots[p].time;
+    for (var i = 0; i < st.dpsSnapshots.length; i++) {
+      if (st.dpsSnapshots[i].intervalDps > peakDps) {
+        peakDps = st.dpsSnapshots[i].intervalDps;
+        peakTime = st.dpsSnapshots[i].time;
       }
     }
-    
+
     // 平均存活
     var avgAlive = 0;
     if (st.dpsSnapshots.length > 0) {
-      for (var r = 0; r < st.dpsSnapshots.length; r++) avgAlive += st.dpsSnapshots[r].alive;
-      avgAlive = avgAlive / st.dpsSnapshots.length;
+      for (var i = 0; i < st.dpsSnapshots.length; i++) avgAlive += st.dpsSnapshots[i].alive;
+      avgAlive = Math.round(avgAlive / st.dpsSnapshots.length);
     }
-    
-    var L = [];
-    L.push('');
-    L.push('╔═══════════════════════════════════════════════════╗');
-    L.push('║     🎯 DPS沙盘报告 v5 (存活比例控制)             ║');
-    L.push('╚═══════════════════════════════════════════════════╝');
-    L.push('');
-    L.push('  武器: ' + st.weapon + ' | 测量: ' + sec.toFixed(1) + 's | 倍速: ' + st.speed + 'x');
-    L.push('  停止: ' + (st.stopReason || '手动停止'));
-    L.push('');
-    L.push('┌─────────────────────────────────────┐');
-    L.push('│  ⭐ 平均DPS:    ' + P(avgDps.toFixed(1), 8) + '              │');
-    L.push('│  📊 稳定DPS:    ' + P(stableDps.toFixed(1), 8) + '              │');
-    L.push('│  🔥 峰值DPS:    ' + P(peakDps.toFixed(1), 8) + ' (@' + peakTime + 's)' + P('', 5) + '│');
-    L.push('│  💀 总伤害:     ' + P(Math.round(st.totalDamage), 8) + '              │');
-    L.push('│  🧱 击杀砖块:   ' + P(st.killCount, 8) + '              │');
-    L.push('│  📏 平均存活:   ' + P(avgAlive.toFixed(0), 8) + '/' + ctrl.targetAlive + P('', 8) + '│');
-    L.push('│  ❤️ 稳定砖HP:   ' + P(ctrl.currentHP.toFixed(1), 8) + '              │');
-    L.push('└─────────────────────────────────────┘');
-    L.push('');
-    
-    // === 武器汇总（子伤害源归类） ===
-    L.push('## 武器汇总');
-    var sourceToWeapon = {
+
+    // 武器归类
+    var weaponDamage = this._classifyDamage(st.damageBySource);
+
+    return {
+      weapon: st.weapon,
+      shopLv: st.shopLv,
+      speed: st.speed,
+      duration: st.duration,
+      fullBranch: st.fullBranch,
+      avgDps: avgDps,
+      stableDps: stableDps,
+      peakDps: +peakDps.toFixed(1),
+      peakTime: peakTime,
+      totalDamage: Math.round(st.totalDamage),
+      kills: st.killCount,
+      avgAlive: avgAlive,
+      stableHp: +ctrl.currentHP.toFixed(1),
+      warmupSec: Math.round(st.warmupElapsed / 1000),
+      measureSec: +sec.toFixed(1),
+      damageBySource: st.damageBySource,
+      weaponDamage: weaponDamage,
+      buffEvents: Object.assign({}, st.buffEvents),
+      snapshots: st.dpsSnapshots,
+    };
+  }
+
+  _classifyDamage(sources) {
+    var map = {
       bullet: 'ship', fire_explosion: 'ship', ice_shatter: 'ship',
       kunai: 'kunai', kunai_aoe: 'kunai', kunai_chain: 'kunai', kunai_split: 'kunai',
       lightning: 'lightning', lightning_aoe: 'lightning', lightning_thor: 'lightning',
@@ -495,6 +509,22 @@ class DPSSandbox {
       gravityWell: 'gravityWell', gravityWell_burst: 'gravityWell', gravityWell_pctHp: 'gravityWell',
       burn: 'dot', negaBrick: 'negaBrick', negaBrick_splash: 'negaBrick',
     };
+    var result = {};
+    for (var src in sources) {
+      var wk = map[src] || 'unknown';
+      result[wk] = (result[wk] || 0) + sources[src];
+    }
+    return result;
+  }
+
+  // ========== 纯文本报告 ==========
+
+  _generateReport() {
+    var r = this._result;
+    if (!r) return '无数据';
+    var st = this.stats;
+    var ctrl = this._ctrl;
+
     var weaponNames = {
       ship: '🔫飞机子弹', kunai: '❄️冰爆弹', lightning: '⚡闪电链',
       missile: '🚀穿甲弹', meteor: '💣轰炸机', frostStorm: '🌨寒冰发生器',
@@ -502,56 +532,79 @@ class DPSSandbox {
       ionBeam: '⚡离子射线', gravityWell: '🌀奇点引擎', dot: '🔥持续伤害',
       negaBrick: '💀负能砖', unknown: '❓未分类',
     };
-    var weaponDmg = {};
-    for (var wsrc in st.damageBySource) {
-      var wkey = sourceToWeapon[wsrc] || 'unknown';
-      weaponDmg[wkey] = (weaponDmg[wkey] || 0) + st.damageBySource[wsrc];
-    }
-    var wkeys = Object.keys(weaponDmg).sort(function(a,b) { return weaponDmg[b] - weaponDmg[a]; });
-    for (var wi = 0; wi < wkeys.length; wi++) {
-      var wk = wkeys[wi];
-      var wdmg = weaponDmg[wk];
-      var wpct = st.totalDamage > 0 ? (wdmg / st.totalDamage * 100) : 0;
-      var wbar = '';
-      for (var wb = 0; wb < Math.round(wpct / 5); wb++) wbar += '█';
-      L.push('  ' + P(weaponNames[wk] || wk, 14) + P(Math.round(wdmg), 8) + ' (' + P(wpct.toFixed(1), 5) + '%)  ' + wbar);
+
+    var L = [];
+    L.push('');
+    L.push('╔═══════════════════════════════════════════════════╗');
+    L.push('║     🎯 DPS沙盘报告 v6                             ║');
+    L.push('╚═══════════════════════════════════════════════════╝');
+    L.push('');
+    L.push('  武器: ' + r.weapon + ' | 商店Lv: ' + r.shopLv + ' | 分支: ' + (r.fullBranch ? '满级' : '无'));
+    L.push('  测量: ' + r.measureSec + 's | 倍速: ' + r.speed + 'x | 预热: ' + r.warmupSec + 's');
+    L.push('  停止: ' + (st.stopReason || '手动'));
+    L.push('');
+    L.push('┌─────────────────────────────────────┐');
+    L.push('│  ⭐ 平均DPS:    ' + P(r.avgDps, 8) + '              │');
+    L.push('│  📊 稳定DPS:    ' + P(r.stableDps, 8) + '              │');
+    L.push('│  🔥 峰值DPS:    ' + P(r.peakDps, 8) + ' (@' + r.peakTime + 's)     │');
+    L.push('│  💀 总伤害:     ' + P(r.totalDamage, 8) + '              │');
+    L.push('│  🧱 击杀:       ' + P(r.kills, 8) + '              │');
+    L.push('│  📏 平均存活:   ' + P(r.avgAlive, 8) + '/' + ctrl.targetAlive + '        │');
+    L.push('│  ❤️ 稳定砖HP:   ' + P(r.stableHp, 8) + '              │');
+    L.push('└─────────────────────────────────────┘');
+    L.push('');
+
+    // 武器汇总
+    L.push('## 武器汇总');
+    var wkeys = Object.keys(r.weaponDamage).sort(function(a,b) { return r.weaponDamage[b] - r.weaponDamage[a]; });
+    for (var i = 0; i < wkeys.length; i++) {
+      var wk = wkeys[i];
+      var wdmg = r.weaponDamage[wk];
+      var wpct = r.totalDamage > 0 ? (wdmg / r.totalDamage * 100) : 0;
+      var bar = '';
+      for (var b = 0; b < Math.round(wpct / 5); b++) bar += '█';
+      L.push('  ' + P(weaponNames[wk] || wk, 14) + P(Math.round(wdmg), 8) + ' (' + P(wpct.toFixed(1), 5) + '%)  ' + bar);
     }
     L.push('');
-    
+
+    // 详细伤害源
     L.push('## 伤害来源(详细)');
-        L.push('## 伤害来源(详细)');
     var sources = Object.keys(st.damageBySource).sort(function(a,b) { return st.damageBySource[b] - st.damageBySource[a]; });
     for (var i = 0; i < sources.length; i++) {
       var src = sources[i];
       var dmg = st.damageBySource[src];
-      var pct = st.totalDamage > 0 ? (dmg / st.totalDamage * 100) : 0;
+      var pct = r.totalDamage > 0 ? (dmg / r.totalDamage * 100) : 0;
       var bar = '';
       for (var b = 0; b < Math.round(pct / 5); b++) bar += '█';
       L.push('  ' + P(src, 20) + P(Math.round(dmg), 8) + ' (' + P(pct.toFixed(1), 5) + '%)  ' + bar);
     }
     L.push('');
-    
+
+    // Buff
     L.push('## Buff触发');
-    L.push('  🔥灼烧:' + st.buffEvents.burn + '  ❄️冰缓:' + st.buffEvents.chill + 
-      '  🧊冻结:' + st.buffEvents.freeze + '  ⚡感电:' + st.buffEvents.shock + '  ⛓电弧:' + st.buffEvents.arc);
-    if (st.buffEvents.chill > 0) L.push('  冻结率: ' + (st.buffEvents.freeze / st.buffEvents.chill * 100).toFixed(1) + '%');
+    var bf = r.buffEvents;
+    L.push('  🔥灼烧:' + bf.burn + '  ❄️冰缓:' + bf.chill + '  🧊冻结:' + bf.freeze + '  ⚡感电:' + bf.shock + '  ⛓电弧:' + bf.arc);
     L.push('');
-    
+
+    // 时间线
     L.push('## 时间线');
     L.push('  时间 │ 平均DPS│ 区间DPS│ 存活 │ 砖HP');
     L.push('  ─────┼────────┼────────┼──────┼─────');
-    for (var k = 0; k < st.dpsSnapshots.length; k++) {
-      var sn = st.dpsSnapshots[k];
+    for (var i = 0; i < r.snapshots.length; i++) {
+      var sn = r.snapshots[i];
       var pctA = Math.round(sn.alive / ctrl.targetAlive * 100);
-      L.push('  ' + P(sn.time + 's', 5) + '│' + P(sn.avgDps.toFixed(1), 7) + ' │' + P(sn.intervalDps.toFixed(1), 7) + ' │' + P(sn.alive + '(' + pctA + '%)', 8) + '│ ' + sn.hp);
+      L.push('  ' + P(sn.time + 's', 5) + '│' + P(sn.avgDps, 7) + ' │' + P(sn.intervalDps, 7) + ' │' + P(sn.alive + '(' + pctA + '%)', 8) + '│ ' + sn.hp);
     }
-    
+
     return L.join('\n');
-    
+
     function P(val, len) { var s = String(val); while (s.length < len) s = ' ' + s; return s; }
   }
 
+  // ========== 公共API ==========
+
   getReport() { return this._lastReport || '没有测试报告'; }
+  getResult() { return this._result; }
 }
 
 module.exports = DPSSandbox;

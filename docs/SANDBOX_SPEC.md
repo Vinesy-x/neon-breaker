@@ -41,7 +41,7 @@ __dpsSandbox({
   duration:    120,         // 测量时长（秒），默认120
   speed:       10,          // 游戏倍速，默认10
   targetAlive: 60,          // 水位目标存活砖块数，默认60
-  fullBranch:  true,        // 点满所有非shopGated分支，默认true
+  fullBranch:  true,        // 点满当前shopLv已解锁的所有分支，默认true
   shipTree:    true,        // 点满飞机树非shopGated分支，默认true
 })
 ```
