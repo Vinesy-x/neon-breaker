@@ -21,18 +21,40 @@ class LightningWeapon extends Weapon {
   }
 
   update(dtMs, ctx) {
-    // thorGod被动：每60秒全屏闪电（读配置thorInterval）
+    // thorGod被动：雷神降临 - 全屏引爆感电
     if (ctx && ctx.saveManager && ctx.saveManager.hasWeaponPassive('lightning', 'thorGod')) {
       this._thorTimer = (this._thorTimer || 0) + dtMs;
-      var thorCD = (this.def.thorInterval || 60000);
+      var thorCD = (this.def.thorInterval || 10000);
       if (this._thorTimer >= thorCD) {
         this._thorTimer = 0;
-        // 全屏闪电：对所有砖块造成1次伤害
-        var thorDmg = this.getDamage(ctx.getBaseAttack(), ctx) * 1;
+        var baseThorDmg = this.getDamage(ctx.getBaseAttack(), ctx);
+        var bs = ctx.buffSystem;
         for (var ti = 0; ti < ctx.bricks.length; ti++) {
-          if (ctx.bricks[ti].alive) ctx.damageBrick(ctx.bricks[ti], thorDmg, 'lightning_thor', 'energy');
+          var tb = ctx.bricks[ti];
+          if (!tb.alive) continue;
+          // 基础伤害：所有砖都吃一次
+          ctx.damageBrick(tb, baseThorDmg, 'lightning_thor', 'energy');
+          // 感电引爆：有感电层的砖额外受 baseDmg × stacks × 2 伤害，清空感电
+          if (bs && tb.alive) {
+            var shockBuff = bs._getBuff(tb, 'shock');
+            if (shockBuff && shockBuff.stacks > 0) {
+              var detonateDmg = baseThorDmg * shockBuff.stacks * 2;
+              ctx.damageBrick(tb, detonateDmg, 'lightning_thor', 'energy');
+              // 引爆传播：周围120px砖块各获得1层感电
+              var tbc = tb.getCenter();
+              for (var si = 0; si < ctx.bricks.length; si++) {
+                var sb = ctx.bricks[si];
+                if (!sb.alive || sb === tb) continue;
+                var sbc = sb.getCenter();
+                if (Math.sqrt((sbc.x-tbc.x)**2+(sbc.y-tbc.y)**2) <= 120) {
+                  bs.applyShock(sb, 1);
+                }
+              }
+              shockBuff.stacks = 0;
+            }
+          }
         }
-        // 全屏闪光效果
+        // 紫色全屏闪光
         this.bolts.push({ points: [{x:0,y:0},{x:ctx.gameWidth,y:ctx.gameHeight}], alpha: 2.0, isThor: true });
       }
     }
