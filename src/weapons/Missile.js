@@ -83,7 +83,7 @@ class MissileWeapon extends Weapon {
 
           // armorBreak被动：降防标记
           if (ctx.saveManager && ctx.saveManager.hasWeaponPassive('missile', 'armorBreak') && brick.alive) {
-            brick._armorBreak = Date.now() + 3000;
+            brick._armorBreak = ctx.elapsedMs + 3000;
           }
           ctx.damageBrick(brick, dmg, 'armorPiercing', 'physical');
 

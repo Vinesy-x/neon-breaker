@@ -137,7 +137,7 @@ class LightningWeapon extends Weapon {
       points.push({ x: bc.x, y: bc.y });
       // shockMark被动：受伤+15%
       if (ctx.saveManager && ctx.saveManager.hasWeaponPassive('lightning', 'shockMark') && nearest.brick.alive) {
-        nearest.brick._shockMark = Date.now() + 3000; // 标记3秒
+        nearest.brick._shockMark = ctx.elapsedMs + 3000; // 标记3秒
       }
       ctx.damageBrick(nearest.brick, damage, 'lightning', 'energy');
 

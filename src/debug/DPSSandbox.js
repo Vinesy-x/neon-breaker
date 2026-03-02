@@ -48,13 +48,16 @@ class DPSSandbox {
     g._devTimeScale = speed;
     
     // 2. 武器锁定
-    if (weaponFilter !== 'all') {
-      if (weaponFilter !== 'ship' && !g.upgrades.weapons[weaponFilter]) {
-        g.upgrades.addWeapon(weaponFilter);
+    var allowedWeapons = weaponFilter === 'all' ? null : weaponFilter.split(',');
+    if (allowedWeapons) {
+      for (var w of allowedWeapons) {
+        if (w !== 'ship' && !g.upgrades.weapons[w]) {
+          g.upgrades.addWeapon(w);
+        }
       }
       var toRemove = [];
       for (var key in g.upgrades.weapons) {
-        if (key !== weaponFilter) toRemove.push(key);
+        if (allowedWeapons.indexOf(key) === -1) toRemove.push(key);
       }
       for (var i = 0; i < toRemove.length; i++) {
         delete g.upgrades.weapons[toRemove[i]];
@@ -64,7 +67,7 @@ class DPSSandbox {
     // 3. 阻止新武器
     var origAddWeapon = g.upgrades.addWeapon.bind(g.upgrades);
     g.upgrades.addWeapon = function(key) {
-      if (weaponFilter !== 'all') return;
+      if (allowedWeapons && allowedWeapons.indexOf(key) === -1) return;
       origAddWeapon(key);
     };
 
@@ -129,7 +132,23 @@ class DPSSandbox {
     // 10. 直接点满所有非shopGated分支
     // 确保初始武器已添加
     var WU = require('../config/WeaponUnlockConfig');
-    if (weaponFilter === 'all') {
+    if (allowedWeapons) {
+      // 满级指定的武器
+      var defs = require('../config/WeaponDefs');
+      for (var w of allowedWeapons) {
+        if (w !== 'ship' && defs[w]) {
+          var tree = defs[w].branches;
+          if (tree) {
+             for (var bk in tree) {
+                var max = tree[bk].max || 1;
+                for (var i = 0; i < max; i++) {
+                   g.upgrades.upgradeWeaponBranch(w, bk);
+                }
+             }
+          }
+        }
+      }
+    } else {
       for (var uk in WU) {
         if (uk === 'ship') continue;
         if (WU[uk].unlockChapter <= 1 && !g.upgrades.weapons[uk]) {
@@ -231,17 +250,16 @@ class DPSSandbox {
       var shouldSpawn = false;
       
       if (ratio < 0.5) {
-        // 严重不足：双行补砖 + 大幅提HP
+        // 严重不足：双行补砖 + 中等提HP (缓解突变过快)
         shouldSpawn = true;
         this._spawnRow(ctrl.currentHP);
-        ctrl.currentHP *= 1.25;
+        ctrl.currentHP *= 1.12; 
       } else if (ratio < 0.8) {
-        // 偏少：补砖 + 提HP
+        // 偏少：补砖 + 小幅提HP
         shouldSpawn = true;
-        ctrl.currentHP *= 1.10;
+        ctrl.currentHP *= 1.05;
       } else if (ratio > 1.5) {
-        // 严重过多：停止生砖，等消化
-        // 不降HP！让玩家慢慢打掉，维持当前HP
+        // 严重过多：停止生砖，不降HP
       } else if (ratio > 1.1) {
         // 偏多：停止生砖
       } else {

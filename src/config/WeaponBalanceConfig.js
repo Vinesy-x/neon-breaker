@@ -13,7 +13,7 @@
 module.exports = {
   // ===== 冰爆弹 =====
   kunai: {
-    basePct: 5,
+    basePct: 12.0,
     interval: 6000,
     damageType: 'ice',
     aoeRadius: 1.1,              // AOE半径(列宽单位)，1.2列≈64px
@@ -33,7 +33,7 @@ module.exports = {
 
   // ===== 闪电链 =====
   lightning: {
-    basePct: 5.0,
+    basePct: 9.0,
     interval: 3800,
     damageType: 'lightning',
     branchDmgScale: 0.5,
@@ -71,7 +71,7 @@ module.exports = {
 
   // ===== 寒冰发生器 =====
   frostStorm: {
-    basePct: 12.0,
+    basePct: 25.0,
     interval: 10000,
     damageType: 'ice',
     branchDmgScale: 0.5,         // 强化每级+50% HP
@@ -79,11 +79,11 @@ module.exports = {
     wallHeight: 22,               // 冰墙高度(px)
     stackLimitBase: 3,            // 基础叠加倍数上限
     auraRange: 80,                // 寒气场范围(px)
-    auraTick: 500,                // 寒气场tick间隔(ms)
+    auraTick: 300,                // 寒气场tick间隔(ms)
     regenCooldown: 1500,          // 被撞后回血冷却(ms)
     regenInterval: 1000,          // 回血间隔(ms)
     frostArmorDmgScale: 0.3,     // 寒霜护甲碰撞伤害+30%/级
-    shatterAoePct: 0.5,           // 碎冰溅射 maxHP×50%
+    shatterAoePct: 1.5,           // 碎冰溅射 maxHP×50%
     permaFrostDuration: 1000,     // 冰封基础持续(ms)
     permaFrostPerLv: 500,         // 冰封每级+500ms
     iceSlowPerStack: 0.1,         // 每层冰缓减速10%
@@ -114,7 +114,7 @@ module.exports = {
 
   // ===== 战术无人机 =====
   drone: {
-    basePct: 1.0,
+    basePct: 2.5,
     interval: 500,
     damageType: 'energy',
     branchDmgScale: 0.5,
@@ -136,7 +136,7 @@ module.exports = {
 
   // ===== 回旋刃 =====
   spinBlade: {
-    basePct: 11.0,
+    basePct: 5.0,
     interval: 10000,
     damageType: 'physical',
     branchDmgScale: 0.5,
@@ -146,7 +146,7 @@ module.exports = {
     durationPerLv: 2000,          // 续航每级+2秒
     pierceDmgScale: 0.3,          // 锋锐贯穿+30%
     rampPerSec: 0.12,             // 蓄势每秒+12%
-    bleedDotPct: 0.15,            // 撕裂DOT 15%/秒
+    bleedDotPct: 0.05,            // 撕裂DOT 15%/秒
     bleedDuration: 2000,          // 撕裂持续2秒
     splitCount: 2,                // 分裂小旋刃数
     bounceBottomPct: 0.88,        // 反弹底部比例
@@ -179,7 +179,7 @@ module.exports = {
 
   // ===== 离子射线 =====
   ionBeam: {
-    basePct: 25.0,
+    basePct: 15.0,
     interval: 7000,
     damageType: 'energy',
     branchDmgScale: 0.5,         // 伤害分支+70%/级（比其他高）
@@ -190,9 +190,9 @@ module.exports = {
     splitRange: 50,               // 溅射范围(px)
     splitDmgPct: 0.3,             // 溅射伤害比例
     overloadBase: 4,              // 过载基础倍率
-    overloadPerLv: 3,             // 过载每级+倍率
+    overloadPerLv: 1.5,             // 过载每级+倍率
     overloadEndBase: 6,           // 结束过载基础倍率
-    overloadEndPerLv: 5,          // 结束过载每级+倍率
+    overloadEndPerLv: 2.5,          // 结束过载每级+倍率
     chargeBurstBase: 2.5,         // 蓄能首击基础倍率
     chargeBurstPerLv: 1.5,        // 蓄能每级+倍率
     superOrbDmgMult: 30,          // 超级离子球倍率

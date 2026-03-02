@@ -39,7 +39,7 @@ class GravityWellWeapon extends Weapon {
     var lensLv = this.getBranch('lens');
     var baseAttack = ctx.getBaseAttack ? ctx.getBaseAttack() : 1;
     var basePct = this.def.basePct;
-    var now = Date.now();
+    var now = ctx.elapsedMs;
 
     // --- CD逻辑：场上有黑洞时不冷却，全部消失后才开始倒计时 ---
     var interval = this.def.interval;
@@ -115,7 +115,7 @@ class GravityWellWeapon extends Weapon {
                 existNb.height = 20 * newSizeMult;
                 existNb.sizeMult = newSizeMult;
                 // 重置存活时间
-                existNb.birthTime = Date.now();
+                existNb.birthTime = ctx.elapsedMs;
                 merged = true;
                 break;
               }
@@ -212,7 +212,7 @@ class GravityWellWeapon extends Weapon {
       timer: duration,
       tickTimer: 0,
       energyAccum: 0,
-      birthTime: Date.now(),
+      birthTime: ctx.elapsedMs,
     });
   }
 
@@ -229,7 +229,7 @@ class GravityWellWeapon extends Weapon {
         b.x += (dx / dist) * force;
         // siphon被动：引力范围内受伤+20%
         if (ctx.saveManager && ctx.saveManager.hasWeaponPassive('gravityWell', 'siphon')) {
-          b._siphonMark = Date.now() + 500; // 标记0.5秒
+          b._siphonMark = ctx.elapsedMs + 500; // 标记0.5秒
         }
         b.y += (dy / dist) * force;
         // 标记禁止融合
@@ -311,7 +311,7 @@ class GravityWellWeapon extends Weapon {
       hp: -negaHp,
       width: 30 * sizeMult,
       height: 20 * sizeMult,
-      birthTime: Date.now(),
+      birthTime: ctx.elapsedMs,
       lifetime: lifetime,
       sizeMult: sizeMult,
       flashTimer: 0,
@@ -321,7 +321,7 @@ class GravityWellWeapon extends Weapon {
 
   _updateNegaBricks(dt, ctx, annihilateLv, darkMatterLv) {
     var bricks = ctx.bricks || [];
-    var now = Date.now();
+    var now = ctx.elapsedMs;
 
     for (var i = this.negaBricks.length - 1; i >= 0; i--) {
       var nb = this.negaBricks[i];

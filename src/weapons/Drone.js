@@ -275,7 +275,7 @@ class DroneWeapon extends Weapon {
       const by = ctx.boss.getCenterY();
       const spread = 50 + (this.branches.deploy || 0) * 25;
       for (let i = 0; i < this.drones.length; i++) {
-        const angle = (Math.PI * 2 / this.drones.length) * i + Date.now() * 0.0005;
+        const angle = (Math.PI * 2 / this.drones.length) * i + ctx.elapsedMs * 0.0005;
         this.drones[i].tx = bx + Math.cos(angle) * spread;
         this.drones[i].ty = by + Math.sin(angle) * spread;
         this.drones[i].targetBrick = null;

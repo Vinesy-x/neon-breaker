@@ -242,7 +242,7 @@ class FrostStormWeapon extends Weapon {
       pulseTimer: 0,
       auraTimer: 0,
       ambientTimer: 0,
-      birthTime: Date.now(),
+      birthTime: ctx.elapsedMs,
     });
 
     // 生成特效
@@ -425,7 +425,7 @@ class FrostStormWeapon extends Weapon {
 
       if (overlapX > 0 && overlapY > 0) {
         var cdKey = '_wallCD_' + (wall.birthTime || 0);
-        var now = Date.now();
+        var now = ctx.elapsedMs;
         if (brick[cdKey] && now - brick[cdKey] < COOLDOWN_MS) continue;
         brick[cdKey] = now;
 
@@ -489,7 +489,7 @@ class FrostStormWeapon extends Weapon {
       var ox = (halfW + bossW * 0.5) - Math.abs(bx - wall.x);
       var oy = (WALL_HEIGHT * 0.5 + bossH * 0.5) - Math.abs(by - wall.y);
       if (ox > 0 && oy > 0) {
-        var now = Date.now();
+        var now = ctx.elapsedMs;
         var bossKey = '_wallCD_' + (wall.birthTime || 0);
         if (!ctx.boss[bossKey] || now - ctx.boss[bossKey] >= COOLDOWN_MS) {
           ctx.boss[bossKey] = now;
