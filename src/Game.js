@@ -585,14 +585,11 @@ class Game {
   // ===== 渲染 =====
 
   render() {
-    if (this._sandboxMode) return;
-
-    // 高倍速下跳帧渲染，减少性能开销
+    // 高倍速/沙盒模式下跳帧渲染（保留视觉反馈）
     var ts = Math.floor(this._devTimeScale || 1);
-    if (ts > 2) {
+    if (ts > 2 || this._sandboxMode) {
       this._renderSkip = (this._renderSkip || 0) + 1;
-      // ts=3~4跳1帧，5~6跳2帧，最高跳5帧（即保证至少10fps左右的视觉刷新）
-      var skipFrames = Math.min(5, Math.floor(ts / 2));
+      var skipFrames = this._sandboxMode ? 8 : Math.min(5, Math.floor(ts / 2));
       if (this._renderSkip % skipFrames !== 0) return;
     }
 
