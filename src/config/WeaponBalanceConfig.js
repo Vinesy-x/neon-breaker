@@ -52,7 +52,7 @@ module.exports = {
 
   // ===== 穿甲弹 =====
   missile: {
-    basePct: 4.5,
+    basePct: 2.8,
     interval: 4500,
     damageType: 'physical',
     branchDmgScale: 0.5,
@@ -160,7 +160,7 @@ module.exports = {
 
   // ===== 白磷弹 =====
   blizzard: {
-    basePct: 4.5,
+    basePct: 2.8,
     interval: 8000,
     damageType: 'fire',
     branchDmgScale: 0.5,
