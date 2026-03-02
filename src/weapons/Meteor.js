@@ -103,7 +103,7 @@ class MeteorWeapon extends Weapon {
         var isNuke = false;
         var nukeDmg = b.damage, nukeRadius = b.radius;
         if (ctx.saveManager && ctx.saveManager.hasWeaponPassive('meteor', 'nuke') && b.isLast) {
-          isNuke = true; nukeDmg = b.damage * 5; nukeRadius = b.radius * 3;
+          isNuke = true; nukeDmg = b.damage * 2; nukeRadius = b.radius * 2;
         }
         this._explodeArea(b.x, b.targetY, isNuke ? nukeRadius : b.radius, isNuke ? nukeDmg : b.damage, ctx);
         this.explosions.push({ x: b.x, y: b.targetY, radius: b.radius * 0.6, alpha: 0.8, maxAlpha: 0.8 });
@@ -208,7 +208,7 @@ class MeteorWeapon extends Weapon {
     const bombsLv = this.branches.bombs || 0;
     // 基础投弹数由外部养成爽点控制
     var baseBombs = this.def.baseBombs;
-    var doubleMult = (ctx && ctx.saveManager && ctx.saveManager.hasWeaponPassive('meteor', 'doublePass')) ? 2 : 1;
+    var doubleMult = (ctx && ctx.saveManager && ctx.saveManager.hasWeaponPassive('meteor', 'doublePass')) ? 1.5 : 1;
     const totalBombs = Math.min((baseBombs + bombsLv * 2) * (b52Lv > 0 ? 2 : 1) * doubleMult, 30);
 
     // 轰炸机固定在目标行上方60px飞行

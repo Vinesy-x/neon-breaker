@@ -105,7 +105,7 @@ var WEAPON_SHOP = {
   },
   meteor: {
     name: '轰炸机',
-    sweetSpot: { type: 'cd', base: 12000, delta: -1500, unit: 'ms' },
+    sweetSpot: { type: 'cd', base: 12000, delta: -1000, unit: 'ms' },
     unlockBranches: {
       2:  'escort',      // 护航编队
       10: 'incendiary',  // 燃烧风暴
@@ -115,8 +115,8 @@ var WEAPON_SHOP = {
       6:  { key: 'fireBomb',    name: '燃烧弹', desc: '所有炸弹命中留火区2秒' },
       14: { key: 'napalmBelt',  name: '凝固汽油', desc: '火焰区域扩展为带状' },
       22: { key: 'scorchEarth', name: '焦土策略', desc: '火焰区域持续时间×3' },
-      26: { key: 'doublePass',  name: '双波次轰炸', desc: '每次出击轰炸机飞两遍' },
-      30: { key: 'nuke',        name: '核弹', desc: '最后1颗炸弹替换为核弹范围×3伤害×5' },
+      26: { key: 'doublePass',  name: '双波次轰炸', desc: '每次出击轰炸机飞1.5遍' },
+      30: { key: 'nuke',        name: '核弹', desc: '最后1颗炸弹替换为核弹范围×2伤害×2' },
     },
   },
   drone: {

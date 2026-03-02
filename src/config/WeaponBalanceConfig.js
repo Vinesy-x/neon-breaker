@@ -92,7 +92,7 @@ module.exports = {
 
   // ===== 轰炸机 =====
   meteor: {
-    basePct: 12.0,
+    basePct: 2.2,
     interval: 12000,
     damageType: 'fire',
     branchDmgScale: 0.5,
@@ -201,7 +201,7 @@ module.exports = {
 
   // ===== 奇点引擎 =====
   gravityWell: {
-    basePct: 12.0,
+    basePct: 2.2,
     interval: 14000,
     damageType: 'energy',
     branchDmgScale: 0.2,         // 引力强化每级+20%吸力
