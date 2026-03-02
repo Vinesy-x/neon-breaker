@@ -10,6 +10,7 @@ class LightningWeapon extends Weapon {
     super('lightning');
     this.bolts = [];
     this.explosions = [];
+    this._echoQueue = []; // 回响延迟队列 [{fireAt, depth}]
   }
 
   /** 闪电伤害 = baseAttack × basePct × (1 + damageLv × 0.5) */
@@ -33,6 +34,13 @@ class LightningWeapon extends Weapon {
         }
         // 全屏闪光效果
         this.bolts.push({ points: [{x:0,y:0},{x:ctx.gameWidth,y:ctx.gameHeight}], alpha: 2.0, isThor: true });
+      }
+    }
+    // 处理回响延迟队列（基于游戏时间而非真实时间）
+    for (var ei = this._echoQueue.length - 1; ei >= 0; ei--) {
+      if (ctx.elapsedMs >= this._echoQueue[ei].fireAt) {
+        var eq = this._echoQueue.splice(ei, 1)[0];
+        this._fire(ctx, eq.depth);
       }
     }
     const dt = dtMs / 16.67;
@@ -171,7 +179,7 @@ class LightningWeapon extends Weapon {
         }
         // 回响：概率再次释放
         if (echoLv > 0 && Math.random() < echoLv * 0.2) {
-          setTimeout(() => this._fire(ctx, echoDepth + 1), 150);
+          this._echoQueue.push({ fireAt: ctx.elapsedMs + 150, depth: echoDepth + 1 });
         }
       }
     }
