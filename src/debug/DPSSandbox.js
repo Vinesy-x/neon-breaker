@@ -123,20 +123,22 @@ class DPSSandbox {
         var treeDef = WeaponDefs[wk];
         if (!treeDef) continue;
 
-        // 基础分支（非shopGated）直接满
-        for (var bk in treeDef.branches) {
-          var bDef = treeDef.branches[bk];
-          if (!bDef.shopGated) {
-            weapon.branches[bk] = bDef.max || 1;
+        // 构建解锁等级映射：分支名 → 解锁所需shopLv
+        var shopDef = WSD.WEAPON_SHOP[wk];
+        var branchUnlockLv = {};  // 默认分支解锁等级=1
+        if (shopDef && shopDef.unlockBranches) {
+          for (var ulv in shopDef.unlockBranches) {
+            branchUnlockLv[shopDef.unlockBranches[ulv]] = parseInt(ulv);
           }
         }
-        // shopGated分支：检查 shopLv 是否已解锁
-        var unlockedBranches = WSD.getUnlockedBranches(wk, shopLv);
-        for (var j = 0; j < unlockedBranches.length; j++) {
-          var ubk = unlockedBranches[j];
-          var ubDef = treeDef.branches[ubk];
-          if (ubDef) {
-            weapon.branches[ubk] = ubDef.max || 1;
+        // 所有分支：shopLv >= 解锁等级则点满
+        for (var bk in treeDef.branches) {
+          var bDef = treeDef.branches[bk];
+          var reqLv = branchUnlockLv[bk] || 1;  // 无解锁等级=默认Lv1可用
+          if (shopLv >= reqLv) {
+            weapon.branches[bk] = bDef.max || 1;
+          } else {
+            weapon.branches[bk] = 0;
           }
         }
       }
@@ -194,6 +196,8 @@ class DPSSandbox {
       measureElapsed: 0,
       totalDamage: 0,
       damageBySource: {},
+      branchSnapshot: null,
+      branchTotalPts: 0,
       killCount: 0,
       buffEvents: { burn: 0, chill: 0, freeze: 0, shock: 0, arc: 0 },
       dpsSnapshots: [],
@@ -202,6 +206,14 @@ class DPSSandbox {
       stopReason: '',
       _totalElapsed: 0,
     };
+    // 记录分支快照（stats已初始化）
+    var wk2 = weaponFilter || Object.keys(g.upgrades.weapons)[0];
+    var w2 = g.upgrades.weapons[wk2];
+    if (w2) {
+      this.stats.branchSnapshot = Object.assign({}, w2.branches);
+      var tp2 = 0; for (var bk2 in w2.branches) tp2 += w2.branches[bk2];
+      this.stats.branchTotalPts = tp2;
+    }
     this.running = true;
     this._result = null;
 
@@ -495,10 +507,26 @@ class DPSSandbox {
       weaponDamage: weaponDamage,
       buffEvents: Object.assign({}, st.buffEvents),
       snapshots: st.dpsSnapshots,
+      branchDetail: { branches: st.branchSnapshot || {}, totalPts: st.branchTotalPts || 0, passives: this._getPassiveList(st) },
     };
   }
 
-  _classifyDamage(sources) {
+  _getPassiveList(st) {
+    var g = this.game;
+    if (!g || !g.saveManager) return [];
+    var wk = st.weapon;
+    var passives = [];
+    var pDef = WSD.WEAPON_SHOP[wk] && WSD.WEAPON_SHOP[wk].passives;
+    if (pDef) {
+      for (var lv in pDef) {
+        var pk = pDef[lv].key;
+        if (g.saveManager.hasWeaponPassive(wk, pk)) passives.push(pk + '@Lv' + lv);
+      }
+    }
+    return passives;
+  }
+
+    _classifyDamage(sources) {
     var map = {
       bullet: 'ship', fire_explosion: 'ship', ice_shatter: 'ship',
       kunai: 'kunai', kunai_aoe: 'kunai', kunai_chain: 'kunai', kunai_split: 'kunai',

@@ -114,7 +114,7 @@ module.exports = {
 
   // ===== 战术无人机 =====
   drone: {
-    basePct: 2.5,
+    basePct: 0.15,
     interval: 500,
     damageType: 'energy',
     branchDmgScale: 0.5,

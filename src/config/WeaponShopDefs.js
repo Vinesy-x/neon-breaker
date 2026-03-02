@@ -123,16 +123,16 @@ var WEAPON_SHOP = {
     name: '战术无人机',
     sweetSpot: { type: 'cd', base: 450, delta: -30, unit: 'ms' },
     unlockBranches: {
-      2:  'arc',    // 电弧
-      10: 'focus',  // 聚焦
+      2:  'overcharge', // 过载
+      10: 'superDrone', // 超级无人机
       18: 'pulse',  // 脉冲
     },
     passives: {
-      6:  { key: 'shield',      name: '能量护盾', desc: '每15秒给玩家1层护盾' },
-      14: { key: 'droneExtra',  name: '增援编队', desc: '额外+1台无人机' },
-      22: { key: 'crossfire',   name: '交叉火力', desc: '激光交叉点伤害+30%' },
+      6:  { key: 'shield',      name: '能量护盾', desc: '无人机数量不降低伤害' },
+      14: { key: 'focus',       name: '聚焦打击', desc: '血量<50%的砖块受到额外100%能量伤害' },
+      22: { key: 'crossfire',   name: '交叉火力', desc: '激光交叉点伤害+50%' },
       26: { key: 'matrixPlus',  name: '矩阵扩展', desc: '无人机上限+2台' },
-      30: { key: 'annihilate',  name: '歼灭模式', desc: '激光宽度×1.5' },
+      30: { key: 'annihilate',  name: '歼灭模式', desc: '无人机锁定最高血量砖块，周期性激光打击' },
     },
   },
   spinBlade: {

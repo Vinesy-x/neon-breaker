@@ -21,8 +21,7 @@ class DroneWeapon extends Weapon {
 
   _syncDrones(ctx) {
     var extraDrones = (ctx && ctx.saveManager && ctx.saveManager.hasWeaponPassive('drone', 'matrixPlus')) ? 2 : 0;
-    var droneExtraPassive = (ctx && ctx.saveManager && ctx.saveManager.hasWeaponPassive('drone', 'droneExtra')) ? 1 : 0;
-    const count = 2 + (this.branches.count || 0) + extraDrones + droneExtraPassive;
+    const count = 2 + (this.branches.count || 0) + extraDrones;
     while (this.drones.length < count) {
       this.drones.push({
         x: Config.SCREEN_WIDTH / 2 + (Math.random() - 0.5) * 60,
@@ -50,7 +49,7 @@ class DroneWeapon extends Weapon {
     this._syncDrones(ctx);
 
     const speedLv = 0; // speed分支已移除，机动由外部养成控制
-    const arcLv = this.branches.arc || 0;
+    const freqLv = this.branches.frequency || 0;
     const deployLv = this.branches.deploy || 0;
     const lcx = ctx.launcher.getCenterX();
     const lcy = ctx.launcher.y;
@@ -99,17 +98,23 @@ class DroneWeapon extends Weapon {
       var ss = ctx.saveManager.getWeaponSweetSpot('drone');
       if (ss !== null) tickInterval = Math.max(150, ss * 0.67); // 比例换算
     }
+    // frequency分支：每级缩减15%
+    if (freqLv > 0) tickInterval = Math.max(100, tickInterval * Math.pow(0.85, freqLv));
 
     if (this._tickTimer >= tickInterval) {
       this._tickTimer = 0;
       const baseAttack = ctx.getBaseAttack ? ctx.getBaseAttack() : 1;
       var rawDamage = this.getDamage(baseAttack, ctx);
-      const damage = rawDamage;
+      // 无人机数量衰减：每台×0.80，shield被动取消衰减
+      var droneCount = this.drones.length;
+      var hasShield = ctx && ctx.saveManager && ctx.saveManager.hasWeaponPassive('drone', 'shield');
+      var countMult = hasShield ? 1.0 : Math.pow(0.90, Math.max(0, droneCount - 2));
+      var superMult = 1 + (this.branches.superDrone || 0) * 0.5;
+      const damage = rawDamage * countMult * superMult;
       const widthLv = this.branches.width || 0;
-      var annihilateMult = (ctx.saveManager && ctx.saveManager.hasWeaponPassive('drone', 'annihilate')) ? 1.5 : 1;
-      const laserWidth = (10 + widthLv * 8) * annihilateMult;
+      const laserWidth = (10 + widthLv * 8);
       const overchargeLv = this.branches.overcharge || 0;
-      const focusLv = this.branches.focus || 0;
+      const superLv = this.branches.superDrone || 0;
       const pulseLv = this.branches.pulse || 0;
 
       const lines = this._getLaserLines();
@@ -123,8 +128,10 @@ class DroneWeapon extends Weapon {
           const dist = this._pointToLineDist(bc.x, bc.y, line.x1, line.y1, line.x2, line.y2);
           if (dist < laserWidth + brick.width * 0.3) {
             let dmg = damage;
-            if (focusLv > 0 && brick.hp <= 3) {
-              dmg = dmg * (1 + focusLv * 0.8);
+            // focus被动：血量<50%额外100%能量伤害
+            var hasFocus = ctx.saveManager && ctx.saveManager.hasWeaponPassive('drone', 'focus');
+            if (hasFocus && brick.hp < brick.maxHp * 0.5) {
+              dmg *= 2.0;
             }
             ctx.damageBrick(brick, dmg, 'drone_laser', 'energy');
             hitBricks.add(brick);
@@ -144,76 +151,34 @@ class DroneWeapon extends Weapon {
         }
       }
 
-      // === 电弧：激光线外随机弹射额外伤害 ===
-      if (arcLv > 0) {
-        const arcRange = 40 + arcLv * 25;
-        const arcDmg = damage * 0.6;
-        const arcsPerLine = arcLv;
-        const arcHit = new Set(); // 电弧自己的去重（砖块）
-
-        for (const line of lines) {
-          let lineHitBoss = false; // 每条线对Boss最多命中1次
-          for (let a = 0; a < arcsPerLine; a++) {
-            const t = Math.random();
-            const srcX = line.x1 + (line.x2 - line.x1) * t;
-            const srcY = line.y1 + (line.y2 - line.y1) * t;
-
-            // 找范围内最近的未被电弧打过的目标（砖块或Boss）
-            let best = null, bestDist = Infinity;
-            for (let j = 0; j < ctx.bricks.length; j++) {
-              const brick = ctx.bricks[j];
-              if (!brick.alive || arcHit.has(brick)) continue;
-              const bc = brick.getCenter();
-              const adist = Math.sqrt((bc.x - srcX) ** 2 + (bc.y - srcY) ** 2);
-              if (adist < arcRange && adist < bestDist) {
-                bestDist = adist;
-                best = { brick, x: bc.x, y: bc.y, isBoss: false };
-              }
-            }
-            // Boss也可以被电弧击中（每条线1次）
-            if (ctx.boss && ctx.boss.alive && !lineHitBoss) {
-              const bx = ctx.boss.getCenterX(), by = ctx.boss.getCenterY();
-              const bdist = Math.sqrt((bx - srcX) ** 2 + (by - srcY) ** 2);
-              if (bdist < arcRange && bdist < bestDist) {
-                bestDist = bdist;
-                best = { x: bx, y: by, isBoss: true };
-              }
-            }
-            if (best) {
-              if (best.isBoss) {
-                ctx.damageBoss(arcDmg, 'drone_arc');
-                lineHitBoss = true;
-              } else {
-                ctx.damageBrick(best.brick, arcDmg, 'drone_arc', 'energy');
-                arcHit.add(best.brick);
-              }
-              this.laserHits.push({
-                x: best.x, y: best.y, alpha: 0.8,
-                arcFrom: { x: srcX, y: srcY },
-              });
-            }
-          }
-        }
-      }
-
-      // === 过载：所有线交叉区域 ===
-      if (overchargeLv > 0 && this.drones.length >= 3) {
-        const cx = this.drones.reduce((s, d) => s + d.x, 0) / this.drones.length;
-        const cy = this.drones.reduce((s, d) => s + d.y, 0) / this.drones.length;
-        const overDmg = damage * (1 + 0.5 * overchargeLv);
-        const overRange = laserWidth * 3;
+      // === 过载：激光交汇点，每多1条线伤害+50%/+100% ===
+      if (overchargeLv > 0 && lines.length >= 2) {
+        var overPerLine = overchargeLv === 1 ? 0.3 : 0.6; // Lv1=+50%, Lv2=+100%
+        var crossMult = (ctx.saveManager && ctx.saveManager.hasWeaponPassive('drone', 'crossfire')) ? 3.0 : 1.0;
+        // 对每个砖块计算被多少条线命中
         for (let j = 0; j < ctx.bricks.length; j++) {
           const brick = ctx.bricks[j];
           if (!brick.alive) continue;
           const bc = brick.getCenter();
-          if (Math.abs(bc.x - cx) + Math.abs(bc.y - cy) < overRange) {
+          var lineHitCount = 0;
+          for (const line of lines) {
+            var dd = this._pointToLineDist(bc.x, bc.y, line.x1, line.y1, line.x2, line.y2);
+            if (dd < laserWidth + brick.width * 0.3) lineHitCount++;
+          }
+          if (lineHitCount >= 2) {
+            var overDmg = damage * (lineHitCount - 1) * overPerLine * crossMult;
             ctx.damageBrick(brick, overDmg, 'drone_cross', 'energy');
           }
         }
         // Boss过载判定
         if (ctx.boss && ctx.boss.alive) {
-          if (Math.abs(ctx.boss.getCenterX() - cx) + Math.abs(ctx.boss.getCenterY() - cy) < overRange) {
-            ctx.damageBoss(overDmg, 'drone_cross');
+          var bossHits = 0;
+          for (const line of lines) {
+            var bd = this._pointToLineDist(ctx.boss.getCenterX(), ctx.boss.getCenterY(), line.x1, line.y1, line.x2, line.y2);
+            if (bd < laserWidth + ctx.boss.width * 0.3) bossHits++;
+          }
+          if (bossHits >= 2) {
+            ctx.damageBoss(damage * (bossHits - 1) * overPerLine * crossMult, 'drone_cross');
           }
         }
       }
@@ -221,12 +186,12 @@ class DroneWeapon extends Weapon {
       // === 脉冲 ===
       if (pulseLv > 0) {
         this._pulseTimer += tickInterval;
-        if (this._pulseTimer >= 4000) {
+        if (this._pulseTimer >= 2000) {
           this._pulseTimer = 0;
           const cx = this.drones.reduce((s, d) => s + d.x, 0) / this.drones.length;
           const cy = this.drones.reduce((s, d) => s + d.y, 0) / this.drones.length;
           const pulseRange = 120 + this.drones.length * 20;
-          const pulseDmg = damage * 4;
+          const pulseDmg = damage * 12;
           for (let j = 0; j < ctx.bricks.length; j++) {
             const brick = ctx.bricks[j];
             if (!brick.alive) continue;
@@ -244,6 +209,34 @@ class DroneWeapon extends Weapon {
             }
           }
           this._pulseWave = { x: cx, y: cy, maxR: pulseRange, progress: 0 };
+        }
+      }
+
+      // === 歼灭模式被动：锁定最高血量砖，每2秒集中打击 ===
+      var hasAnnihilate = ctx.saveManager && ctx.saveManager.hasWeaponPassive('drone', 'annihilate');
+      if (hasAnnihilate) {
+        this._annihilateTimer = (this._annihilateTimer || 0) + tickInterval;
+        if (this._annihilateTimer >= 1000) {
+          this._annihilateTimer = 0;
+          var maxHpBrick = null, maxHp = 0;
+          for (let j = 0; j < ctx.bricks.length; j++) {
+            var ab = ctx.bricks[j];
+            if (ab.alive && ab.hp > maxHp) { maxHp = ab.hp; maxHpBrick = ab; }
+          }
+          if (maxHpBrick) {
+            var annDmg = damage * this.drones.length * 10;
+            var annBC = maxHpBrick.getCenter();
+            // AOE: 50px范围内所有砖
+            for (let aj = 0; aj < ctx.bricks.length; aj++) {
+              var atgt = ctx.bricks[aj];
+              if (!atgt.alive) continue;
+              var ac = atgt.getCenter();
+              var adx = ac.x - annBC.x, ady = ac.y - annBC.y;
+              if (Math.sqrt(adx*adx + ady*ady) < 50) {
+                ctx.damageBrick(atgt, annDmg, 'drone_annihilate', 'energy');
+              }
+            }
+          }
         }
       }
     }
