@@ -302,6 +302,26 @@ class SpinBlade extends Weapon {
   getWingData(lcx, lcy) {
     return { type: 'spinBlade', color: this.def.color, x: lcx, y: lcy };
   }
+
+  getCdRatio() {
+    if (this.blades.length > 0) return 0;
+    if (!this.isOnCooldown) return 0;
+    return Math.max(0, 1 - this.cooldownTimer / this.def.interval);
+  }
+
+  getActiveRatio() {
+    if (this.blades.length === 0) return 0;
+    var best = 0;
+    for (var i = 0; i < this.blades.length; i++) {
+      var b = this.blades[i];
+      if (b.life > 0 && b.maxLife > 0) {
+        var r = b.life / b.maxLife;
+        if (r > best) best = r;
+      }
+    }
+    return best;
+  }
+
 }
 
 module.exports = SpinBlade;

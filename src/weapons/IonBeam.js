@@ -12,7 +12,7 @@ class IonBeamWeapon extends Weapon {
   constructor() {
     super('ionBeam');
     this.beam = null;
-    this.chargeTimer = 0;
+    this.chargeTimer = 99999;
     this.firingTimer = 0;
     this.isFiring = false;
     this.burstReady = false;
@@ -554,6 +554,13 @@ class IonBeamWeapon extends Weapon {
 
   getWingData(lcx, lcy) {
     return { type: 'ionBeam', color: this.def.color, x: lcx, y: lcy };
+  }
+
+
+  getCdRatio() {
+    if (this.isFiring) return 0; // 正在射击，无冷却
+    var interval = this.def.interval;
+    return Math.max(0, 1 - this.chargeTimer / interval);
   }
 
   getActiveRatio() {

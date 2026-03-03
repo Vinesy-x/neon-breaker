@@ -225,27 +225,25 @@ function drawWeaponHUD(ctx, sprites, weaponList) {
     ctx.strokeStyle = w.color; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.roundRect(startX - 2, y - 2, iconSize + 4, iconSize + 4, 6); ctx.stroke();
 
-    // 持续时间发光边框（activeRatio > 0 时）
+    // 持续时间发光边框（activeRatio > 0 时）— 双层发光
     if (w.activeRatio > 0) {
-      var glowAlpha = 0.3 + 0.5 * w.activeRatio;
-      ctx.strokeStyle = w.color;
-      ctx.lineWidth = 2.5;
-      ctx.globalAlpha = glowAlpha;
-      // 发光长度 = 周长 × activeRatio（顺时针缩短）
       var boxW = iconSize + 4, boxH = iconSize + 4, bx = startX - 2, by = y - 2;
       var perim = 2 * (boxW + boxH);
       var glowLen = perim * w.activeRatio;
-      ctx.beginPath();
-      // 从顶部中点开始顺时针画
       var halfTop = boxW / 2;
-      // 用 setLineDash 模拟部分边框
+      // 外层光晕（宽+半透明）
+      ctx.strokeStyle = w.color;
+      ctx.lineWidth = 5;
+      ctx.globalAlpha = 0.3 * w.activeRatio;
       ctx.setLineDash([glowLen, perim]);
-      ctx.lineDashOffset = -halfTop; // 起点偏移到顶部中心
-      ctx.roundRect(bx, by, boxW, boxH, 6);
-      ctx.stroke();
+      ctx.lineDashOffset = -halfTop;
+      ctx.beginPath(); ctx.roundRect(bx - 1, by - 1, boxW + 2, boxH + 2, 7); ctx.stroke();
+      // 内层亮线（细+高亮）
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.6 + 0.4 * w.activeRatio;
+      ctx.beginPath(); ctx.roundRect(bx, by, boxW, boxH, 6); ctx.stroke();
       ctx.setLineDash([]);
       ctx.globalAlpha = 1;
-      ctx.lineWidth = 1.5;
     }
 
     // 冷却遮罩 — 从底部向上覆盖(圆角矩形，clip实现)

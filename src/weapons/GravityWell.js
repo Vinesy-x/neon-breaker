@@ -523,6 +523,14 @@ class GravityWellWeapon extends Weapon {
     };
   }
 
+
+  getCdRatio() {
+    if (this.wells.length > 0) return 0;
+    var interval = this.def.interval;
+    if (interval <= 0) return 0;
+    return Math.max(0, this.cooldown / interval);
+  }
+
   getActiveRatio() {
     if (this.wells.length === 0) return 0;
     var best = 0;

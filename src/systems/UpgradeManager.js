@@ -260,7 +260,9 @@ class UpgradeManager {
       const w = this.weapons[key];
       const def = Config.WEAPON_TREES[key];
       var cdRatio = 0;
-      if (w.timer !== undefined && def.interval) {
+      if (typeof w.getCdRatio === 'function') {
+        cdRatio = w.getCdRatio();
+      } else if (w.timer !== undefined && def.interval) {
         cdRatio = Math.max(0, 1 - w.timer / def.interval);
       }
       var activeRatio = (typeof w.getActiveRatio === 'function') ? w.getActiveRatio() : 0;

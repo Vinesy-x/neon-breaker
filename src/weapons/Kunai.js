@@ -25,7 +25,7 @@ class Kunai extends Weapon {
 
     const interval = this._getInterval(ctx);
     if (this.timer >= interval) {
-      this.timer = 0;
+      this.timer = 99999;
       this._fire(ctx);
     }
 

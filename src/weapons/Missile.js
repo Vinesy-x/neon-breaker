@@ -25,7 +25,7 @@ class MissileWeapon extends Weapon {
 
     // 触发发射
     if (this.timer >= interval) {
-      this.timer = 0;
+      this.timer = 99999;
       this._fire(ctx);
     }
 
