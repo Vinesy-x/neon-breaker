@@ -606,7 +606,7 @@ class Game {
       case Config.STATE.PAUSED: this._renderGame(); this.renderer.drawPauseDialog(); break;
       case Config.STATE.LEVEL_UP:
         this._renderGame();
-        this.renderer.drawSkillChoice(this.pendingSkillChoices, this.upgrades, '⬆ LEVEL ' + this.expSystem.playerLevel, this);
+        this.renderer.drawSkillChoice(this.pendingSkillChoices, this.upgrades, 'LEVEL ' + this.expSystem.playerLevel, this);
         break;
       case Config.STATE.SKILL_CHOICE:
         this._renderGame();

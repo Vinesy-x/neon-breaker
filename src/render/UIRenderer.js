@@ -118,15 +118,23 @@ function _drawTextWrap(ctx, text, cx, y, maxW, lineH) {
 }
 
 function _drawLevelDots(ctx, cx, y, curLv, maxLv, color) {
-  const dotSize = 9, dotGap = 5;
-  const totalW = maxLv * dotSize + (maxLv - 1) * dotGap;
-  const startX = cx - totalW / 2;
-  for (let i = 0; i < maxLv; i++) {
-    const dx = startX + i * (dotSize + dotGap);
-    if (i < curLv) ctx.fillStyle = color;
-    else if (i === curLv) ctx.fillStyle = 'rgba(255,255,255,' + (0.4 + Math.sin(Date.now() * 0.008) * 0.4) + ')';
-    else ctx.fillStyle = 'rgba(255,255,255,0.15)';
-    ctx.fillRect(dx, y - dotSize / 2, dotSize, dotSize);
+  const dotSize = 9, dotGap = 5, maxPerRow = 5;
+  const rowCount = Math.ceil(maxLv / maxPerRow);
+  const rowH = dotSize + 4;
+  for (let row = 0; row < rowCount; row++) {
+    const rowStart = row * maxPerRow;
+    const rowEnd = Math.min(rowStart + maxPerRow, maxLv);
+    const rowLen = rowEnd - rowStart;
+    const totalW = rowLen * dotSize + (rowLen - 1) * dotGap;
+    const startX = cx - totalW / 2;
+    const rowY = y - (rowCount - 1) * rowH / 2 + row * rowH;
+    for (let i = rowStart; i < rowEnd; i++) {
+      const dx = startX + (i - rowStart) * (dotSize + dotGap);
+      if (i < curLv) ctx.fillStyle = color;
+      else if (i === curLv) ctx.fillStyle = 'rgba(255,255,255,' + (0.4 + Math.sin(Date.now() * 0.008) * 0.4) + ')';
+      else ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      ctx.fillRect(dx, rowY - dotSize / 2, dotSize, dotSize);
+    }
   }
 }
 
