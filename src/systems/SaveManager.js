@@ -12,6 +12,7 @@ var _cloudSaving = false;    // 防并发
 var _justReset = false;      // 重置标记，跳过云端恢复
 
 const UPGRADE_CONFIG = require('../config/UpgradeConfig');
+const ShopDefs = require('../config/WeaponShopDefs');
 
 const DEFAULT_SAVE = {
   maxChapter: 1,
@@ -281,7 +282,6 @@ class SaveManager {
   /** 飞机射击CD(ms)：爽点直接给CD值，永久升级和被动再缩短 */
   getFireRateBonus() {
     // 旧接口保持兼容，返回的是减CD百分比(0~1)
-    var ShopDefs = require('../config/WeaponShopDefs');
     var shipLevel = this.getWeaponLevel('ship');
     var ssCD = ShopDefs.getSweetSpotValue('ship', shipLevel); // CD型：800,-80/5级
     if (ssCD === null) ssCD = 800;
@@ -364,7 +364,6 @@ class SaveManager {
 
   /** 全局暴击伤害加成（递进曲线，单武器满级+100%，11个全满+1100%） */
   getWeaponCritDamageBonus() {
-    var ShopDefs = require('../config/WeaponShopDefs');
     var total = 0;
     for (var k in this._data.weaponLevels) {
       total += ShopDefs.getTotalCritBonus(this._data.weaponLevels[k]);
@@ -374,7 +373,6 @@ class SaveManager {
 
   /** 获取武器在某商店等级解锁的战斗分支列表（新系统） */
   static getWeaponUnlocks(weaponKey) {
-    var ShopDefs = require('../config/WeaponShopDefs');
     var def = ShopDefs.WEAPON_SHOP[weaponKey];
     if (!def) return [];
     var unlocks = [];
@@ -388,26 +386,22 @@ class SaveManager {
 
   /** 获取武器伤害倍率（基于商店等级） */
   getWeaponDmgMultiplier(key) {
-    var ShopDefs = require('../config/WeaponShopDefs');
     return ShopDefs.getDmgMultiplier(this.getWeaponLevel(key));
   }
 
   /** 获取武器爽点属性值（基于商店等级） */
   getWeaponSweetSpot(key) {
-    var ShopDefs = require('../config/WeaponShopDefs');
     return ShopDefs.getSweetSpotValue(key, this.getWeaponLevel(key));
   }
 
   /** 检查武器某被动是否已解锁 */
   hasWeaponPassive(weaponKey, passiveKey) {
-    var ShopDefs = require('../config/WeaponShopDefs');
     var unlocked = ShopDefs.getUnlockedPassives(weaponKey, this.getWeaponLevel(weaponKey));
     return unlocked.indexOf(passiveKey) >= 0;
   }
 
   /** 检查武器某战斗分支是否已解锁 */
   isWeaponBranchUnlocked(weaponKey, branchKey) {
-    var ShopDefs = require('../config/WeaponShopDefs');
     return ShopDefs.isBranchUnlocked(weaponKey, branchKey, this.getWeaponLevel(weaponKey));
   }
 

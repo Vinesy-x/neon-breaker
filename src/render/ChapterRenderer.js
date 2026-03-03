@@ -4,6 +4,11 @@
  */
 const Config = require('../Config');
 const { getIconLoader } = require('./IconLoader');
+const WEAPON_TREES = require('../config/WeaponDefs');
+const SHIP_TREE = require('../config/ShipDefs');
+const WeaponUnlockConfig = require('../config/WeaponUnlockConfig');
+const ShopDefs = require('../config/WeaponShopDefs');
+const SaveManagerClass = require('../systems/SaveManager');
 
 class ChapterRenderer {
   constructor() {
@@ -65,7 +70,6 @@ class ChapterRenderer {
   // ===== 章节选择 =====
   drawChapterSelect(ctx, maxChapter, records, coins) {
     const sw = Config.SCREEN_WIDTH, sh = Config.SCREEN_HEIGHT, top = Config.SAFE_TOP;
-    const WEAPON_TREES = require('../config/WeaponDefs');
     const weaponUnlocks = { 3:'missile', 6:'meteor', 10:'drone', 15:'spinBlade', 25:'blizzard', 40:'ionBeam', 55:'frostStorm' };
     const now = Date.now();
 
@@ -282,7 +286,6 @@ class ChapterRenderer {
     ];
 
     this._shopUpgradeAreas = [];
-    var SaveManagerClass = require('../systems/SaveManager');
     var now = Date.now();
 
     for (var i = 0; i < layouts.length; i++) {
@@ -371,12 +374,8 @@ class ChapterRenderer {
 
   // ===== 武器商店 =====
   drawWeaponShop(ctx, saveManager) {
-    const WeaponUnlockConfig = require('../config/WeaponUnlockConfig');
 
     const sw = Config.SCREEN_WIDTH, sh = Config.SCREEN_HEIGHT, top = Config.SAFE_TOP;
-    const WEAPON_TREES = require('../config/WeaponDefs');
-    const SHIP_TREE = require('../config/ShipDefs');
-    const SaveManagerClass = require('../systems/SaveManager');
     this._weaponHitAreas = [];
     ctx.fillStyle = 'rgba(0,0,0,0.95)'; ctx.fillRect(0, 0, sw, sh);
     this._drawBg(ctx, sw, sh, 0.55, this._weaponBg);
@@ -400,9 +399,8 @@ class ChapterRenderer {
 
     // 构建武器列表（飞机 + 武器，按解锁章节排序）
     const allItems = [{ key: 'ship', iconKey: 'tab_upgrade', name: '战斗飞机', color: '#00DDFF', isShip: true }];
-    var WUC = require('../config/WeaponUnlockConfig');
     var weaponKeys = Object.keys(WEAPON_TREES);
-    weaponKeys.sort(function(a, b) { return (WUC[a] && WUC[a].unlockChapter || 99) - (WUC[b] && WUC[b].unlockChapter || 99); });
+    weaponKeys.sort(function(a, b) { return (WeaponUnlockConfig[a] && WeaponUnlockConfig[a].unlockChapter || 99) - (WeaponUnlockConfig[b] && WeaponUnlockConfig[b].unlockChapter || 99); });
     for (let i = 0; i < weaponKeys.length; i++) {
       const wk = weaponKeys[i], wDef = WEAPON_TREES[wk];
       allItems.push({ key: wk, iconKey: 'weapon_' + wk, name: wDef.name, color: wDef.color, isShip: false });
@@ -510,11 +508,7 @@ class ChapterRenderer {
   }
 
   _drawWeaponDetail(ctx, sw, sh, top, saveManager, weaponKey) {
-    const WeaponUnlockConfig2 = require('../config/WeaponUnlockConfig');
-    const WEAPON_TREES = require('../config/WeaponDefs'), SaveManagerClass = require('../systems/SaveManager');
-    const SHIP_TREE = require('../config/ShipDefs');
     // 飞机视为特殊武器
-    const ShopDefs = require('../config/WeaponShopDefs');
     const isShip = weaponKey === 'ship';
     const wDef = isShip
       ? { name: '战斗飞机', desc: '你的主力战机，发射子弹消灭砖块', color: '#00DDFF', basePct: 1.0, interval: 400, branches: SHIP_TREE }
