@@ -681,12 +681,12 @@ class ChapterRenderer {
         for (const slv in shopDef.unlockBranches) {
           const bk = shopDef.unlockBranches[slv];
           const bDef = wDef.branches[bk];
-          milestones.push({ level: parseInt(slv), type: 'option', label: '🎰 选项', desc: '解锁: ' + (bDef ? bDef.name : bk) });
+          milestones.push({ level: parseInt(slv), type: 'option', label: '选项', desc: '解锁: ' + (bDef ? bDef.name : bk) });
         }
         // 被动解锁（6/14/22/26/30）
         for (const plv in shopDef.passives) {
           const p = shopDef.passives[plv];
-          milestones.push({ level: parseInt(plv), type: 'passive', label: '🌟 被动', desc: p.name + ': ' + p.desc });
+          milestones.push({ level: parseInt(plv), type: 'passive', label: '被动', desc: p.name + ': ' + p.desc });
         }
         milestones.sort(function(a, b) { return a.level - b.level; });
 

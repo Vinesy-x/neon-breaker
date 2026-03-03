@@ -443,7 +443,7 @@ function drawSkillChoice(ctx, sprites, choices, upgrades, title, game) {
       // 文字
       ctx.fillStyle = isFree ? '#00FF88' : '#FFCC00';
       ctx.font = 'bold 13px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      var label = isFree ? '🔄 免费刷新' : '🎬 看广告刷新 (' + (maxAd - adUsed) + ')';
+      var label = isFree ? '免费刷新' : '看广告刷新 (' + (maxAd - adUsed) + ')';
       ctx.fillText(label, cx, btnY + btnH / 2);
       _refreshBtnArea = { x: btnX, y: btnY, w: btnW, h: btnH, needAd: !isFree };
     }
@@ -489,7 +489,7 @@ function drawBossWarning(ctx, bossType) {
   const flash = Math.sin(Date.now() * 0.01) > 0 ? 0.6 : 0.3;
   ctx.fillStyle = 'rgba(255,0,0,' + (flash * 0.15) + ')'; ctx.fillRect(0, 0, sw, sh);
   ctx.fillStyle = 'rgba(255,50,50,' + flash + ')'; ctx.font = 'bold 28px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText('⚠ WARNING ⚠', cx, sh * 0.4);
+  ctx.fillText('WARNING', cx, sh * 0.4);
   const bossNames = { charger:'冲锋者', guardian:'护盾卫士', summoner:'召唤师', laser:'激光炮台', phantom:'幽影刺客' };
   const bossIcons = { charger:'🔴', guardian:'🔵', summoner:'🟣', laser:'🟡', phantom:'⚪' };
   ctx.fillStyle = '#FFFFFF'; ctx.globalAlpha = flash; ctx.font = 'bold 16px monospace';

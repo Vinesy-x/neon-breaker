@@ -40,7 +40,11 @@ function drawChapterHUD(ctx, chapter, score, combo, playerLevel, elapsedMs, soun
   // 音效
   ctx.fillStyle = soundEnabled ? 'rgba(255,255,255,0.5)' : 'rgba(255,50,50,0.5)';
   ctx.font = '14px monospace'; ctx.textAlign = 'left';
-  ctx.fillText(soundEnabled ? '♪' : '♪̶', 10, Config.SCREEN_HEIGHT - Config.SAFE_BOTTOM - 48);
+  var IL = getIconLoader();
+  var sndKey = soundEnabled ? 'ui_sound_on' : 'ui_sound_off';
+  if (!IL.drawIcon(ctx, sndKey, 10 + 7, Config.SCREEN_HEIGHT - Config.SAFE_BOTTOM - 48, 14)) {
+    ctx.fillText(soundEnabled ? '♪' : '♪̶', 10, Config.SCREEN_HEIGHT - Config.SAFE_BOTTOM - 48);
+  }
 
   // 速度按钮（统计按钮上方）
   var ts = timeScale || 1;
@@ -101,7 +105,10 @@ function drawDamageStats(ctx, stats, expanded) {
   ctx.beginPath(); ctx.arc(px + btnW / 2, py + btnH / 2, btnW / 2, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = totalDmg > 0 ? '#FF6666' : 'rgba(255,255,255,0.3)';
   ctx.font = '14px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText('📊', px + btnW / 2, py + btnH / 2);
+  var IL2 = getIconLoader();
+  if (!IL2.drawIcon(ctx, 'ui_stats', px + btnW / 2, py + btnH / 2, 16)) {
+    ctx.fillText('📊', px + btnW / 2, py + btnH / 2);
+  }
 
   const hitArea = { x: px, y: py, w: btnW, h: btnH };
   if (!expanded || totalDmg === 0) return hitArea;
