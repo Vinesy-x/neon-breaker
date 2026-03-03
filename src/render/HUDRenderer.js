@@ -211,7 +211,7 @@ function drawDangerLine(ctx, dangerY) {
 
 function drawWeaponHUD(ctx, sprites, weaponList) {
   if (!weaponList || weaponList.length === 0) return;
-  const iconSize = 40, gap = 4;
+  const iconSize = 36, gap = 4;
   const startX = Config.SCREEN_WIDTH - iconSize - 6;
   const startY = Config.SAFE_TOP + 36;
   for (let i = 0; i < weaponList.length; i++) {
@@ -225,15 +225,12 @@ function drawWeaponHUD(ctx, sprites, weaponList) {
     ctx.strokeStyle = w.color; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.roundRect(startX - 2, y - 2, iconSize + 4, iconSize + 4, 6); ctx.stroke();
 
-    // 冷却遮罩 (如果有cdRatio)
+    // 冷却遮罩 — 从底部向上覆盖(矩形)
     if (w.cdRatio !== undefined && w.cdRatio > 0 && w.cdRatio < 1) {
+      var maskH = (iconSize + 4) * w.cdRatio;
       ctx.fillStyle = 'rgba(0,0,0,0.55)';
       ctx.beginPath();
-      ctx.moveTo(cx, cy);
-      var startAngle = -Math.PI / 2;
-      var endAngle = startAngle + Math.PI * 2 * w.cdRatio;
-      ctx.arc(cx, cy, iconSize / 2 + 2, startAngle, endAngle);
-      ctx.closePath();
+      ctx.roundRect(startX - 2, y - 2 + (iconSize + 4 - maskH), iconSize + 4, maskH, [0, 0, 6, 6]);
       ctx.fill();
     }
 
