@@ -45,7 +45,7 @@ class PhantomBoss extends BossBase {
   }
   _spawnAppearBricks() {
     var y = this.y + this.height + 5;
-    var phase = { types: this.cycle >= 2 ? ['split'] : ['fast'], timeCurve: [1.5, 2.0], spawnMult: 1.0 };
+    var phase = { types: this.cycle >= 2 ? ['split'] : ['fast'], phaseMult: 1.75, spawnMult: 1.0 };
     var config = { baseHP: 1, chapterScale: this.hpMult * 0.5, gapChance: 0.3 };
     this._spawnedBricks = this._spawnedBricks.concat(BrickFactory.generateRow(this.gameAreaWidth, y, phase, config));
   }

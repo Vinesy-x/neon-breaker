@@ -33,8 +33,8 @@ class SummonerBoss extends BossBase {
   }
   _summonBricks() {
     var y = this.y + this.height + 10;
-    var phase = { types: ['normal'], timeCurve: [2.0, 3.0], spawnMult: 1.0 };
-    if (this.cycle >= 2) { phase.types = ['normal', 'fast', 'shield']; phase.timeCurve = [3.0, 4.0]; }
+    var phase = { types: ['normal'], phaseMult: 2.5, spawnMult: 1.0 };
+    if (this.cycle >= 2) { phase.types = ['normal', 'fast', 'shield']; phase.phaseMult = 3.5; }
     var config = { baseHP: 1 + this.cycle * 0.5, chapterScale: this.hpMult, gapChance: 0.2 };
     this._spawnedBricks = this._spawnedBricks.concat(BrickFactory.generateRow(this.gameAreaWidth, y, phase, config));
     if (this.cycle >= 3) { var y2 = y - Config.BRICK_HEIGHT - Config.BRICK_PADDING; this._spawnedBricks = this._spawnedBricks.concat(BrickFactory.generateRow(this.gameAreaWidth, y2, phase, config)); }

@@ -565,7 +565,7 @@ class Game {
     this.boss = createBoss(bossType, chapter, this.gameWidth);
     this.bossTriggered = true;
     this.bossWarningTimer = 0;
-    this.currentPhase = { phase: 'boss', spawnMult: 0, types: [], timeCurve: [0, 0], scrollAccel: 0 };
+    this.currentPhase = { phase: 'boss', spawnMult: 0, types: [], phaseMult: 0, scrollAccel: 0 };
     Sound.bossAppear();
   }
 

@@ -11,7 +11,12 @@ const PhantomBoss = require('./bosses/PhantomBoss');
 
 function createBoss(type, chapter, gameAreaWidth) {
   var cycle = Math.floor((chapter - 1) / 5);
-  var hpMult = 1.0 + (chapter - 1) * 0.12;
+  // Boss HP倍率 = 章节基准 × 章节缩放
+  // Boss baseHp(4800等) 设计为：满级玩家(25pts) 打 ~45秒
+  // 跨章节缩放只走 chapterScale
+  var ChapterConfig = require('./ChapterConfig');
+  var cfg = ChapterConfig.get(chapter);
+  var hpMult = cfg.baseHP * cfg.chapterScale;
   switch (type) {
     case 'charger':  return new ChargerBoss(hpMult, cycle, gameAreaWidth);
     case 'guardian':  return new GuardianBoss(hpMult, cycle, gameAreaWidth);

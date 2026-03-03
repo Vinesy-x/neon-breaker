@@ -1,6 +1,11 @@
 /**
- * ChapterConfig.js - 100章数值配置生成器
- * 所有章节共用相同的节奏曲线，差异在数值缩放
+ * ChapterConfig.js - 关卡数值配置
+ * 
+ * 核心设计：
+ * - 关卡内难度跨度 = 满分支倍率 ≈ 265x（25个技能点 × 1.25/点）
+ * - 所有关卡共用同一条节奏曲线，差异仅在章节基准HP（跨关卡成长）
+ * - 砖块有效HP = baseHP × chapterScale × phaseMult
+ * - phaseMult 从 1x 涨到 265x，匹配玩家 14级+11宝箱=25次升级的成长
  */
 
 class ChapterConfig {
@@ -9,28 +14,24 @@ class ChapterConfig {
    * @param {number} chapter - 章节号 (1~100)
    */
   static get(chapter) {
-    // ===== 四层正交数值公式 =====
-    // 最终HP = ceil( baseHP × timeCurve × typeMult × formationMult )
-    //
-    // 第一层：章节基准HP（难度跨度×2）
-    // 第一层：章节基准HP（平缓增长，前期差距小）
-    var baseHP = 1 + (chapter - 1) * 0.3;  // ch1=1, ch2=1.3, ch5=2.2, ch10=3.7, ch50=15.7, ch100=30.7
-    // 章节缩放（额外乘数，拉开高章节差距）
-    var chapterScale = 1.0 + (chapter - 1) * 0.04;  // ch1=1.0, ch2=1.04, ch10=1.36, ch50=2.96, ch100=4.96
+    // 章节基准HP：跨关卡的商店养成差异
+    var baseHP = 1 + (chapter - 1) * 0.3;
+    var chapterScale = 1.0 + (chapter - 1) * 0.04;
 
     return {
       chapter: chapter,
-
-      // ===== 第一层：章节难度（跨度×2） =====
       baseHP: baseHP,
       chapterScale: chapterScale,
-      scrollSpeed: Math.min(0.4, 0.12 + (chapter - 1) * 0.004),  // ch100=0.4 (降速：起步0.12, 上限0.4)
-      spawnInterval: Math.max(1000, 2500 - (chapter - 1) * 18),  // ch100=1000 (降频：起步2500, 下限1000)
-      gapChance: Math.max(0.02, 0.12 - (chapter - 1) * 0.0015),  // ch100=0.02
 
-      // Boss（跨度×2）
+      // 关卡内固定参数
+      scrollSpeed: Math.min(0.4, 0.12 + (chapter - 1) * 0.004),
+      spawnInterval: Math.max(1000, 2500 - (chapter - 1) * 18),
+      gapChance: Math.max(0.02, 0.12 - (chapter - 1) * 0.0015),
+
+      // Boss：HP = baseHP × chapterScale × bossMultiplier
+      // bossMultiplier 设计为"满级玩家DPS × 45秒击杀时间"等效
       bossType: ['charger', 'guardian', 'summoner', 'laser', 'phantom'][(chapter - 1) % 5],
-      bossHpMultiplier: 1.0 + (chapter - 1) * 0.5,  // ch1=1.0, ch50=25.5, ch100=50.5
+      bossHpMultiplier: 265 * 45,  // ≈ 11925，即满级DPS打45秒
       bossCycle: Math.floor((chapter - 1) / 5),
 
       // 金币奖励
@@ -59,36 +60,58 @@ class ChapterConfig {
   }
 
   /**
-   * 难度节奏时间线
-   * 返回数组：[{ time, phase, intensity, timeCurve, spawnMult, scrollAccel, types }]
+   * 难度节奏时间线（所有关卡共用）
+   * 
+   * phaseMult = 1.25 ^ 等效技能点数
+   * 12分钟关卡 = 玩家从0级成长到25级的过程
+   * 
+   * 设计原则：
+   * - 难度曲线匹配玩家升级节奏
+   * - breather阶段回退到低于当前玩家等级，制造"变强感"
+   * - sprint阶段略超玩家等级，制造紧迫感
+   * - boss前回退，给玩家信心
    */
   static _getTimeline(chapter) {
-    // v7.0: 更陡峭的难度曲线，压缩时间+拉高数值
+    var n = 1.25;  // 每技能点倍率
+
     var phases = [
-      // === 12分钟关卡节奏 (720s) ===
-      { time: 0,      phase: 'warmup',    intensity: 0.3,  timeCurve: [0.5, 0.7],  spawnMult: 0.7,  types: ['normal'],
-        scrollAccel: 0.002 },
-      { time: 30000,  phase: 'wave1',     intensity: 0.5,  timeCurve: [0.7, 1.0],  spawnMult: 0.9,  types: ['normal', 'fast'],
-        scrollAccel: 0.003 },
-      { time: 80000,  phase: 'surge1',    intensity: 0.7,  timeCurve: [1.0, 1.5],  spawnMult: 1.0,  types: ['normal', 'fast', 'formation'],
-        scrollAccel: 0.003 },
-      { time: 130000, phase: 'breather1', intensity: 0.35, timeCurve: [0.8, 1.2],  spawnMult: 0.6,  types: ['normal'],
-        scrollAccel: 0 },
-      { time: 150000, phase: 'wave2',     intensity: 0.8,  timeCurve: [1.3, 2.0],  spawnMult: 1.1,  types: ['normal', 'fast', 'formation', 'shield', 'split'],
-        scrollAccel: 0.004 },
-      { time: 220000, phase: 'highpres',  intensity: 0.9,  timeCurve: [1.5, 2.5],  spawnMult: 1.2,  types: ['normal', 'fast', 'formation', 'shield', 'split'],
-        scrollAccel: 0.004 },
-      { time: 290000, phase: 'breather2', intensity: 0.35, timeCurve: [3.5, 4.5],  spawnMult: 0.5,  types: ['normal'],
-        scrollAccel: 0 },
-      { time: 320000, phase: 'wave3',     intensity: 0.9,  timeCurve: [1.0, 1.5],  spawnMult: 1.3,  types: ['normal', 'fast', 'formation', 'shield', 'split', 'stealth'],
-        scrollAccel: 0.005 },
-      { time: 400000, phase: 'sprint',    intensity: 1.0,  timeCurve: [2.5, 3.5],  spawnMult: 1.5,  types: ['normal', 'fast', 'formation', 'shield', 'split', 'stealth', 'healer'],
-        scrollAccel: 0.005 },
-      { time: 560000, phase: 'breather3', intensity: 0.3,  timeCurve: [1.0, 1.5],  spawnMult: 0.4,  types: ['normal'],
-        scrollAccel: 0 },
-      { time: 620000, phase: 'preBoss',   intensity: 0.1,  timeCurve: [2.0, 3.0],  spawnMult: 0.3,  types: ['normal'],
-        scrollAccel: 0 },
-      { time: 690000, phase: 'boss',      intensity: 0,    timeCurve: [0, 0],      spawnMult: 0,    types: [],
+      // 12分钟关卡节奏 (720s)
+      // phaseMult: 砖块HP倍率（相对warmup）
+      // 等效pts: 匹配玩家在该时间点大约获得的技能点数
+      { time: 0,      phase: 'warmup',    intensity: 0.3,  phaseMult: 1.0,                 spawnMult: 0.7,  types: ['normal'],
+        scrollAccel: 0.002 },                                                   // pts≈0
+
+      { time: 30000,  phase: 'wave1',     intensity: 0.5,  phaseMult: Math.pow(n, 5),      spawnMult: 0.9,  types: ['normal', 'fast'],
+        scrollAccel: 0.003 },                                                   // pts≈5, ×3.1
+
+      { time: 80000,  phase: 'surge1',    intensity: 0.7,  phaseMult: Math.pow(n, 9),      spawnMult: 1.0,  types: ['normal', 'fast', 'formation'],
+        scrollAccel: 0.003 },                                                   // pts≈9, ×7.5
+
+      { time: 130000, phase: 'breather1', intensity: 0.35, phaseMult: Math.pow(n, 7),      spawnMult: 0.6,  types: ['normal'],
+        scrollAccel: 0 },                                                       // pts≈7, ×4.8 (回退)
+
+      { time: 150000, phase: 'wave2',     intensity: 0.8,  phaseMult: Math.pow(n, 13),     spawnMult: 1.1,  types: ['normal', 'fast', 'formation', 'shield', 'split'],
+        scrollAccel: 0.004 },                                                   // pts≈13, ×18.2
+
+      { time: 220000, phase: 'highpres',  intensity: 0.9,  phaseMult: Math.pow(n, 17),     spawnMult: 1.2,  types: ['normal', 'fast', 'formation', 'shield', 'split'],
+        scrollAccel: 0.004 },                                                   // pts≈17, ×44.4
+
+      { time: 290000, phase: 'breather2', intensity: 0.35, phaseMult: Math.pow(n, 12),     spawnMult: 0.5,  types: ['normal'],
+        scrollAccel: 0 },                                                       // pts≈12, ×14.6 (回退)
+
+      { time: 320000, phase: 'wave3',     intensity: 0.9,  phaseMult: Math.pow(n, 20),     spawnMult: 1.3,  types: ['normal', 'fast', 'formation', 'shield', 'split', 'stealth'],
+        scrollAccel: 0.005 },                                                   // pts≈20, ×86.7
+
+      { time: 400000, phase: 'sprint',    intensity: 1.0,  phaseMult: Math.pow(n, 23),     spawnMult: 1.5,  types: ['normal', 'fast', 'formation', 'shield', 'split', 'stealth', 'healer'],
+        scrollAccel: 0.005 },                                                   // pts≈23, ×169.4
+
+      { time: 560000, phase: 'breather3', intensity: 0.3,  phaseMult: Math.pow(n, 18),     spawnMult: 0.4,  types: ['normal'],
+        scrollAccel: 0 },                                                       // pts≈18, ×55.5 (boss前放松)
+
+      { time: 620000, phase: 'preBoss',   intensity: 0.1,  phaseMult: Math.pow(n, 20),     spawnMult: 0.3,  types: ['normal'],
+        scrollAccel: 0 },                                                       // pts≈20, ×86.7
+
+      { time: 690000, phase: 'boss',      intensity: 0,    phaseMult: 0,                   spawnMult: 0,    types: [],
         scrollAccel: 0 },
     ];
 
@@ -99,7 +122,7 @@ class ChapterConfig {
         time: p.time,
         phase: p.phase,
         intensity: p.intensity,
-        timeCurve: p.timeCurve,
+        phaseMult: p.phaseMult,
         spawnMult: p.spawnMult,
         scrollAccel: p.scrollAccel || 0,
         types: p.types.filter(function(t) { return unlocked.indexOf(t) !== -1; }),
@@ -109,8 +132,6 @@ class ChapterConfig {
 
   /**
    * 获取当前时间点的阶段配置
-   * @param {number} chapter
-   * @param {number} elapsedMs - 章节内经过时间
    */
   static getPhaseAt(chapter, elapsedMs) {
     var timeline = ChapterConfig._getTimeline(chapter);

@@ -280,7 +280,7 @@ class DPSSandbox {
   _fillInitialBricks(rows) {
     var g = this.game;
     var Config = this.Config;
-    var phase = { types: ['normal'], timeCurve: [1.0, 1.0], spawnMult: 1 };
+    var phase = { types: ['normal'], phaseMult: 1.0, spawnMult: 1 };
     var chapterConfig = { baseHP: 1, chapterScale: 1, gapChance: 0.08 };
     for (var r = 0; r < rows; r++) {
       var y = Config.BRICK_TOP_OFFSET + r * (Config.BRICK_HEIGHT + Config.BRICK_PADDING);
@@ -315,7 +315,7 @@ class DPSSandbox {
   _spawnRow(hp) {
     var g = this.game;
     var Config = this.Config;
-    var phase = { types: ['normal', 'fast'], timeCurve: [hp, hp], spawnMult: 1 };
+    var phase = { types: ['normal', 'fast'], phaseMult: hp, spawnMult: 1 };
     var chapterConfig = { baseHP: 1, chapterScale: 1, gapChance: 0.08 };
     var y = Config.BRICK_TOP_OFFSET - Config.BRICK_HEIGHT - Config.BRICK_PADDING;
     g.bricks = g.bricks.concat(BrickFactory.generateRow(g.gameWidth, y, phase, chapterConfig));

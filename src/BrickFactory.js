@@ -51,7 +51,7 @@ class BrickFactory {
    * 根据当前阶段配置生成一行砖块
    * @param {number} gameAreaWidth
    * @param {number} y - 行的Y坐标
-   * @param {object} phase - 当前阶段 { types, timeCurve, spawnMult }
+   * @param {object} phase - 当前阶段 { types, phaseMult, spawnMult }
    * @param {object} chapterConfig - 章节配置 { baseHP, chapterScale, gapChance }
    * @returns {Brick[]}
    */
@@ -60,7 +60,7 @@ class BrickFactory {
 
     // 概率选择是否生成阵型
     if (phase.types.indexOf('formation') !== -1 && Math.random() < 0.15) {
-      var formHP = BrickFactory.calcHP(chapterConfig, phase.timeCurve, 'formation', true);
+      var formHP = BrickFactory.calcHP(chapterConfig, phase.phaseMult, 'formation', true);
       return BrickFactory.generateFormation(gameAreaWidth, y, null, formHP);
     }
 
@@ -86,7 +86,7 @@ class BrickFactory {
       var type = BrickFactory._pickType(availableTypes);
 
       // v6.2: 四层正交HP公式
-      var hp = BrickFactory.calcHP(chapterConfig, phase.timeCurve, type, false);
+      var hp = BrickFactory.calcHP(chapterConfig, phase.phaseMult, type, false);
 
       var color = BrickFactory._getColor(type, hp);
       var brick = new Brick(x, y, brickWidth, brickHeight, hp, color);
@@ -241,14 +241,12 @@ class BrickFactory {
 
   /**
    * v6.2 四层正交HP公式
-   * finalHP = ceil( baseHP * chapterScale * timeCurve * typeMult * formationMult )
+   * finalHP = ceil( baseHP * chapterScale * phaseMult * typeMult * formationMult )
    */
-  static calcHP(chapterConfig, timeCurve, brickType, isFormation) {
+  static calcHP(chapterConfig, phaseMult, brickType, isFormation) {
     var base = chapterConfig.baseHP * chapterConfig.chapterScale;
-    // 时间曲线随机
-    var tMin = timeCurve[0];
-    var tMax = timeCurve[1];
-    var tMult = tMin + Math.random() * (tMax - tMin);
+    // 阶段倍率 ±20% 随机浮动
+    var tMult = phaseMult * (0.8 + Math.random() * 0.4);
     // 类型系数
     var TYPE_MULT = {
       normal: 1.0,
