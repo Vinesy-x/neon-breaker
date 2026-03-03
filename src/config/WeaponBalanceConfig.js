@@ -201,7 +201,7 @@ module.exports = {
 
   // ===== 奇点引擎 =====
   gravityWell: {
-    basePct: 0.2,
+    basePct: 1,
     interval: 14000,
     damageType: 'energy',
     damagePctPerLv: 0.15,         // 引力强化每级+15%伤害

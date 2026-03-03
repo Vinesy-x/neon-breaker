@@ -297,6 +297,21 @@ class DPSSandbox {
     return count;
   }
 
+  /** 销毁超出屏幕底部的砖块 */
+  _cullOffscreen() {
+    var g = this.game;
+    var bricks = g.bricks;
+    var screenBottom = g.gameHeight || 800;
+    for (var i = bricks.length - 1; i >= 0; i--) {
+      var b = bricks[i];
+      if (!b.alive) continue;
+      if (b.y > screenBottom + 50) {
+        b.hp = 0;
+        b.alive = false;
+      }
+    }
+  }
+
   _spawnRow(hp) {
     var g = this.game;
     var Config = this.Config;
@@ -314,10 +329,14 @@ class DPSSandbox {
     var ctrl = this._ctrl;
     st._totalElapsed += dtMs;
 
-    // 水位控制
+    // 水位控制（数量模式 + 屏幕外销毁）
     ctrl.spawnCd -= dtMs;
     if (ctrl.spawnCd <= 0) {
       ctrl.spawnCd = ctrl.baseInterval;
+
+      // 先销毁屏幕外砖块
+      this._cullOffscreen();
+
       var alive = this._countAlive();
       var ratio = alive / ctrl.targetAlive;
 
