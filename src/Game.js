@@ -488,7 +488,7 @@ class Game {
       }
     }
 
-    this.collision.mergeBricks();
+    // this.collision.mergeBricks(); // 暂时屏蔽砖块融合
 
     for (var j = this.bricks.length - 1; j >= 0; j--) {
       if (!this.bricks[j].alive || this.bricks[j].y > this.gameHeight + 50) this.bricks.splice(j, 1);
