@@ -136,7 +136,7 @@ module.exports = {
 
   // ===== 回旋刃 =====
   spinBlade: {
-    basePct: 5.0,
+    basePct: 0.25,
     interval: 10000,
     damageType: 'physical',
     branchDmgScale: 0.5,

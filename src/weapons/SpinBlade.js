@@ -123,7 +123,9 @@ class SpinBlade extends Weapon {
         // 回旋斩
         if (bounced && shockwaveLv > 0) {
           const swRadius = 30 + shockwaveLv * 20;
-          const swDmg = damage * (0.4 + shockwaveLv * 0.3);
+          var swBase = damage * (0.4 + shockwaveLv * 0.3);
+          var swSlashMult = (ctx.saveManager && ctx.saveManager.hasWeaponPassive('spinBlade', 'shockSlash')) ? 2.5 : 1.0;
+          const swDmg = swBase * swSlashMult;
           this.shockwaves.push({
             x: b.x, y: b.y, radius: 0, maxRadius: swRadius,
             damage: swDmg, speed: 3 + shockwaveLv, hit: false,
@@ -141,8 +143,8 @@ class SpinBlade extends Weapon {
             this._spawnSplitBlades(b, splitLv);
           }
           // rebirth被动：50%概率重生
-          if (ctx.saveManager && ctx.saveManager.hasWeaponPassive('spinBlade', 'rebirth') && Math.random() < 0.5) {
-            b.life = b.maxLife * 0.5;
+          if (ctx.saveManager && ctx.saveManager.hasWeaponPassive('spinBlade', 'rebirth') && Math.random() < 0.7) {
+            b.life = b.maxLife;
             b.vx = -b.vx; b.vy = -b.vy; // 反弹
             continue;
           }
@@ -160,10 +162,11 @@ class SpinBlade extends Weapon {
         b.tickTimer = 0;
         const hitRadius = b.size + (giantLv > 0 ? 4 : 0);
         var rampUpBonus = (ctx.saveManager && ctx.saveManager.hasWeaponPassive('spinBlade', 'rampUp')) ? 0.1 : 0;
-        var rampCap = (ctx.saveManager && ctx.saveManager.hasWeaponPassive('spinBlade', 'bladeFury')) ? 2.0 : 1.0;
+        var rampCap = (ctx.saveManager && ctx.saveManager.hasWeaponPassive('spinBlade', 'bladeFury')) ? 4.0 : 1.0;
         const rampRaw = (b.aliveMs / 1000) * (rampLv > 0 ? 0.12 * rampLv : 0) + (b.aliveMs / 1000) * rampUpBonus;
         const rampMult = 1 + Math.min(rampRaw, rampCap);
-        const tickDmg = damage * rampMult;
+        var eternalMult = (ctx.saveManager && ctx.saveManager.hasWeaponPassive('spinBlade', 'eternal')) ? 2.5 : 1.0;
+        const tickDmg = damage * rampMult * eternalMult;
         // 默认贯穿：每tick打所有砖块，pierce分支增加伤害
         var sharpBonus = 0; // sharpEdge已删除
         const pierceDmgMult = pierceLv > 0 ? (1.3 + sharpBonus) : (1 + sharpBonus);
