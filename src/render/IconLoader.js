@@ -9,7 +9,7 @@ class IconLoader {
     this._allKeys = [
       // 武器
       'weapon_kunai', 'weapon_lightning', 'weapon_missile', 'weapon_meteor',
-      'weapon_drone', 'weapon_spinBlade', 'weapon_blizzard', 'weapon_ionBeam', 'weapon_frostStorm',
+      'weapon_drone', 'weapon_spinBlade', 'weapon_blizzard', 'weapon_ionBeam', 'weapon_frostStorm', 'weapon_gravityWell',
       // 飞机升级
       'upgrade_attack', 'upgrade_fireRate', 'upgrade_crit', 'upgrade_startLevel', 'upgrade_coinBonus',
       // 飞机分支
