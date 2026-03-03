@@ -22,6 +22,13 @@ class IconLoader {
       'ship_main', 'wing_default',
       'wing_kunai', 'wing_lightning', 'wing_missile', 'wing_meteor',
       'wing_drone', 'wing_spinBlade', 'wing_blizzard', 'wing_ionBeam',
+      // 飞机高级分支
+      'ship_burst', 'ship_ricochet', 'ship_fireBullet', 'ship_iceBullet', 'ship_thunderBullet',
+      'ship_fireSpread', 'ship_fireExplosion', 'ship_iceFreeze', 'ship_iceShatter',
+      'ship_shockMark', 'ship_shockField',
+      // UI新增
+      'ui_stats', 'ui_sound_on', 'ui_sound_off', 'ui_refresh', 'ui_ad', 'ui_warning',
+      'ui_option', 'ui_passive',
     ];
     this._loadAll();
   }
