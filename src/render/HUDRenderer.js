@@ -225,13 +225,39 @@ function drawWeaponHUD(ctx, sprites, weaponList) {
     ctx.strokeStyle = w.color; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.roundRect(startX - 2, y - 2, iconSize + 4, iconSize + 4, 6); ctx.stroke();
 
-    // 冷却遮罩 — 从底部向上覆盖(矩形)
+    // 持续时间发光边框（activeRatio > 0 时）
+    if (w.activeRatio > 0) {
+      var glowAlpha = 0.3 + 0.5 * w.activeRatio;
+      ctx.strokeStyle = w.color;
+      ctx.lineWidth = 2.5;
+      ctx.globalAlpha = glowAlpha;
+      // 发光长度 = 周长 × activeRatio（顺时针缩短）
+      var boxW = iconSize + 4, boxH = iconSize + 4, bx = startX - 2, by = y - 2;
+      var perim = 2 * (boxW + boxH);
+      var glowLen = perim * w.activeRatio;
+      ctx.beginPath();
+      // 从顶部中点开始顺时针画
+      var halfTop = boxW / 2;
+      // 用 setLineDash 模拟部分边框
+      ctx.setLineDash([glowLen, perim]);
+      ctx.lineDashOffset = -halfTop; // 起点偏移到顶部中心
+      ctx.roundRect(bx, by, boxW, boxH, 6);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = 1.5;
+    }
+
+    // 冷却遮罩 — 从底部向上覆盖(圆角矩形，clip实现)
     if (w.cdRatio !== undefined && w.cdRatio > 0 && w.cdRatio < 1) {
       var maskH = (iconSize + 4) * w.cdRatio;
-      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.save();
       ctx.beginPath();
-      ctx.roundRect(startX - 2, y - 2 + (iconSize + 4 - maskH), iconSize + 4, maskH, [0, 0, 6, 6]);
-      ctx.fill();
+      ctx.roundRect(startX - 2, y - 2, iconSize + 4, iconSize + 4, 6);
+      ctx.clip();
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(startX - 2, y - 2 + (iconSize + 4 - maskH), iconSize + 4, maskH);
+      ctx.restore();
     }
 
     // 图标

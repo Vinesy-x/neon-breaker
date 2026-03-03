@@ -263,7 +263,8 @@ class UpgradeManager {
       if (w.timer !== undefined && def.interval) {
         cdRatio = Math.max(0, 1 - w.timer / def.interval);
       }
-      list.push({ key, icon: def.icon, color: def.color, name: def.name, totalLevel: w.getTotalLevel(), cdRatio: cdRatio });
+      var activeRatio = (typeof w.getActiveRatio === 'function') ? w.getActiveRatio() : 0;
+      list.push({ key, icon: def.icon, color: def.color, name: def.name, totalLevel: w.getTotalLevel(), cdRatio: cdRatio, activeRatio: activeRatio });
     }
     return list;
   }

@@ -522,6 +522,16 @@ class GravityWellWeapon extends Weapon {
       particles: this.particles,
     };
   }
+
+  getActiveRatio() {
+    if (this.wells.length === 0) return 0;
+    var best = 0;
+    for (var i = 0; i < this.wells.length; i++) {
+      var r = this.wells[i].timer / this.wells[i].duration;
+      if (r > best) best = r;
+    }
+    return Math.min(1, best);
+  }
 }
 
 module.exports = GravityWellWeapon;

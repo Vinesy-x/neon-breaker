@@ -555,6 +555,13 @@ class IonBeamWeapon extends Weapon {
   getWingData(lcx, lcy) {
     return { type: 'ionBeam', color: this.def.color, x: lcx, y: lcy };
   }
+
+  getActiveRatio() {
+    if (!this.isFiring) return 0;
+    var durationLv = this.branches.duration || 0;
+    var fireDuration = 3000 + durationLv * 1000;
+    return Math.min(1, Math.max(0, 1 - this.firingTimer / fireDuration));
+  }
 }
 
 module.exports = IonBeamWeapon;
