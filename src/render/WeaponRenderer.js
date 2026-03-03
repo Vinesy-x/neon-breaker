@@ -47,11 +47,12 @@ function drawKunai(ctx, sprites, data) {
   for (const k of knives) {
     if (k.trail && k.trail.length > 1) {
       const s = k.scale || 1;
+      const drawScale = Math.max(s, 1.4); // 初期至少1.4倍大小
       ctx.fillStyle = color;
       for (let t = 0; t < k.trail.length; t++) {
         const tr = k.trail[t];
         ctx.globalAlpha = tr.alpha * 0.35;
-        const sz = (1 + (t / k.trail.length) * 2) * s;
+        const sz = (1.5 + (t / k.trail.length) * 3) * drawScale;
         ctx.fillRect(tr.x - sz, tr.y - sz, sz * 2, sz * 2);
       }
       ctx.globalAlpha = 1;
@@ -61,7 +62,7 @@ function drawKunai(ctx, sprites, data) {
   for (const k of knives) {
     const s = k.scale || 1;
     const angle = Math.atan2(k.vy, k.vx);
-    sprites.draw(ctx, 'mortar_shell', k.x, k.y, angle, s);
+    sprites.draw(ctx, 'mortar_shell', k.x, k.y, angle, Math.max(s, 1.4));
   }
 
   if (explosions) {
@@ -72,11 +73,11 @@ function drawKunai(ctx, sprites, data) {
       const eColor = e.isChain ? '#FF6600' : color;
 
       // 快速展开曲线：前20%就扩到满半径
-      var expand = Math.min(1, progress * 5); // 0→1 在 progress 0~0.2
+      var expand = Math.min(1, progress * 7); // 0→1 在 progress 0~0.14, 更快展开
       var curR = er * expand;
 
       // ① 伤害范围区域（使用武器颜色）
-      var zoneAlpha = Math.max(0, 0.35 * (1 - progress * 1.2));
+      var zoneAlpha = Math.max(0, 0.45 * (1 - progress * 1.1));
       if (zoneAlpha > 0.01) {
         ctx.globalAlpha = zoneAlpha;
         ctx.fillStyle = eColor;
@@ -85,7 +86,7 @@ function drawKunai(ctx, sprites, data) {
 
       // ② 亮色内圈（收缩消失）
       if (progress < 0.6) {
-        var innerR = curR * 0.6 * (1 - progress * 0.8);
+        var innerR = curR * 0.75 * (1 - progress * 0.8);
         ctx.globalAlpha = (0.6 - progress) * 0.6;
         ctx.fillStyle = '#FFFFFF';
         ctx.beginPath(); ctx.arc(e.x, e.y, Math.max(2, innerR), 0, Math.PI * 2); ctx.fill();
@@ -93,7 +94,7 @@ function drawKunai(ctx, sprites, data) {
 
       // ③ 白色中心闪光（瞬间爆发）
       if (progress < 0.15) {
-        var flashR = curR * 0.35 * (1 - progress * 6);
+        var flashR = curR * 0.5 * (1 - progress * 6);
         ctx.globalAlpha = (0.15 - progress) * 6;
         ctx.fillStyle = '#FFFFFF';
         ctx.beginPath(); ctx.arc(e.x, e.y, Math.max(3, flashR), 0, Math.PI * 2); ctx.fill();
@@ -695,20 +696,20 @@ function drawLightning(ctx, data) {
     const zigzagPoints = generateZigzag(pts);
 
     // 外层大光晕
-    ctx.strokeStyle = 'rgba(' + hexToRgb(color) + ', 0.12)';
-    ctx.lineWidth = 14; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(' + hexToRgb(color) + ', 0.18)';
+    ctx.lineWidth = 20; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     ctx.beginPath(); ctx.moveTo(zigzagPoints[0].x, zigzagPoints[0].y);
     for (let i = 1; i < zigzagPoints.length; i++) ctx.lineTo(zigzagPoints[i].x, zigzagPoints[i].y);
     ctx.stroke();
 
     // 主闪电体
-    ctx.strokeStyle = color; ctx.lineWidth = 3;
+    ctx.strokeStyle = color; ctx.lineWidth = 4;
     ctx.beginPath(); ctx.moveTo(zigzagPoints[0].x, zigzagPoints[0].y);
     for (let i = 1; i < zigzagPoints.length; i++) ctx.lineTo(zigzagPoints[i].x, zigzagPoints[i].y);
     ctx.stroke();
 
     // 白色内芯
-    ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 1.5;
+    ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(zigzagPoints[0].x, zigzagPoints[0].y);
     for (let i = 1; i < zigzagPoints.length; i++) ctx.lineTo(zigzagPoints[i].x, zigzagPoints[i].y);
     ctx.stroke();
@@ -716,10 +717,10 @@ function drawLightning(ctx, data) {
     // 分支闪电
     ctx.strokeStyle = 'rgba(' + hexToRgb(color) + ', 0.5)'; ctx.lineWidth = 1.5;
     for (let i = 1; i < pts.length - 1; i++) {
-      if (Math.random() > 0.6) continue;
+      if (Math.random() > 0.75) continue;
       const p = pts[i];
       const angle = Math.random() * Math.PI * 2;
-      const len = 15 + Math.random() * 20;
+      const len = 20 + Math.random() * 30;
       ctx.beginPath(); ctx.moveTo(p.x, p.y);
       const midX = p.x + Math.cos(angle) * len * 0.5 + (Math.random() - 0.5) * 8;
       const midY = p.y + Math.sin(angle) * len * 0.5 + (Math.random() - 0.5) * 8;
@@ -731,17 +732,17 @@ function drawLightning(ctx, data) {
     // 命中点光效
     for (let i = 1; i < pts.length; i++) {
       const p = pts[i];
-      ctx.globalAlpha = bolt.alpha * 0.3; ctx.fillStyle = color;
-      ctx.beginPath(); ctx.arc(p.x, p.y, 12, 0, Math.PI * 2); ctx.fill();
-      ctx.globalAlpha = bolt.alpha * 0.6; ctx.fillStyle = color;
-      ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, Math.PI * 2); ctx.fill();
-      ctx.globalAlpha = bolt.alpha; ctx.fillStyle = '#FFFFFF';
-      ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = bolt.alpha * 0.25; ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 18, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = bolt.alpha * 0.5; ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 10, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = bolt.alpha * 0.8; ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
     }
 
     // 链间电弧
     if (pts.length > 2) {
-      ctx.strokeStyle = 'rgba(' + hexToRgb(color) + ', 0.3)'; ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(' + hexToRgb(color) + ', 0.45)'; ctx.lineWidth = 1.5;
       for (let i = 1; i < pts.length - 1; i++) {
         const p1 = pts[i], p2 = pts[i + 1];
         const midX = (p1.x + p2.x) / 2 + (Math.random() - 0.5) * 20;
@@ -759,10 +760,12 @@ function drawLightning(ctx, data) {
   // 超载爆炸
   const explosions = data.explosions || [];
   for (const e of explosions) {
-    ctx.globalAlpha = e.alpha * 0.6; ctx.strokeStyle = color; ctx.lineWidth = 2;
+    ctx.globalAlpha = e.alpha * 0.8; ctx.strokeStyle = color; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.arc(e.x, e.y, e.radius * e.alpha, 0, Math.PI * 2); ctx.stroke();
-    ctx.globalAlpha = e.alpha * 0.2; ctx.fillStyle = color;
-    ctx.beginPath(); ctx.arc(e.x, e.y, e.radius * e.alpha * 0.6, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = e.alpha * 0.35; ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(e.x, e.y, e.radius * e.alpha * 0.7, 0, Math.PI * 2); ctx.fill();
+    // 白色中心闪光
+    if (e.alpha > 0.5) { ctx.globalAlpha = e.alpha * 0.6; ctx.fillStyle = '#FFFFFF'; ctx.beginPath(); ctx.arc(e.x, e.y, e.radius * e.alpha * 0.2, 0, Math.PI * 2); ctx.fill(); }
   }
   ctx.globalAlpha = 1;
 }
@@ -773,10 +776,10 @@ function drawMissile(ctx, sprites, data) {
 
   // 弹体颜色/大小表
   const TIER_STYLE = [
-    { bodyW: 4, bodyH: 10, trailLen: 4, color: '#FFFFFF', trailColor: 'rgba(255,255,255,0.3)', glow: false },        // 基础
-    { bodyW: 5, bodyH: 14, trailLen: 5, color: '#FF8800', trailColor: 'rgba(255,136,0,0.35)', glow: false },          // 强化
-    { bodyW: 7, bodyH: 18, trailLen: 6, color: '#FF3333', trailColor: 'rgba(255,51,51,0.4)', glow: true },            // 重型
-    { bodyW: 4, bodyH: 24, trailLen: 10, color: '#44CCFF', trailColor: 'rgba(68,204,255,0.5)', glow: true },          // 超速
+    { bodyW: 6, bodyH: 14, trailLen: 10, color: '#FFFFFF', glow: false },        // 基础 - 更大更长拖尾
+    { bodyW: 7, bodyH: 18, trailLen: 12, color: '#FF8800', glow: false },         // 强化
+    { bodyW: 9, bodyH: 22, trailLen: 14, color: '#FF3333', glow: true },          // 重型
+    { bodyW: 6, bodyH: 28, trailLen: 18, color: '#44CCFF', glow: true },          // 超速
   ];
 
   for (const sh of shells) {
@@ -786,13 +789,36 @@ function drawMissile(ctx, sprites, data) {
     sh.trail.push({ x: sh.x, y: sh.y });
     if (sh.trail.length > style.trailLen) sh.trail.shift();
 
+    // 拖尾 - 颜色跟随弹体，渐变淡出
+    var trailRgb = hexToRgb(style.color);
     for (let t = 0; t < sh.trail.length; t++) {
       const tr = sh.trail[t];
       const ratio = t / sh.trail.length;
-      ctx.globalAlpha = ratio * 0.4;
-      ctx.fillStyle = style.trailColor;
-      const sz = style.bodyW * ratio;
-      ctx.fillRect(tr.x - sz / 2, tr.y, sz, style.bodyH * ratio);
+      // 外层光晕
+      ctx.globalAlpha = ratio * 0.15;
+      ctx.fillStyle = 'rgba(' + trailRgb + ', 0.4)';
+      const glowSz = style.bodyW * 2.5 * ratio;
+      ctx.beginPath(); ctx.arc(tr.x, tr.y, glowSz, 0, Math.PI * 2); ctx.fill();
+      // 内层亮芯
+      ctx.globalAlpha = ratio * 0.6;
+      ctx.fillStyle = style.color;
+      const sz = style.bodyW * 0.8 * ratio;
+      ctx.fillRect(tr.x - sz / 2, tr.y, sz, style.bodyH * 0.6 * ratio);
+    }
+    // 尾部渐变光带（连续线条拖尾）
+    if (sh.trail.length > 2) {
+      ctx.strokeStyle = style.color;
+      ctx.lineWidth = style.bodyW * 0.6;
+      ctx.lineCap = 'round';
+      ctx.globalAlpha = 0.25;
+      ctx.beginPath();
+      ctx.moveTo(sh.trail[0].x, sh.trail[0].y);
+      for (let t = 1; t < sh.trail.length; t++) {
+        ctx.lineTo(sh.trail[t].x, sh.trail[t].y);
+      }
+      ctx.lineTo(sh.x, sh.y);
+      ctx.stroke();
+      ctx.lineCap = 'butt';
     }
 
     // 弹体辉光（重型/超速）
