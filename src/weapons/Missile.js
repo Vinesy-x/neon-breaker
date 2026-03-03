@@ -210,9 +210,17 @@ class MissileWeapon extends Weapon {
     else if (damageLv >= 4 || twinLv >= 1) tier = 2;
     else if (damageLv >= 2 || salvoLv >= 2) tier = 1;
 
+    const lcx = ctx.launcher.getCenterX();
+    const launcherW = ctx.launcher.width;
+    const twinLv2 = this.branches.twinCannon || 0;
     const lcy = ctx.launcher.y;
+    // 发射位置：单管从飞机中心，双管从两侧
+    var startX;
+    if (side === 'center') startX = lcx;
+    else if (side === 'left') startX = lcx - launcherW / 2 - 4;
+    else startX = lcx + launcherW / 2 + 4;
     this.shells.push({
-      x: colX, y: lcy - 10,
+      x: startX, y: lcy - 10, targetX: colX,
       speed: 8 + tier * 1.5,
       hitCount: 0,
       hitSet: new Set(),

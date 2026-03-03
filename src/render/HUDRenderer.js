@@ -24,15 +24,9 @@ function drawChapterHUD(ctx, chapter, score, combo, playerLevel, elapsedMs, soun
   ctx.fillRect(pauseX + 9, pauseY + 7, 4, 16);
   ctx.fillRect(pauseX + 17, pauseY + 7, 4, 16);
 
-  // 分数
-  ctx.fillStyle = Config.NEON_CYAN;
-  ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center';
-  ctx.fillText('' + score, Config.SCREEN_WIDTH / 2, top);
+  // 分数（已删除）
 
-  // 等级
-  ctx.fillStyle = Config.NEON_GREEN;
-  ctx.font = 'bold 13px monospace'; ctx.textAlign = 'right';
-  ctx.fillText('Lv.' + playerLevel, Config.SCREEN_WIDTH - 8, top);
+  // 等级（已删除，在经验条上显示）
 
   // 时间
   const sec = Math.floor(elapsedMs / 1000);
@@ -48,9 +42,9 @@ function drawChapterHUD(ctx, chapter, score, combo, playerLevel, elapsedMs, soun
   ctx.font = '14px monospace'; ctx.textAlign = 'left';
   ctx.fillText(soundEnabled ? '♪' : '♪̶', 10, Config.SCREEN_HEIGHT - Config.SAFE_BOTTOM - 48);
 
-  // 速度按钮（暂停按钮右边）
+  // 速度按钮（统计按钮上方）
   var ts = timeScale || 1;
-  var speedX = pauseX + pauseSize + 6, speedY = pauseY, speedW = 38, speedH = pauseSize;
+  var speedX = 8, speedY = top + 40, speedW = 28, speedH = 28;
   ctx.fillStyle = ts > 1 ? 'rgba(255,255,0,0.2)' : 'rgba(255,255,255,0.1)';
   ctx.beginPath(); ctx.roundRect(speedX, speedY, speedW, speedH, 6); ctx.fill();
   ctx.fillStyle = ts > 1 ? Config.NEON_YELLOW : 'rgba(255,255,255,0.7)';
@@ -210,32 +204,51 @@ function drawDangerLine(ctx, dangerY) {
 
 function drawWeaponHUD(ctx, sprites, weaponList) {
   if (!weaponList || weaponList.length === 0) return;
-  const iconSize = 20, gap = 6;
+  const iconSize = 40, gap = 4;
   const startX = Config.SCREEN_WIDTH - iconSize - 6;
   const startY = Config.SAFE_TOP + 36;
   for (let i = 0; i < weaponList.length; i++) {
     const w = weaponList[i];
-    const y = startY + i * (iconSize + gap + 8);
+    const y = startY + i * (iconSize + gap + 12);
+    const cx = startX + iconSize / 2, cy = y + iconSize / 2;
+
+    // 背景
     ctx.fillStyle = 'rgba(255,255,255,0.06)';
-    ctx.beginPath(); ctx.roundRect(startX - 2, y - 2, iconSize + 4, iconSize + 4, 4); ctx.fill();
-    ctx.strokeStyle = w.color; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.roundRect(startX - 2, y - 2, iconSize + 4, iconSize + 4, 4); ctx.stroke();
+    ctx.beginPath(); ctx.roundRect(startX - 2, y - 2, iconSize + 4, iconSize + 4, 6); ctx.fill();
+    ctx.strokeStyle = w.color; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.roundRect(startX - 2, y - 2, iconSize + 4, iconSize + 4, 6); ctx.stroke();
+
+    // 冷却遮罩 (如果有cdRatio)
+    if (w.cdRatio !== undefined && w.cdRatio > 0 && w.cdRatio < 1) {
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      var startAngle = -Math.PI / 2;
+      var endAngle = startAngle + Math.PI * 2 * w.cdRatio;
+      ctx.arc(cx, cy, iconSize / 2 + 2, startAngle, endAngle);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // 图标
     const wiconKey = 'wicon_' + w.key;
     if (sprites._cache[wiconKey]) {
       ctx.globalAlpha = 1;
-      sprites.draw(ctx, wiconKey, startX + iconSize / 2, y + iconSize / 2, 0, iconSize / 32);
+      sprites.draw(ctx, wiconKey, cx, cy, 0, iconSize / 32);
     } else {
       const IL = getIconLoader();
-      if (!IL.drawIcon(ctx, 'weapon_' + w.key, startX + iconSize / 2, y + iconSize / 2, iconSize - 2)) {
-        ctx.fillStyle = w.color; ctx.font = (iconSize - 2) + 'px monospace';
+      if (!IL.drawIcon(ctx, 'weapon_' + w.key, cx, cy, iconSize - 4)) {
+        ctx.fillStyle = w.color; ctx.font = (iconSize - 4) + 'px monospace';
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(w.icon, startX + iconSize / 2, y + iconSize / 2);
+        ctx.fillText(w.icon, cx, cy);
       }
     }
     ctx.globalAlpha = 1;
-    ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = '7px monospace';
+
+    // 等级文本（放大）
+    ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = 'bold 12px monospace';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('Lv.' + w.totalLevel, startX + iconSize / 2, y + iconSize + 6);
+    ctx.fillText('Lv.' + w.totalLevel, cx, y + iconSize + 8);
   }
 }
 

@@ -259,7 +259,11 @@ class UpgradeManager {
     for (const key in this.weapons) {
       const w = this.weapons[key];
       const def = Config.WEAPON_TREES[key];
-      list.push({ key, icon: def.icon, color: def.color, name: def.name, totalLevel: w.getTotalLevel() });
+      var cdRatio = 0;
+      if (w.timer !== undefined && def.interval) {
+        cdRatio = Math.max(0, 1 - w.timer / def.interval);
+      }
+      list.push({ key, icon: def.icon, color: def.color, name: def.name, totalLevel: w.getTotalLevel(), cdRatio: cdRatio });
     }
     return list;
   }

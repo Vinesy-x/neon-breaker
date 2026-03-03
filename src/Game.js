@@ -378,11 +378,7 @@ class Game {
     this.particles.update(dt);
     this._updateFloatingTexts(dt);
 
-    // Combo 超时
-    if (this.combo > 0) {
-      this.comboTimer += dtMs;
-      if (this.comboTimer > 2000) { this.combo = 0; this.comboTimer = 0; }
-    }
+    // Combo已删除
   }
 
   _updatePlaying(dt, dtMs) {
@@ -665,7 +661,7 @@ class Game {
     this.renderer.drawParticles(this.particles.particles);
     this.renderer.drawFloatingTexts(this.floatingTexts);
     this.renderer.drawWeaponHUD(this.upgrades.getOwnedWeapons());
-    this.renderer.drawChapterHUD(this.currentChapter, this.score, this.combo, this.expSystem.playerLevel, this.elapsedMs, Sound.enabled, this._devTimeScale || 1);
+    this.renderer.drawChapterHUD(this.currentChapter, this.score, 0, this.expSystem.playerLevel, this.elapsedMs, Sound.enabled, this._devTimeScale || 1);
     this.renderer.drawExpBar(this.expSystem.exp, this.expSystem.expToNext, this.expSystem.playerLevel);
     if (Config.DEV_MODE) this._statsArea = this.renderer.drawDamageStats(this.damageStats, this.statsExpanded);
     if (shaking) this.renderer.ctx.restore();
