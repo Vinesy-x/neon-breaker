@@ -76,7 +76,7 @@ class BlizzardWeapon extends Weapon {
       var effectiveTickMs = z.tickMs;
             if (z.tickTimer >= effectiveTickMs) {
         z.tickTimer -= z.tickMs;
-        var burnBoostMult = (ctx.saveManager && ctx.saveManager.hasWeaponPassive('blizzard', 'burnBoost')) ? 1.5 : 1;
+        var burnBoostMult = (ctx.saveManager && ctx.saveManager.hasWeaponPassive('blizzard', 'burnBoost')) ? 2.5 : 1;
         this._burnTick(z, damage * burnBoostMult, slowLv, frostbiteLv, ctx);
       }
 
@@ -99,7 +99,7 @@ class BlizzardWeapon extends Weapon {
       if (z.life <= 0) {
         // 白磷溅射被动：区域结束时爆炸
         if (ctx.saveManager && ctx.saveManager.hasWeaponPassive('blizzard', 'burnBlast')) {
-          this._finalBurst(z, damage * 2.0, ctx);
+          this._finalBurst(z, damage * 4.0, ctx);
         }
         // 最终爆燃（引燃分支）
         if (shatterLv > 0) {
@@ -123,7 +123,7 @@ class BlizzardWeapon extends Weapon {
 
   _launch(ctx) {
     var extraOne = (ctx.saveManager && ctx.saveManager.hasWeaponPassive('blizzard', 'extraCount')) ? 1 : 0;
-    var extraBombs = (ctx.saveManager && ctx.saveManager.hasWeaponPassive('blizzard', 'burnExtra')) ? 2 : 0;
+    var extraBombs = (ctx.saveManager && ctx.saveManager.hasWeaponPassive('blizzard', 'burnExtra')) ? 3 : 0;
     const count = 1 + (this.branches.count || 0) + extraOne + extraBombs;
     const targets = this._findTargets(ctx, count);
 
@@ -271,6 +271,20 @@ class BlizzardWeapon extends Weapon {
     if (ctx.boss && ctx.boss.alive) {
       if (Math.sqrt((ctx.boss.getCenterX() - zone.x) ** 2 + (ctx.boss.getCenterY() - zone.y) ** 2) <= r) {
         ctx.damageBoss(damage, 'blizzard');
+      }
+    }
+
+    // fireSpread被动(Lv14): 燃烧tick时对区域外相邻砖块造成溅射伤害
+    if (ctx.saveManager && ctx.saveManager.hasWeaponPassive('blizzard', 'fireSpread')) {
+      for (let i = 0; i < ctx.bricks.length; i++) {
+        const brick = ctx.bricks[i];
+        if (!brick.alive) continue;
+        const bc = brick.getCenter();
+        const dist = Math.sqrt((bc.x - zone.x) ** 2 + (bc.y - zone.y) ** 2);
+        // 区域外但在1.6倍范围内的砖块受到50%溅射伤害
+        if (dist > r && dist < r * 1.6) {
+          ctx.damageBrick(brick, damage * 0.8, 'blizzard_spread', 'fire');
+        }
       }
     }
   }

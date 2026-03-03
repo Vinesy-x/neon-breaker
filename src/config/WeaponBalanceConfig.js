@@ -160,7 +160,7 @@ module.exports = {
 
   // ===== 白磷弹 =====
   blizzard: {
-    basePct: 2.8,
+    basePct: 0.25,
     interval: 8000,
     damageType: 'fire',
     branchDmgScale: 0.5,
