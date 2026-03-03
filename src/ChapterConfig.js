@@ -24,7 +24,7 @@ class ChapterConfig {
       chapterScale: chapterScale,
 
       // 关卡内固定参数
-      scrollSpeed: Math.min(0.4, 0.12 + (chapter - 1) * 0.004),
+      scrollSpeed: Math.min(0.4, 0.096 + (chapter - 1) * 0.004),
       spawnInterval: Math.max(1000, 2500 - (chapter - 1) * 18),
       gapChance: Math.max(0.02, 0.12 - (chapter - 1) * 0.0015),
 
