@@ -5,7 +5,7 @@
  * - 25个技能点偏向2-3个主力武器，等效÷3，跨度~6.4x
  * - 所有关卡共用同一条节奏曲线，差异仅在章节基准HP（跨关卡成长）
  * - 砖块有效HP = baseHP × chapterScale × phaseMult
- * - 关卡内难度跨度 ≈ 12x
+ * - 关卡内难度跨度 ≈ 10x
  */
 
 class ChapterConfig {
@@ -31,7 +31,7 @@ class ChapterConfig {
       // Boss：HP = baseHP × chapterScale × bossMultiplier
       // bossMultiplier 设计为"满级玩家DPS × 45秒击杀时间"等效
       bossType: ['charger', 'guardian', 'summoner', 'laser', 'phantom'][(chapter - 1) % 5],
-      bossHpMultiplier: 12 * 45,  // ≈ 182，满级DPS(~4x)打45秒
+      bossHpMultiplier: 10 * 45,  // ≈ 182，满级DPS(~4x)打45秒
       bossCycle: Math.floor((chapter - 1) / 5),
 
       // 金币奖励
@@ -80,34 +80,34 @@ class ChapterConfig {
       { time: 0,      phase: 'warmup',    intensity: 0.3,  phaseMult: 1.0,                 spawnMult: 0.7,  types: ['normal'],
         scrollAccel: 0.002 },                                                   // pts≈0
 
-      { time: 30000,  phase: 'wave1',     intensity: 0.5,  phaseMult: 1.6,      spawnMult: 0.9,  types: ['normal', 'fast'],
+      { time: 30000,  phase: 'wave1',     intensity: 0.5,  phaseMult: 1.5,      spawnMult: 0.9,  types: ['normal', 'fast'],
         scrollAccel: 0.003 },                                                   // pts≈5, ×1.32
 
-      { time: 80000,  phase: 'surge1',    intensity: 0.7,  phaseMult: 2.5,      spawnMult: 1.0,  types: ['normal', 'fast', 'formation'],
+      { time: 80000,  phase: 'surge1',    intensity: 0.7,  phaseMult: 2.2,      spawnMult: 1.0,  types: ['normal', 'fast', 'formation'],
         scrollAccel: 0.003 },                                                   // pts≈9, ×1.65
 
-      { time: 130000, phase: 'breather1', intensity: 0.35, phaseMult: 1.9,      spawnMult: 0.6,  types: ['normal'],
+      { time: 130000, phase: 'breather1', intensity: 0.35, phaseMult: 1.7,      spawnMult: 0.6,  types: ['normal'],
         scrollAccel: 0 },                                                       // pts≈7, ×1.48 (回退)
 
-      { time: 150000, phase: 'wave2',     intensity: 0.8,  phaseMult: 3.9,     spawnMult: 1.1,  types: ['normal', 'fast', 'formation', 'shield', 'split'],
+      { time: 150000, phase: 'wave2',     intensity: 0.8,  phaseMult: 3.4,     spawnMult: 1.1,  types: ['normal', 'fast', 'formation', 'shield', 'split'],
         scrollAccel: 0.004 },                                                   // pts≈13, ×2.07
 
-      { time: 220000, phase: 'highpres',  intensity: 0.9,  phaseMult: 5.8,     spawnMult: 1.2,  types: ['normal', 'fast', 'formation', 'shield', 'split'],
+      { time: 220000, phase: 'highpres',  intensity: 0.9,  phaseMult: 4.9,     spawnMult: 1.2,  types: ['normal', 'fast', 'formation', 'shield', 'split'],
         scrollAccel: 0.004 },                                                   // pts≈17, ×2.58
 
-      { time: 290000, phase: 'breather2', intensity: 0.35, phaseMult: 3.6,     spawnMult: 0.5,  types: ['normal'],
+      { time: 290000, phase: 'breather2', intensity: 0.35, phaseMult: 3.1,     spawnMult: 0.5,  types: ['normal'],
         scrollAccel: 0 },                                                       // pts≈12, ×1.95 (回退)
 
-      { time: 320000, phase: 'wave3',     intensity: 0.9,  phaseMult: 7.6,     spawnMult: 1.3,  types: ['normal', 'fast', 'formation', 'shield', 'split', 'stealth'],
+      { time: 320000, phase: 'wave3',     intensity: 0.9,  phaseMult: 6.4,     spawnMult: 1.3,  types: ['normal', 'fast', 'formation', 'shield', 'split', 'stealth'],
         scrollAccel: 0.005 },                                                   // pts≈20, ×3.05
 
-      { time: 400000, phase: 'sprint',    intensity: 1.0,  phaseMult: 10.5,     spawnMult: 1.5,  types: ['normal', 'fast', 'formation', 'shield', 'split', 'stealth', 'healer'],
+      { time: 400000, phase: 'sprint',    intensity: 1.0,  phaseMult: 8.8,     spawnMult: 1.5,  types: ['normal', 'fast', 'formation', 'shield', 'split', 'stealth', 'healer'],
         scrollAccel: 0.005 },                                                   // pts≈23, ×3.61
 
-      { time: 560000, phase: 'breather3', intensity: 0.3,  phaseMult: 6.1,     spawnMult: 0.4,  types: ['normal'],
+      { time: 560000, phase: 'breather3', intensity: 0.3,  phaseMult: 5.2,     spawnMult: 0.4,  types: ['normal'],
         scrollAccel: 0 },                                                       // pts≈18, ×2.73 (boss前放松)
 
-      { time: 620000, phase: 'preBoss',   intensity: 0.1,  phaseMult: 7.6,     spawnMult: 0.3,  types: ['normal'],
+      { time: 620000, phase: 'preBoss',   intensity: 0.1,  phaseMult: 6.4,     spawnMult: 0.3,  types: ['normal'],
         scrollAccel: 0 },                                                       // pts≈20, ×3.05
 
       { time: 690000, phase: 'boss',      intensity: 0,    phaseMult: 0,                   spawnMult: 0,    types: [],
