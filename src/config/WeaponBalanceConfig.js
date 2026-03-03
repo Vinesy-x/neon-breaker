@@ -179,7 +179,7 @@ module.exports = {
 
   // ===== 离子射线 =====
   ionBeam: {
-    basePct: 15.0,
+    basePct: 0.8,
     interval: 7000,
     damageType: 'energy',
     branchDmgScale: 0.5,         // 伤害分支+70%/级（比其他高）

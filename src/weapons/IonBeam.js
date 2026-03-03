@@ -30,7 +30,11 @@ class IonBeamWeapon extends Weapon {
   }
 
   getDamage(baseAttack, ctx) {
-    return Math.max(0.1, baseAttack * this.def.basePct * (1 + (this.branches.damage || 0) * 0.7));  // 0.5→0.7 buff
+    var shopMult = 1.0;
+    if (ctx && ctx.saveManager) {
+      shopMult = ctx.saveManager.getWeaponDmgMultiplier(this.key);
+    }
+    return Math.max(0.1, baseAttack * this.def.basePct * shopMult * (1 + (this.branches.damage || 0) * 0.7));  // 0.5→0.7 buff
   }
 
   update(dtMs, ctx) {
@@ -136,6 +140,12 @@ class IonBeamWeapon extends Weapon {
           this.timer -= 100;
           let dmg = tickDamage;
 
+          // focusMode被动(Lv14): 持续命中同目标每秒+10%伤害
+          if (ctx.saveManager && ctx.saveManager.hasWeaponPassive('ionBeam', 'focusMode')) {
+            var focusSec = Math.floor(this.firingTimer / 1000);
+            dmg *= (1 + focusSec * 0.25);  // 每秒+25%
+          }
+
           // 充能爆发（开场）
           if (this.burstReady) {
             dmg *= (2.5 + chargeLv * 1.5);
@@ -191,12 +201,33 @@ class IonBeamWeapon extends Weapon {
 
           // 穿透
           if (pierceLv > 0) {
-            this._pierceDamage(sx, sy, tx, ty, dmg * 0.2 * pierceLv, target, ctx);
+            var pierceDmgMult = 0.2 * pierceLv;
+            // pierceAll被动(Lv22): 穿透所有目标,伤害不衰减
+            if (ctx.saveManager && ctx.saveManager.hasWeaponPassive('ionBeam', 'pierceAll')) {
+              pierceDmgMult = 0.8;  // 固定80%伤害穿透所有
+            }
+            this._pierceDamage(sx, sy, tx, ty, dmg * pierceDmgMult, target, ctx);
+          } else if (ctx.saveManager && ctx.saveManager.hasWeaponPassive('ionBeam', 'pierceAll')) {
+            // 没有pierce分支但有pierceAll被动也能穿透
+            this._pierceDamage(sx, sy, tx, ty, dmg * 0.8, target, ctx);  // pierceAll无分支也80%
           }
 
           // 分裂
           if (splitLv > 0) {
             this._splitDamage(tx, ty, dmg * 0.2 * splitLv, target, ctx);
+          }
+
+          // splashHit被动(Lv26): 命中点溅射50px范围内所有敌人30%伤害
+          if (ctx.saveManager && ctx.saveManager.hasWeaponPassive('ionBeam', 'splashHit')) {
+            for (var si = 0; si < ctx.bricks.length; si++) {
+              var sb = ctx.bricks[si];
+              if (!sb.alive || sb === target.ref) continue;
+              var sc = sb.getCenter();
+              var sdx = sc.x - tx, sdy = sc.y - ty;
+              if (Math.sqrt(sdx*sdx + sdy*sdy) <= 70) {
+                ctx.damageBrick(sb, dmg * 0.5, 'ionBeam_splash_passive', 'energy');
+              }
+            }
           }
 
           // 过载脉冲：射击期间每800ms触发一次小范围过载
@@ -205,7 +236,7 @@ class IonBeamWeapon extends Weapon {
             this._overloadPulseTimer += 100; // 每tick +100ms
             if (this._overloadPulseTimer >= 800) {
               this._overloadPulseTimer = 0;
-              this._overloadBurst(tx, ty, tickDamage * (4 + overloadLv * 3), ctx);  // (3+2x)→(4+3x) buff
+              this._overloadBurst(tx, ty, tickDamage * (1.5 + overloadLv * 1), ctx);  // (3+2x)→(4+3x) buff
             }
           }
 
@@ -251,23 +282,26 @@ class IonBeamWeapon extends Weapon {
         this.beam = null;
       }
 
-      // doomBeam被动：持续5秒后全屏贯穿
-      if (this.firingTimer >= 5000 && !this._doomFired && ctx.saveManager && ctx.saveManager.hasWeaponPassive('ionBeam', 'doomBeam')) {
-        this._doomFired = true;
-        var doomDmg = this.getDamage(baseAttack, ctx) * 10;
-        for (var di = 0; di < ctx.bricks.length; di++) {
-          if (ctx.bricks[di].alive) ctx.damageBrick(ctx.bricks[di], doomDmg, 'ionBeam_doom', 'energy');
+      // doomBeam被动：3秒后每秒全屏贯穿脉冲
+      if (this.firingTimer >= 3000 && ctx.saveManager && ctx.saveManager.hasWeaponPassive('ionBeam', 'doomBeam')) {
+        this._doomPulseTimer = (this._doomPulseTimer || 0) + dtMs;
+        if (this._doomPulseTimer >= 1000) {
+          this._doomPulseTimer -= 1000;
+          var doomDmg = this.getDamage(baseAttack, ctx) * 8;
+          for (var di = 0; di < ctx.bricks.length; di++) {
+            if (ctx.bricks[di].alive) ctx.damageBrick(ctx.bricks[di], doomDmg, 'ionBeam_doom', 'energy');
+          }
+          if (ctx.boss && ctx.boss.alive) ctx.damageBoss(doomDmg, 'ionBeam_doom');
+          if (!ctx.shakeCooldown) { ctx.screenShake = 6; ctx.shakeCooldown = 10; }
         }
-        if (ctx.boss && ctx.boss.alive) ctx.damageBoss(doomDmg, 'ionBeam_doom');
-        if (!ctx.shakeCooldown) { ctx.screenShake = 6; ctx.shakeCooldown = 10; }
       }
       if (this.firingTimer >= fireDuration) {
-        this._doomFired = false;
+        this._doomPulseTimer = 0;
         this.isFiring = false;
         this.beam = null;
 
         if (overloadLv > 0 && lastTarget) {
-          this._overloadBurst(lastTarget.x, lastTarget.y, tickDamage * (6 + overloadLv * 5), ctx);  // (5+4x)→(6+5x) buff
+          this._overloadBurst(lastTarget.x, lastTarget.y, tickDamage * (2 + overloadLv * 1.5), ctx);  // (5+4x)→(6+5x) buff
         }
 
         this.markStacks = 0;
