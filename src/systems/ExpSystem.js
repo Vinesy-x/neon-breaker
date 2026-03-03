@@ -23,7 +23,7 @@ class ExpSystem {
   }
 
   _calcExpToLevel(lv) {
-    return 40 + (lv - 1) * 20 + (lv - 1) * (lv - 1) * 3;  // 12min目标Lv15满级
+    return 60 + (lv - 1) * 30 + (lv - 1) * (lv - 1) * 5;  // 10min目标Lv15满级
   }
 
   /** 击碎砖块时调用，生成经验球 */
