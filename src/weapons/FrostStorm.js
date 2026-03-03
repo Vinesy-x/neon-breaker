@@ -24,8 +24,12 @@ class FrostStormWeapon extends Weapon {
   }
 
   /** 冰墙HP = baseAttack × basePct × (1 + damageLv×0.5) */
-  getWallHP(baseAttack) {
-    return Math.max(1, baseAttack * this.def.basePct * (1 + (this.branches.damage || 0) * 0.5));
+  getWallHP(baseAttack, ctx) {
+    var shopMult = 1.0;
+    if (ctx && ctx.saveManager) {
+      shopMult = ctx.saveManager.getWeaponDmgMultiplier(this.key);
+    }
+    return Math.max(1, baseAttack * this.def.basePct * shopMult * (1 + (this.branches.damage || 0) * 0.5));
   }
 
   getMaxWalls() {
@@ -175,7 +179,7 @@ class FrostStormWeapon extends Weapon {
   /** 智能选位 + 放墙/叠加 */
   _placeWall(ctx) {
     var baseAttack = ctx.getBaseAttack ? ctx.getBaseAttack() : 1;
-    var wallHP = this.getWallHP(baseAttack);
+    var wallHP = this.getWallHP(baseAttack, ctx);
     var maxWalls = this.getMaxWalls();
     var wallW = this.getWallWidth();
     var stackLimit = this.getStackLimit();
