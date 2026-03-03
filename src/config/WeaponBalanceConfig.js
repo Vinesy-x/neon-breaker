@@ -128,7 +128,7 @@ module.exports = {
     pulseCycleSec: 4,             // 脉冲周期(s)
     pulseMulti: 4,                // 脉冲倍率×4
     maxSpeed: 1.2,                // 无人机移动速度
-    tickInterval: 300,            // 激光tick间隔(ms)
+    tickInterval: 400,            // 激光tick间隔(ms)
     shieldInterval: 15000,        // 护盾刷新间隔(ms)
     maxShield: 3,                 // 护盾上限
     deployY: 0.3,                 // 初始Y位置比例
@@ -201,26 +201,26 @@ module.exports = {
 
   // ===== 奇点引擎 =====
   gravityWell: {
-    basePct: 2.6,
+    basePct: 0.2,
     interval: 14000,
     damageType: 'energy',
-    branchDmgScale: 0.2,         // 引力强化每级+20%吸力
-    radiusPerLv: 12,              // 每级范围+12px
+    damagePctPerLv: 0.15,         // 引力强化每级+15%伤害
+    horizonMultPerLv: 1.0,        // 事件视界每级中心+100%伤害
+    radiusPerLv: 20,              // 奇点每级范围+20px
     baseRadius: 120,              // 基础吸引半径(px)
     baseDuration: 5000,           // 基础持续时间(ms)
     basePull: 0.4,                // 基础吸力
     tickInterval: 400,            // 伤害tick间隔(ms)
     minInterval: 3000,            // 最小冷却(ms)
-    negaBaseRate: 0.04,           // 负能量基础转化率
-    negaLifetime: 15000,          // 负能量存活时间(ms)
-    negaPerLvRate: 0.1,           // 负能量每级+10%
-    negaBrickSize: 1.5,           // 负能量砖块大小倍率
-    pctHpCapMult: 8,              // %HP伤害上限倍率
-    horizonPctPerLv: 0.02,        // 事件视界每级+2% maxHP/tick
-    singularityDurationPerLv: 1500, // 奇点每级+1.5秒
-    singularityCenterMult: 2,     // 中心30px伤害翻倍
-    darkMatterSizePerLv: 0.3,     // 暗物质体积+30%/级
-    annihilateRangePerLv: 20,     // 湮灭冲击波+20px/级
+    negaRatePerLv: 0.10,          // 黑洞体转化率5%/级
+    negaShieldChancePerLv: 0.2,   // 黑洞护盾概率20%/级
+    negaShieldReduction: 0.5,     // 护盾触发时消耗减半
+    pctHpCapMult: 12,             // 保留(未使用,兼容)
+    sustainBaseTime: 300,             // 黑洞延续:每击败砖块延长0.3s
+    sustainPerLv: 200,               // 2级时每击败延长0.5s
+    singPullDmgPerLv: 0.02,          // 奇点:每吸引砖块tick伤害+10%/级
+    annihilateRangePerLv: 15,     // 湮灭冲击波+15px/级
+    annihilateSplashPct: 0.03,    // 湮灭溅射伤害比例
     lensEnergyPerLv: 0.12,        // 引力透镜+12%/级
   },
 };

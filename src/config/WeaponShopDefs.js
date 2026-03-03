@@ -201,10 +201,10 @@ var WEAPON_SHOP = {
   },
   gravityWell: {
     name: '奇点引擎',
-    sweetSpot: { type: 'duration', base: 3, delta: 0.5, unit: 's' },
+    sweetSpot: { type: 'cd', base: 14000, delta: -800, unit: 'ms' },
     unlockBranches: {
-      2:  'darkMatter',  // 暗物质
-      10: 'annihilate',  // 湮灭链
+      2:  'negaShield',   // 黑洞护盾
+      10: 'annihilate',  // 湮灭冲击
       18: 'lens',        // 引力透镜
     },
     passives: {

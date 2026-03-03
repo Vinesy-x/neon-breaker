@@ -1174,25 +1174,18 @@ function drawGravityWell(ctx, data) {
     var lifeRatio = Math.max(0.01, w.timer / w.duration);
     var pulse = Math.sin(now * 0.004 + i * 2) * 0.1 + 0.9;
 
-    // 外围引力场（大范围暗紫色区域，让人感受到范围）
-    ctx.globalAlpha = 0.18 * lifeRatio;
-    ctx.fillStyle = '#220044';
-    ctx.beginPath(); ctx.arc(w.x, w.y, w.radius, 0, Math.PI * 2); ctx.fill();
-
-    // 引力场边缘 - 双层虚线环
-    ctx.globalAlpha = 0.4 * lifeRatio * pulse;
+    // 外围引力场 — 仅边缘薄环，不遮挡砖块
+    ctx.globalAlpha = 0.08 * lifeRatio;
     ctx.strokeStyle = '#8833CC';
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 8;
+    ctx.beginPath(); ctx.arc(w.x, w.y, w.radius, 0, Math.PI * 2); ctx.stroke();
+
+    // 引力场边缘虚线环
+    ctx.globalAlpha = 0.3 * lifeRatio * pulse;
+    ctx.strokeStyle = '#8833CC';
+    ctx.lineWidth = 1;
     ctx.setLineDash([6, 4]);
     ctx.beginPath(); ctx.arc(w.x, w.y, w.radius, 0, Math.PI * 2); ctx.stroke();
-    ctx.setLineDash([]);
-
-    // 内圈范围环（半径60%处）
-    ctx.globalAlpha = 0.25 * lifeRatio * pulse;
-    ctx.strokeStyle = '#AA55DD';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 6]);
-    ctx.beginPath(); ctx.arc(w.x, w.y, w.radius * 0.6, 0, Math.PI * 2); ctx.stroke();
     ctx.setLineDash([]);
 
     // 扭曲吸积盘（多层旋转弧线，模拟物质被吸入）
@@ -1238,73 +1231,61 @@ function drawGravityWell(ctx, data) {
     }
   }
 
-  // 2. 负能量砖块（非常醒目！）
+  // 2. 黑洞体（圆形黑色+白边）
   for (var i = 0; i < negaBricks.length; i++) {
     var nb = negaBricks[i];
     var absHp = Math.abs(nb.hp);
+    var r = nb.radius || 15;
     var pulse = Math.sin(now * 0.005 + i * 3) * 0.15 + 0.85;
-    var halfW = nb.width * 0.5;
-    var halfH = nb.height * 0.5;
     var isFlash = nb.flashTimer > 0;
 
-    // 外发光（大范围紫色光晕）
-    ctx.globalAlpha = 0.2 * pulse;
-    ctx.fillStyle = '#440088';
-    ctx.fillRect(nb.x - halfW - 8, nb.y - halfH - 8, nb.width + 16, nb.height + 16);
+    // 外发光
+    ctx.globalAlpha = 0.15 * pulse;
+    ctx.fillStyle = '#333333';
+    ctx.beginPath(); ctx.arc(nb.x, nb.y, r + 6, 0, Math.PI * 2); ctx.fill();
 
-    // 本体（暗紫色）
-    ctx.globalAlpha = isFlash ? 0.95 : 0.75;
-    ctx.fillStyle = isFlash ? '#FFFFFF' : '#1A0033';
-    ctx.fillRect(nb.x - halfW, nb.y - halfH, nb.width, nb.height);
+    // 黑色主体
+    ctx.globalAlpha = isFlash ? 0.95 : 0.9;
+    ctx.fillStyle = isFlash ? '#FFFFFF' : '#0A0A0A';
+    ctx.beginPath(); ctx.arc(nb.x, nb.y, r, 0, Math.PI * 2); ctx.fill();
 
-    // 内部漩涡纹理
-    ctx.globalAlpha = 0.3 * pulse;
-    ctx.strokeStyle = '#8844CC';
+    // 白色边框
+    ctx.globalAlpha = 0.85 * pulse;
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(nb.x, nb.y, r, 0, Math.PI * 2); ctx.stroke();
+
+    // 内部漩涡
+    ctx.globalAlpha = 0.25 * pulse;
+    ctx.strokeStyle = '#666666';
     ctx.lineWidth = 1;
     var vAngle = nb.vortexAngle || 0;
     for (var v = 0; v < 3; v++) {
-      var vr = 4 + v * 4;
+      var vr = 3 + v * 3;
+      if (vr > r - 2) break;
       var va = vAngle + v * 1.2;
       ctx.beginPath();
       ctx.arc(nb.x, nb.y, vr, va, va + Math.PI * 0.8);
       ctx.stroke();
     }
 
-    // 紫色霓虹边框
-    ctx.globalAlpha = 0.7 * pulse;
-    ctx.strokeStyle = '#CC44FF';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(nb.x - halfW, nb.y - halfH, nb.width, nb.height);
-
-    // 第二层亮边框
-    ctx.globalAlpha = 0.3;
-    ctx.strokeStyle = '#FFFFFF';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(nb.x - halfW + 1, nb.y - halfH + 1, nb.width - 2, nb.height - 2);
-
-    // 大号负数显示
+    // 负数显示
     ctx.globalAlpha = 1.0;
     ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 11px monospace';
+    ctx.font = 'bold 10px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    // 紫色外发光文字（画两遍模拟）
-    ctx.globalAlpha = 0.5;
-    ctx.fillStyle = '#AA00FF';
-    ctx.fillText('-' + Math.floor(absHp), nb.x + 1, nb.y + 1);
-    ctx.globalAlpha = 1.0;
-    ctx.fillStyle = '#FFFFFF';
     ctx.fillText('-' + Math.floor(absHp), nb.x, nb.y);
 
-    // 反向粒子（从外向内吸入效果，用小点模拟）
-    ctx.globalAlpha = 0.4;
-    ctx.fillStyle = '#AA66FF';
+    // 反向粒子
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = '#AAAAAA';
     for (var d = 0; d < 4; d++) {
       var angle = now * 0.002 + d * Math.PI * 0.5 + i;
-      var dist = halfW + 5 + Math.sin(now * 0.003 + d) * 4;
+      var dist = r + 4 + Math.sin(now * 0.003 + d) * 3;
       var dx = nb.x + Math.cos(angle) * dist;
-      var dy = nb.y + Math.sin(angle) * dist * 0.6;
-      ctx.beginPath(); ctx.arc(dx, dy, 1.2, 0, Math.PI * 2); ctx.fill();
+      var dy = nb.y + Math.sin(angle) * dist;
+      ctx.beginPath(); ctx.arc(dx, dy, 1, 0, Math.PI * 2); ctx.fill();
     }
   }
 

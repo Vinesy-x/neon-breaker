@@ -112,6 +112,7 @@ class DPSSandbox {
     this._cleanups.push(function() { g._updateBrickSpawn = origUpdateSpawn; });
 
     // ========== 7. 分支满级（fullBranch） ==========
+    var customBranches = opts.branches || null; // {damage:10, horizon:2, ...}
     if (fullBranch) {
       // 获取当前 shopLv 下已解锁的分支列表
       var weaponsToMax = allowedWeapons || Object.keys(g.upgrades.weapons);
@@ -173,7 +174,21 @@ class DPSSandbox {
       }
     }
 
-    // ========== 8. 水位控制器 ==========
+    // ========== 7b. 自定义分支覆盖 ==========
+    var testWeapon = g.upgrades && g.upgrades.weapons && g.upgrades.weapons[weaponFilter];
+    if (customBranches && testWeapon) {
+      for (var cbk in customBranches) {
+        testWeapon.branches[cbk] = customBranches[cbk];
+      }
+      var treeDef2 = WeaponDefs[weaponFilter];
+      if (treeDef2) {
+        for (var bk3 in treeDef2.branches) {
+          if (!(bk3 in customBranches)) testWeapon.branches[bk3] = 0;
+        }
+      }
+    }
+
+        // ========== 8. 水位控制器 ==========
     this._ctrl = {
       targetAlive: targetAlive,
       currentHP: 1,
@@ -191,6 +206,7 @@ class DPSSandbox {
       speed: speed,
       targetAlive: targetAlive,
       fullBranch: fullBranch,
+      customBranches: customBranches,
       warmupElapsed: 0,
       isWarmedUp: false,
       measureElapsed: 0,
@@ -246,7 +262,13 @@ class DPSSandbox {
     console.log('║     🎯 DPS沙盘 v6                        ║');
     console.log('╚══════════════════════════════════════════╝');
     console.log('  武器: ' + weaponFilter + ' | 商店Lv: ' + shopLv);
-    console.log('  分支: ' + (fullBranch ? '满级(shopLv已解锁)' : '无'));
+    if (customBranches) {
+      var cbStr = [];
+      for (var ck in customBranches) cbStr.push(ck + '=' + customBranches[ck]);
+      console.log('  分支: 自定义[' + cbStr.join(', ') + ']');
+    } else {
+      console.log('  分支: ' + (fullBranch ? '满级(shopLv已解锁)' : '无'));
+    }
     console.log('  目标存活: ' + targetAlive + ' | 测量: ' + duration + 's | 倍速: ' + speed + 'x');
     console.log('');
 
@@ -507,7 +529,7 @@ class DPSSandbox {
       weaponDamage: weaponDamage,
       buffEvents: Object.assign({}, st.buffEvents),
       snapshots: st.dpsSnapshots,
-      branchDetail: { branches: st.branchSnapshot || {}, totalPts: st.branchTotalPts || 0, passives: this._getPassiveList(st) },
+      branchDetail: { branches: st.branchSnapshot || {}, totalPts: st.branchTotalPts || 0, passives: this._getPassiveList(st), mode: st.customBranches ? 'custom' : (st.fullBranch ? 'full' : 'none'), custom: st.customBranches || null },
     };
   }
 
@@ -574,7 +596,13 @@ class DPSSandbox {
     L.push('║     🎯 DPS沙盘报告 v6                             ║');
     L.push('╚═══════════════════════════════════════════════════╝');
     L.push('');
-    L.push('  武器: ' + r.weapon + ' | 商店Lv: ' + r.shopLv + ' | 分支: ' + (r.fullBranch ? '满级' : '无'));
+    var branchLabel = r.fullBranch ? '满级' : '无';
+    if (r.customBranches) {
+      var parts = [];
+      for (var rk in r.customBranches) parts.push(rk + '=' + r.customBranches[rk]);
+      branchLabel = '自定义[' + parts.join(',') + ']';
+    }
+    L.push('  武器: ' + r.weapon + ' | 商店Lv: ' + r.shopLv + ' | 分支: ' + branchLabel);
     L.push('  测量: ' + r.measureSec + 's | 倍速: ' + r.speed + 'x | 预热: ' + r.warmupSec + 's');
     L.push('  停止: ' + (st.stopReason || '手动'));
     L.push('');
