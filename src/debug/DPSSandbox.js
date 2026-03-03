@@ -690,3 +690,157 @@ class DPSSandbox {
 }
 
 module.exports = DPSSandbox;
+
+// ========== 关卡模拟模式 ==========
+// __chapterTest({ chapter: 1, speed: 10, strategy: 'balanced' })
+// 使用正式关卡timeline的砖块HP，autoBattle自动选技能
+// 返回: 各阶段数据、武器分配、Boss战情况
+
+if (typeof window !== 'undefined') {
+  window.__chapterTest = function(opts) {
+    opts = opts || {};
+    var chapter = opts.chapter || 1;
+    var speed = opts.speed || 10;
+    var strategy = opts.strategy || 'balanced';
+
+    var g = window.__game;
+    var ChapterConfig = require('../ChapterConfig');
+    var cfg = ChapterConfig.get(chapter);
+
+    // 初始化
+    g._initGame();
+    g._devTimeScale = speed;
+    g._devInvincible = true;
+    g._sandboxMode = true;
+
+    // 启动autoBattle
+    if (typeof window.__autoBattle === 'function') {
+      window.__autoBattle(strategy);
+    }
+
+    // Boss越线保护
+    g._sandboxUpdate = function(dtMs) {
+      if (g.boss && g.boss.alive && g.boss.isPastDangerLine) {
+        g.boss.isPastDangerLine = function() { return false; };
+      }
+    };
+
+    // 数据收集
+    var snapshots = [];
+    var phaseLog = {};
+    var _t = setInterval(function() {
+      var e = g.elapsedMs || 0;
+      var phase = g.currentPhase ? g.currentPhase.phase : '?';
+      var bricks = g.bricks ? g.bricks.filter(function(b) { return b.alive; }).length : 0;
+
+      // 武器数据
+      var weaponData = {};
+      var totalWL = 0;
+      for (var k in g.upgrades.weapons) {
+        var w = g.upgrades.weapons[k];
+        var wl = w.getTotalLevel();
+        weaponData[k] = wl;
+        totalWL += wl;
+      }
+      var shipPts = 0;
+      for (var sk in g.upgrades.shipTree) shipPts += g.upgrades.shipTree[sk];
+
+      var snap = {
+        t: Math.round(e / 1000),
+        phase: phase,
+        bricks: bricks,
+        weapons: Object.keys(g.upgrades.weapons).length,
+        weaponLevels: Object.assign({}, weaponData),
+        shipPts: shipPts,
+        totalPts: totalWL + shipPts,
+      };
+
+      // Boss数据
+      if (g.boss && g.boss.alive) {
+        snap.bossHP = Math.round(g.boss.hp);
+        snap.bossMax = g.boss.maxHp;
+      }
+
+      snapshots.push(snap);
+
+      // 记录每个阶段的砖块密度
+      if (!phaseLog[phase]) phaseLog[phase] = { maxBricks: 0, avgBricks: 0, count: 0 };
+      phaseLog[phase].maxBricks = Math.max(phaseLog[phase].maxBricks, bricks);
+      phaseLog[phase].avgBricks = (phaseLog[phase].avgBricks * phaseLog[phase].count + bricks) / (phaseLog[phase].count + 1);
+      phaseLog[phase].count++;
+
+      // 结束条件
+      var done = false;
+      var reason = '';
+      if (g.state === 'CHAPTER_CLEAR') { done = true; reason = '通关'; }
+      else if (g.boss && !g.boss.alive) { done = true; reason = 'Boss击杀'; }
+      else if (e > 900000) { done = true; reason = '超时(900s)'; }
+      else if (g.state === 'GAME_OVER') { done = true; reason = 'GameOver'; }
+
+      if (done) {
+        clearInterval(_t);
+        // 最终武器详情
+        var finalWeapons = {};
+        for (var k in g.upgrades.weapons) {
+          var w = g.upgrades.weapons[k];
+          finalWeapons[k] = {
+            level: w.getTotalLevel(),
+            branches: Object.assign({}, w.branches),
+          };
+        }
+        var finalShip = {};
+        for (var sk in g.upgrades.shipTree) {
+          if (g.upgrades.shipTree[sk] > 0) finalShip[sk] = g.upgrades.shipTree[sk];
+        }
+
+        window.__chapterResult = {
+          chapter: chapter,
+          speed: speed,
+          strategy: strategy,
+          result: reason,
+          elapsed: Math.round(e / 1000),
+          snapshots: snapshots,
+          phaseLog: phaseLog,
+          weapons: finalWeapons,
+          ship: finalShip,
+          totalPts: totalWL + shipPts,
+          bossResult: g.boss ? {
+            hp: Math.round(g.boss.hp),
+            maxHp: g.boss.maxHp,
+            alive: g.boss.alive,
+            killed: !g.boss.alive,
+          } : null,
+        };
+
+        // 打印报告
+        console.log('');
+        console.log('╔══════════════════════════════════════════╗');
+        console.log('║     📊 关卡模拟报告                      ║');
+        console.log('╚══════════════════════════════════════════╝');
+        console.log('  章节: ' + chapter + ' | 策略: ' + strategy + ' | 倍速: ' + speed + 'x');
+        console.log('  结果: ' + reason + ' | 耗时: ' + Math.round(e / 1000) + 's');
+        console.log('  总技能点: ' + (totalWL + shipPts));
+        console.log('');
+        console.log('  武器:');
+        for (var k in finalWeapons) {
+          console.log('    ' + k + ': Lv' + finalWeapons[k].level);
+        }
+        console.log('  飞机: ' + JSON.stringify(finalShip));
+        if (g.boss) {
+          console.log('  Boss: ' + Math.round(g.boss.hp) + '/' + g.boss.maxHp +
+            (g.boss.alive ? ' (存活)' : ' (击杀)'));
+        }
+        console.log('');
+        console.log('  阶段砖块密度:');
+        for (var pk in phaseLog) {
+          var pl = phaseLog[pk];
+          console.log('    ' + pk + ': avg=' + pl.avgBricks.toFixed(0) + ' max=' + pl.maxBricks);
+        }
+      }
+    }, 3000);
+
+    return '关卡模拟启动: Ch' + chapter + ' @' + speed + 'x ' + strategy;
+  };
+
+  window.__chapterResult = null;
+}
