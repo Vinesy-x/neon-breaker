@@ -692,9 +692,16 @@ class DPSSandbox {
 module.exports = DPSSandbox;
 
 // ========== 关卡模拟模式 ==========
-// __chapterTest({ chapter: 1, speed: 10, strategy: 'balanced' })
-// 使用正式关卡timeline的砖块HP，autoBattle自动选技能
-// 返回: 各阶段数据、武器分配、Boss战情况
+// __chapterTest({ chapter: 1, speed: 10, mode: 'normal' })
+//
+// mode:
+//   'balance' (默认) — 沙盒模式，跳过掉落物/金币/宝箱，纯DPS测试
+//   'normal'         — 完整正式关卡：经验球+掉落物+金币+宝箱+智能选技能
+//
+// 其他参数:
+//   chapter: 关卡号 (默认1)
+//   speed:   倍速 (默认10)
+//   strategy: autoBattle策略 'balanced'|'aggressive'|'burst' (默认balanced)
 
 if (typeof window !== 'undefined') {
   window.__chapterTest = function(opts) {
@@ -702,30 +709,43 @@ if (typeof window !== 'undefined') {
     var chapter = opts.chapter || 1;
     var speed = opts.speed || 10;
     var strategy = opts.strategy || 'balanced';
+    var mode = opts.mode || 'balance';
+    var isNormal = (mode === 'normal');
 
     var g = window.__game;
-    var ChapterConfig = require('../ChapterConfig');
-    var cfg = ChapterConfig.get(chapter);
 
     // 初始化
     g._initGame();
     g._devTimeScale = speed;
     g._devInvincible = true;
-    g._sandboxMode = true;
+
+    // balance模式: 开sandboxMode(跳掉落物，跳帧渲染)
+    // normal模式:  关sandboxMode(完整掉落+经验+金币+宝箱)
+    g._sandboxMode = !isNormal;
 
     // 启动autoBattle
     if (typeof window.__autoBattle === 'function') {
       window.__autoBattle(strategy);
     }
 
-    // Boss越线保护
+    // Boss越线保护 + 位置锁定
+    var _bossPatched = false;
+    var _origSandboxUpdate = g._sandboxUpdate;
     g._sandboxUpdate = function(dtMs) {
-      if (g.boss && g.boss.alive && g.boss.isPastDangerLine) {
+      if (_origSandboxUpdate) _origSandboxUpdate(dtMs);
+      if (g.boss && g.boss.alive && !_bossPatched) {
         g.boss.isPastDangerLine = function() { return false; };
+        var _origBossUpdate = g.boss.update.bind(g.boss);
+        g.boss.update = function(dt) {
+          _origBossUpdate(dt);
+          if (g.boss.y > 300) g.boss.y = 120;
+        };
+        _bossPatched = true;
       }
     };
 
     // 数据收集
+    var _wallStart = Date.now();
     var snapshots = [];
     var phaseLog = {};
     var _t = setInterval(function() {
@@ -745,6 +765,7 @@ if (typeof window !== 'undefined') {
       var shipPts = 0;
       for (var sk in g.upgrades.shipTree) shipPts += g.upgrades.shipTree[sk];
 
+      var expLv = g.expSystem ? g.expSystem.playerLevel : 0;
       var snap = {
         t: Math.round(e / 1000),
         phase: phase,
@@ -753,6 +774,7 @@ if (typeof window !== 'undefined') {
         weaponLevels: Object.assign({}, weaponData),
         shipPts: shipPts,
         totalPts: totalWL + shipPts,
+        expLv: expLv,
       };
 
       // Boss数据
@@ -772,9 +794,10 @@ if (typeof window !== 'undefined') {
       // 结束条件
       var done = false;
       var reason = '';
+      var wallElapsed = Date.now() - _wallStart;
       if (g.state === 'CHAPTER_CLEAR') { done = true; reason = '通关'; }
       else if (g.boss && !g.boss.alive) { done = true; reason = 'Boss击杀'; }
-      else if (e > 900000) { done = true; reason = '超时(900s)'; }
+      else if (wallElapsed > (900000 / speed)) { done = true; reason = '超时(wall ' + Math.round(wallElapsed/1000) + 's)'; }
       else if (g.state === 'GAME_OVER') { done = true; reason = 'GameOver'; }
 
       if (done) {
@@ -796,6 +819,7 @@ if (typeof window !== 'undefined') {
         window.__chapterResult = {
           chapter: chapter,
           speed: speed,
+          mode: mode,
           strategy: strategy,
           result: reason,
           elapsed: Math.round(e / 1000),
@@ -817,7 +841,7 @@ if (typeof window !== 'undefined') {
         console.log('╔══════════════════════════════════════════╗');
         console.log('║     📊 关卡模拟报告                      ║');
         console.log('╚══════════════════════════════════════════╝');
-        console.log('  章节: ' + chapter + ' | 策略: ' + strategy + ' | 倍速: ' + speed + 'x');
+        console.log('  章节: ' + chapter + ' | 模式: ' + mode + ' | 策略: ' + strategy + ' | 倍速: ' + speed + 'x');
         console.log('  结果: ' + reason + ' | 耗时: ' + Math.round(e / 1000) + 's');
         console.log('  总技能点: ' + (totalWL + shipPts));
         console.log('');
@@ -839,7 +863,7 @@ if (typeof window !== 'undefined') {
       }
     }, 3000);
 
-    return '关卡模拟启动: Ch' + chapter + ' @' + speed + 'x ' + strategy;
+    return '关卡模拟启动: Ch' + chapter + ' [' + mode + '] @' + speed + 'x ' + strategy;
   };
 
   window.__chapterResult = null;
