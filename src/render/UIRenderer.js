@@ -444,7 +444,13 @@ function drawSkillChoice(ctx, sprites, choices, upgrades, title, game) {
       ctx.fillStyle = isFree ? '#00FF88' : '#FFCC00';
       ctx.font = 'bold 13px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       var label = isFree ? '免费刷新' : '看广告刷新 (' + (maxAd - adUsed) + ')';
-      ctx.fillText(label, cx, btnY + btnH / 2);
+      var refreshIconKey = isFree ? 'ui_refresh' : 'ui_ad';
+      var IL3 = getIconLoader();
+      var iconSz = 16;
+      var textW = ctx.measureText(label).width;
+      var totalW2 = iconSz + 4 + textW;
+      IL3.drawIcon(ctx, refreshIconKey, cx - totalW2 / 2 + iconSz / 2, btnY + btnH / 2, iconSz);
+      ctx.fillText(label, cx + iconSz / 2 + 2, btnY + btnH / 2);
       _refreshBtnArea = { x: btnX, y: btnY, w: btnW, h: btnH, needAd: !isFree };
     }
   }
