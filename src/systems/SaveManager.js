@@ -30,6 +30,23 @@ const DEFAULT_SAVE = {
   },
   weaponLevels: {},  // 通过 getWeaponLevel 自动补1级
   chapterRecords: {},
+  // === 芯片系统 ===
+  chips: [],
+  chipUidCounter: 0,
+  equipped: {
+    fireControl: [null, null, null, null, null],
+    powerCore:   [null, null, null, null, null],
+    armorBay:    [null, null, null, null, null],
+    mobility:    [null, null, null, null, null],
+    tactical:    [null, null, null, null, null],
+    expansion:   [null, null, null, null, null],
+  },
+  partsUnlocked: ['fireControl', 'powerCore', 'armorBay'],
+  diamonds: 0,
+  premiumPity: 0,
+  freeDrawToday: false,
+  scraps: 0,
+  solvents: 0,
 };
 
 class SaveManager {
@@ -53,6 +70,20 @@ class SaveManager {
           }
         }
         if (!this._data.weaponLevels) this._data.weaponLevels = {};
+        // 芯片系统字段补全（旧存档兼容）
+        if (!this._data.chips) this._data.chips = [];
+        if (!this._data.chipUidCounter) this._data.chipUidCounter = 0;
+        if (!this._data.equipped) this._data.equipped = {
+          fireControl:[null,null,null,null,null], powerCore:[null,null,null,null,null],
+          armorBay:[null,null,null,null,null], mobility:[null,null,null,null,null],
+          tactical:[null,null,null,null,null], expansion:[null,null,null,null,null],
+        };
+        if (!this._data.partsUnlocked) this._data.partsUnlocked = ['fireControl','powerCore','armorBay'];
+        if (this._data.diamonds === undefined) this._data.diamonds = 0;
+        if (this._data.premiumPity === undefined) this._data.premiumPity = 0;
+        if (this._data.freeDrawToday === undefined) this._data.freeDrawToday = false;
+        if (this._data.scraps === undefined) this._data.scraps = 0;
+        if (this._data.solvents === undefined) this._data.solvents = 0;
       } else {
         this._data = JSON.parse(JSON.stringify(DEFAULT_SAVE));
       }
@@ -404,6 +435,38 @@ class SaveManager {
   isWeaponBranchUnlocked(weaponKey, branchKey) {
     return ShopDefs.isBranchUnlocked(weaponKey, branchKey, this.getWeaponLevel(weaponKey));
   }
+
+
+  // ===== 芯片系统便捷方法 =====
+
+  getChips() { return this._data.chips; }
+  setChips(chips) { this._data.chips = chips; this.save(); }
+
+  getChipUidCounter() { return this._data.chipUidCounter; }
+  incChipUid() { this._data.chipUidCounter++; this.save(); return this._data.chipUidCounter; }
+
+  getEquipped() { return this._data.equipped; }
+  setEquipped(equipped) { this._data.equipped = equipped; this.save(); }
+
+  getPartsUnlocked() { return this._data.partsUnlocked || []; }
+  setPartsUnlocked(parts) { this._data.partsUnlocked = parts; this.save(); }
+
+  getDiamonds() { return this._data.diamonds || 0; }
+  addDiamonds(n) { this._data.diamonds = (this._data.diamonds||0) + n; this.save(); }
+  spendDiamonds(n) { if (this.getDiamonds() < n) return false; this._data.diamonds -= n; this.save(); return true; }
+
+  getScraps() { return this._data.scraps || 0; }
+  addScraps(n) { this._data.scraps = (this._data.scraps||0) + n; this.save(); }
+
+  getSolvents() { return this._data.solvents || 0; }
+  addSolvents(n) { this._data.solvents = (this._data.solvents||0) + n; this.save(); }
+  spendSolvent() { if (this.getSolvents() < 1) return false; this._data.solvents--; this.save(); return true; }
+
+  getPremiumPity() { return this._data.premiumPity || 0; }
+  setPremiumPity(n) { this._data.premiumPity = n; this.save(); }
+
+  getFreeDrawToday() { return this._data.freeDrawToday || false; }
+  setFreeDrawToday(v) { this._data.freeDrawToday = v; this.save(); }
 
   resetSave(onDone) {
     _justReset = true;
