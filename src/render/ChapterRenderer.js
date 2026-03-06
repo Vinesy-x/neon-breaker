@@ -235,7 +235,7 @@ class ChapterRenderer {
   }
 
   // ===== 升级商店 =====
-  drawUpgradeShop(ctx, saveManager) {
+  drawUpgradeShop(ctx, saveManager, chipManager) {
     var sw = Config.SCREEN_WIDTH, sh = Config.SCREEN_HEIGHT, top = Config.SAFE_TOP;
     ctx.fillStyle = 'rgba(5,3,20,1)'; ctx.fillRect(0, 0, sw, sh);
     this._drawBg(ctx, sw, sh, 0.3, this._upgradeBg);
@@ -246,8 +246,44 @@ class ChapterRenderer {
     IL1.drawIcon(ctx, 'ui_coin', 20, top + 13, 16);
     ctx.fillStyle = Config.NEON_YELLOW; ctx.font = 'bold 14px monospace';
     ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText('' + saveManager.getCoins(), 30, top + 6);
+    // 二级tab：飞机改造 | 改装台 | 抽奖
+    var subTabY = top + 32;
+    var subTabH = 36;
+    var subTabs = ['飞机改造', '改装台', '抽奖'];
+    var subTabColors = ['#00DDFF', '#BB66FF', '#FF8800'];
+    var activeSubTab = this._upgradeSubTab || 0;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, subTabY, sw, subTabH);
+    this._upgradeSubTabAreas = [];
+    var stw = sw / 3;
+    for (var ti = 0; ti < 3; ti++) {
+      var stx = stw * ti, stcx = stx + stw / 2;
+      ctx.fillStyle = ti === activeSubTab ? subTabColors[ti] : 'rgba(255,255,255,0.3)';
+      ctx.font = ti === activeSubTab ? 'bold 14px monospace' : '13px monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(subTabs[ti], stcx, subTabY + subTabH / 2);
+      if (ti === activeSubTab) {
+        ctx.fillStyle = subTabColors[ti]; ctx.fillRect(stx + 10, subTabY + subTabH - 3, stw - 20, 3);
+      }
+      this._upgradeSubTabAreas.push({ idx: ti, x: stx, y: subTabY, w: stw, h: subTabH });
+    }
+
+    // 如果选的是改装台或抽奖，交给对应UI绘制
+    if (activeSubTab === 1) {
+      if (!this._hangarUI) { var HangarUI = require('./HangarUI'); this._hangarUI = new HangarUI(); }
+      this._hangarUI.draw(ctx, chipManager, saveManager);
+      this._drawLobbyTabs(ctx, sw, sh, 1);
+      return;
+    }
+    if (activeSubTab === 2) {
+      if (!this._gachaUI) { var GachaUI = require('./GachaUI'); this._gachaUI = new GachaUI(); }
+      this._gachaUI.draw(ctx, saveManager);
+      this._drawLobbyTabs(ctx, sw, sh, 1);
+      return;
+    }
+
+    // === 原飞机改造内容 ===
     ctx.fillStyle = Config.NEON_CYAN; ctx.font = 'bold 16px monospace';
-    ctx.textAlign = 'center'; ctx.fillText('飞机改造', sw / 2, top + 6);
+    ctx.textAlign = 'center';
 
     // imgPt：原图坐标→屏幕坐标（与_drawBg cover适配同步）
     var imgW = this._upgradeBg ? (this._upgradeBg.width || 1024) : 1024;
@@ -915,23 +951,23 @@ class ChapterRenderer {
   }
 
   _drawLobbyTabs(ctx, sw, sh, activeIdx) {
-    const tabH = 70, tabY = sh - Config.SAFE_BOTTOM - tabH, tabW = sw / 4;
-    const labels = ['关卡', '飞机', '武器', '改装'];
-    const tabIcons = ['tab_chapter', 'tab_upgrade', 'tab_weapon', 'tab_hangar'];
-    const tabColors = ['#FFB830', '#00DDFF', '#FF3366', '#BB66FF'];
+    const tabH = 70, tabY = sh - Config.SAFE_BOTTOM - tabH, tabW = sw / 3;
+    const labels = ['关卡', '飞机', '武器'];
+    const tabIcons = ['tab_chapter', 'tab_upgrade', 'tab_weapon'];
+    const tabColors = ['#FFB830', '#00DDFF', '#FF3366'];
     ctx.fillStyle = 'rgba(10, 10, 30, 0.95)'; ctx.fillRect(0, tabY, sw, tabH + Config.SAFE_BOTTOM);
     ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, tabY); ctx.lineTo(sw, tabY); ctx.stroke();
     const IL = getIconLoader();
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 3; i++) {
       const tx = tabW * i, tcx = tx + tabW / 2;
       if (i === activeIdx) { ctx.fillStyle = tabColors[i]; ctx.fillRect(tx, tabY, tabW, 3); }
       IL.drawIcon(ctx, tabIcons[i], tcx, tabY + 24, 36);
       ctx.fillStyle = i === activeIdx ? tabColors[i] : 'rgba(255,255,255,0.3)';
       ctx.font = i === activeIdx ? 'bold 12px monospace' : '12px monospace';
       ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(labels[i], tcx, tabY + 46);
-      if (i < 3) { ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.beginPath(); ctx.moveTo(tx + tabW, tabY + 10); ctx.lineTo(tx + tabW, tabY + tabH - 10); ctx.stroke(); }
+      if (i < 2) { ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.beginPath(); ctx.moveTo(tx + tabW, tabY + 10); ctx.lineTo(tx + tabW, tabY + tabH - 10); ctx.stroke(); }
     }
-    this._chapterTabAreas = { battle: { x: 0, y: tabY, w: tabW, h: tabH }, upgrade: { x: tabW, y: tabY, w: tabW, h: tabH }, weapon: { x: tabW * 2, y: tabY, w: tabW, h: tabH }, hangar: { x: tabW * 3, y: tabY, w: tabW, h: tabH } };
+    this._chapterTabAreas = { battle: { x: 0, y: tabY, w: tabW, h: tabH }, upgrade: { x: tabW, y: tabY, w: tabW, h: tabH }, weapon: { x: tabW * 2, y: tabY, w: tabW, h: tabH } };
   }
 
   // ===== 点击判定 =====
@@ -939,7 +975,6 @@ class ChapterRenderer {
     if (this._chapterTabAreas) {
       const u = this._chapterTabAreas.upgrade; if (u && tap.x >= u.x && tap.x <= u.x + u.w && tap.y >= u.y && tap.y <= u.y + u.h) return 'upgrade';
       const w = this._chapterTabAreas.weapon; if (w && tap.x >= w.x && tap.x <= w.x + w.w && tap.y >= w.y && tap.y <= w.y + w.h) return 'weapon';
-      const h = this._chapterTabAreas.hangar; if (h && tap.x >= h.x && tap.x <= h.x + h.w && tap.y >= h.y && tap.y <= h.y + h.h) return 'hangar';
     }
     if (this._chapterHitAreas) { for (let i = 0; i < this._chapterHitAreas.length; i++) { const a = this._chapterHitAreas[i]; if (tap.x >= a.x && tap.x <= a.x + a.w && tap.y >= a.y && tap.y <= a.y + a.h) return a.chapter; } }
     return null;

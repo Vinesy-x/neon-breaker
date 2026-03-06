@@ -23,6 +23,8 @@ const InputManager = require('./input/InputManager');
 const Sound = require('./systems/SoundManager');
 const DevPanel = require('./DevPanel');
 const AutoBattle = require('./debug/AutoBattle');
+const ChipManager = require('./systems/ChipManager');
+const GachaManager = require('./systems/GachaManager');
 
 // 系统模块
 const CombatSystem = require('./systems/CombatSystem');
@@ -53,11 +55,6 @@ class Game {
     this.launcher = null;
     this.particles = new ParticleManager();
     this.powerUps = [];
-      // 芯片掉落
-      if (this.gachaManager) {
-        var isFirstClear = !this.saveManager.isChapterCleared(this.currentChapter);
-        this._bossDropChips = this.gachaManager.bossDropChip(this.currentChapter, isFirstClear);
-      }
     this.boss = null;
     this.floatingTexts = [];
     this.screenShake = 0;
@@ -210,11 +207,6 @@ class Game {
     this.fireTimer = 0;
     this.comboTimer = 0;
     this.spawnTimer = 0;
-      // 芯片掉落
-      if (this.gachaManager) {
-        var isFirstClear = !this.saveManager.isChapterCleared(this.currentChapter);
-        this._bossDropChips = this.gachaManager.bossDropChip(this.currentChapter, isFirstClear);
-      }
     this.boss = null;
     this.score = 0;
 
@@ -308,8 +300,6 @@ class Game {
       case Config.STATE.CHAPTER_SELECT: this.ui.updateChapterSelect(); break;
       case Config.STATE.UPGRADE_SHOP: this.ui.updateUpgradeShop(); break;
       case Config.STATE.WEAPON_SHOP: this.ui.updateWeaponShop(); break;
-      case Config.STATE.HANGAR: this.ui.updateHangar(); break;
-      case Config.STATE.GACHA: this.ui.updateGacha(); break;
       case Config.STATE.PLAYING: this._updatePlaying(dt, dtMs); break;
       case Config.STATE.BOSS: this._updateBoss(dt, dtMs); break;
       case Config.STATE.PAUSED: this.ui.updatePaused(); break;
@@ -470,7 +460,6 @@ class Game {
       this.saveManager.setChapterRecord(this.currentChapter, this.score, this.expSystem.playerLevel);
       if (!this.saveManager.isChapterCleared(this.currentChapter) && this.currentChapter >= this.saveManager.getMaxChapter()) this.saveManager.unlockNextChapter();
       this.saveManager.addCoins(this.coinsEarned);
-      // 检查部位解锁
       if (this.chipManager) this.chipManager.checkPartUnlock();
       // 芯片掉落
       if (this.gachaManager) {
@@ -574,11 +563,6 @@ class Game {
     }
     for (var i = 0; i < this.bricks.length; i++) this.bricks[i].alive = false;
     this.bricks = [];
-      // 芯片掉落
-      if (this.gachaManager) {
-        var isFirstClear = !this.saveManager.isChapterCleared(this.currentChapter);
-        this._bossDropChips = this.gachaManager.bossDropChip(this.currentChapter, isFirstClear);
-      }
     this.boss = null;
     this.damageStats = {};
     this.currentChapter = chapter;
@@ -622,10 +606,8 @@ class Game {
       case Config.STATE.CHAPTER_SELECT:
         this.renderer.drawChapterSelect(this.saveManager.getMaxChapter(), this.saveManager.getData().chapterRecords, this.saveManager.getCoins());
         break;
-      case Config.STATE.UPGRADE_SHOP: this.renderer.drawUpgradeShop(this.saveManager); break;
+      case Config.STATE.UPGRADE_SHOP: this.renderer.drawUpgradeShop(this.saveManager, this.chipManager); break;
       case Config.STATE.WEAPON_SHOP: this.renderer.drawWeaponShop(this.saveManager); break;
-      case Config.STATE.HANGAR: if (!this._hangarUI) { var HangarUI = require("./render/HangarUI"); this._hangarUI = new HangarUI(); } this._hangarUI.draw(this.ctx, this.chipManager, this.saveManager); break;
-      case Config.STATE.GACHA: if (!this._gachaUI) { var GachaUI = require("./render/GachaUI"); this._gachaUI = new GachaUI(); } this._gachaUI.draw(this.ctx, this.saveManager); break;
       case Config.STATE.PLAYING:
         this._renderGame();
         if (this.bossWarningTimer > 0) this.renderer.drawBossWarning(this.chapterConfig.bossType);

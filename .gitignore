@@ -4,3 +4,6 @@ node_modules/
 
 # Web debug (不参与微信小游戏打包)
 web/
+node_modules/
+test-results/
+package-lock.json
