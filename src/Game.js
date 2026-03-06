@@ -300,6 +300,7 @@ class Game {
       case Config.STATE.CHAPTER_SELECT: this.ui.updateChapterSelect(); break;
       case Config.STATE.UPGRADE_SHOP: this.ui.updateUpgradeShop(); break;
       case Config.STATE.WEAPON_SHOP: this.ui.updateWeaponShop(); break;
+      case Config.STATE.SHOP: this.ui.updateShop(); break;
       case Config.STATE.PLAYING: this._updatePlaying(dt, dtMs); break;
       case Config.STATE.BOSS: this._updateBoss(dt, dtMs); break;
       case Config.STATE.PAUSED: this.ui.updatePaused(); break;
@@ -608,6 +609,7 @@ class Game {
         break;
       case Config.STATE.UPGRADE_SHOP: this.renderer.drawUpgradeShop(this.saveManager, this.chipManager); break;
       case Config.STATE.WEAPON_SHOP: this.renderer.drawWeaponShop(this.saveManager); break;
+      case Config.STATE.SHOP: this.renderer.drawShop(this.saveManager); break;
       case Config.STATE.PLAYING:
         this._renderGame();
         if (this.bossWarningTimer > 0) this.renderer.drawBossWarning(this.chapterConfig.bossType);

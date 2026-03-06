@@ -246,16 +246,23 @@ class ChapterRenderer {
     IL1.drawIcon(ctx, 'ui_coin', 20, top + 13, 16);
     ctx.fillStyle = Config.NEON_YELLOW; ctx.font = 'bold 14px monospace';
     ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText('' + saveManager.getCoins(), 30, top + 6);
-    // 二级tab：飞机改造 | 改装台 | 抽奖
-    var subTabY = top + 32;
+    ctx.fillStyle = Config.NEON_CYAN; ctx.font = 'bold 16px monospace';
+    ctx.textAlign = 'center'; ctx.fillText('飞机', sw / 2, top + 6);
+
+    // 底部二级tab（在lobbyTabs上方）
+    var lobbyTabH = 70;
+    var lobbyTabY = sh - Config.SAFE_BOTTOM - lobbyTabH;
     var subTabH = 36;
-    var subTabs = ['飞机改造', '改装台', '抽奖'];
-    var subTabColors = ['#00DDFF', '#BB66FF', '#FF8800'];
+    var subTabY = lobbyTabY - subTabH;
+    var subTabs = ['改造', '改装'];
+    var subTabColors = ['#00DDFF', '#BB66FF'];
     var activeSubTab = this._upgradeSubTab || 0;
-    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, subTabY, sw, subTabH);
+    ctx.fillStyle = 'rgba(10,10,30,0.9)'; ctx.fillRect(0, subTabY, sw, subTabH);
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, subTabY); ctx.lineTo(sw, subTabY); ctx.stroke();
     this._upgradeSubTabAreas = [];
-    var stw = sw / 3;
-    for (var ti = 0; ti < 3; ti++) {
+    var stw = sw / 2;
+    for (var ti = 0; ti < 2; ti++) {
       var stx = stw * ti, stcx = stx + stw / 2;
       ctx.fillStyle = ti === activeSubTab ? subTabColors[ti] : 'rgba(255,255,255,0.3)';
       ctx.font = ti === activeSubTab ? 'bold 14px monospace' : '13px monospace';
@@ -267,16 +274,10 @@ class ChapterRenderer {
       this._upgradeSubTabAreas.push({ idx: ti, x: stx, y: subTabY, w: stw, h: subTabH });
     }
 
-    // 如果选的是改装台或抽奖，交给对应UI绘制
+    // 如果选的是改装台，交给HangarUI绘制
     if (activeSubTab === 1) {
       if (!this._hangarUI) { var HangarUI = require('./HangarUI'); this._hangarUI = new HangarUI(); }
       this._hangarUI.draw(ctx, chipManager, saveManager);
-      this._drawLobbyTabs(ctx, sw, sh, 1);
-      return;
-    }
-    if (activeSubTab === 2) {
-      if (!this._gachaUI) { var GachaUI = require('./GachaUI'); this._gachaUI = new GachaUI(); }
-      this._gachaUI.draw(ctx, saveManager);
       this._drawLobbyTabs(ctx, sw, sh, 1);
       return;
     }
@@ -951,23 +952,45 @@ class ChapterRenderer {
   }
 
   _drawLobbyTabs(ctx, sw, sh, activeIdx) {
-    const tabH = 70, tabY = sh - Config.SAFE_BOTTOM - tabH, tabW = sw / 3;
-    const labels = ['关卡', '飞机', '武器'];
-    const tabIcons = ['tab_chapter', 'tab_upgrade', 'tab_weapon'];
-    const tabColors = ['#FFB830', '#00DDFF', '#FF3366'];
+    const tabH = 70, tabY = sh - Config.SAFE_BOTTOM - tabH, tabW = sw / 4;
+    const labels = ['关卡', '飞机', '武器', '商城'];
+    const tabIcons = ['tab_chapter', 'tab_upgrade', 'tab_weapon', 'tab_shop'];
+    const tabColors = ['#FFB830', '#00DDFF', '#FF3366', '#FF8800'];
     ctx.fillStyle = 'rgba(10, 10, 30, 0.95)'; ctx.fillRect(0, tabY, sw, tabH + Config.SAFE_BOTTOM);
     ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, tabY); ctx.lineTo(sw, tabY); ctx.stroke();
     const IL = getIconLoader();
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 4; i++) {
       const tx = tabW * i, tcx = tx + tabW / 2;
       if (i === activeIdx) { ctx.fillStyle = tabColors[i]; ctx.fillRect(tx, tabY, tabW, 3); }
       IL.drawIcon(ctx, tabIcons[i], tcx, tabY + 24, 36);
       ctx.fillStyle = i === activeIdx ? tabColors[i] : 'rgba(255,255,255,0.3)';
       ctx.font = i === activeIdx ? 'bold 12px monospace' : '12px monospace';
       ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(labels[i], tcx, tabY + 46);
-      if (i < 2) { ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.beginPath(); ctx.moveTo(tx + tabW, tabY + 10); ctx.lineTo(tx + tabW, tabY + tabH - 10); ctx.stroke(); }
+      if (i < 3) { ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.beginPath(); ctx.moveTo(tx + tabW, tabY + 10); ctx.lineTo(tx + tabW, tabY + tabH - 10); ctx.stroke(); }
     }
-    this._chapterTabAreas = { battle: { x: 0, y: tabY, w: tabW, h: tabH }, upgrade: { x: tabW, y: tabY, w: tabW, h: tabH }, weapon: { x: tabW * 2, y: tabY, w: tabW, h: tabH } };
+    this._chapterTabAreas = { battle: { x: 0, y: tabY, w: tabW, h: tabH }, upgrade: { x: tabW, y: tabY, w: tabW, h: tabH }, weapon: { x: tabW * 2, y: tabY, w: tabW, h: tabH }, shop: { x: tabW * 3, y: tabY, w: tabW, h: tabH } };
+  }
+
+  // ===== 商城页面 =====
+  drawShop(ctx, saveManager) {
+    var sw = Config.SCREEN_WIDTH, sh = Config.SCREEN_HEIGHT, top = Config.SAFE_TOP;
+    ctx.fillStyle = 'rgba(5,3,20,1)'; ctx.fillRect(0, 0, sw, sh);
+    this._drawBg(ctx, sw, sh, 0.3, this._upgradeBg);
+
+    // 顶部信息栏
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, sw, top + 32);
+    var IL1 = getIconLoader();
+    IL1.drawIcon(ctx, 'ui_coin', 20, top + 13, 16);
+    ctx.fillStyle = Config.NEON_YELLOW; ctx.font = 'bold 14px monospace';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText('' + saveManager.getCoins(), 30, top + 6);
+    ctx.fillStyle = '#FF8800'; ctx.font = 'bold 16px monospace';
+    ctx.textAlign = 'center'; ctx.fillText('商城', sw / 2, top + 6);
+
+    // GachaUI 绘制
+    if (!this._gachaUI) { var GachaUI = require('./GachaUI'); this._gachaUI = new GachaUI(); }
+    this._gachaUI.draw(ctx, saveManager);
+
+    this._drawLobbyTabs(ctx, sw, sh, 3);
   }
 
   // ===== 点击判定 =====
@@ -975,6 +998,7 @@ class ChapterRenderer {
     if (this._chapterTabAreas) {
       const u = this._chapterTabAreas.upgrade; if (u && tap.x >= u.x && tap.x <= u.x + u.w && tap.y >= u.y && tap.y <= u.y + u.h) return 'upgrade';
       const w = this._chapterTabAreas.weapon; if (w && tap.x >= w.x && tap.x <= w.x + w.w && tap.y >= w.y && tap.y <= w.y + w.h) return 'weapon';
+      const s = this._chapterTabAreas.shop; if (s && tap.x >= s.x && tap.x <= s.x + s.w && tap.y >= s.y && tap.y <= s.y + s.h) return 'shop';
     }
     if (this._chapterHitAreas) { for (let i = 0; i < this._chapterHitAreas.length; i++) { const a = this._chapterHitAreas[i]; if (tap.x >= a.x && tap.x <= a.x + a.w && tap.y >= a.y && tap.y <= a.y + a.h) return a.chapter; } }
     return null;

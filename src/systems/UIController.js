@@ -48,6 +48,7 @@ class UIController {
     var r = g.renderer.getChapterSelectHit(t);
     if (r === 'upgrade') g.state = Config.STATE.UPGRADE_SHOP;
     else if (r === 'weapon') { g.renderer._weaponDetailKey = null; g.state = Config.STATE.WEAPON_SHOP; }
+    else if (r === 'shop') { g.state = Config.STATE.SHOP; }
     else if (r === 'sound') Sound.toggle();
     else if (typeof r === 'number' && r > 0 && r <= maxChapter) { g.currentChapter = r; g._initGame(); }
   }
@@ -58,75 +59,17 @@ class UIController {
     var g = this.game;
     var activeSubTab = g.renderer._upgradeSubTab || 0;
 
-    // 改装台子tab：委托给HangarUI处理
+    // 改装台子tab
     if (activeSubTab === 1) {
       if (!g._hangarUI) g._hangarUI = new HangarUI();
-      // 惯性滚动
-      if (g._hangarUI._scrollVelocity && !g._scrolling) {
-        g._hangarUI._scrollY += g._hangarUI._scrollVelocity;
-        g._hangarUI._scrollVelocity *= 0.92;
-        if (Math.abs(g._hangarUI._scrollVelocity) < 0.3) g._hangarUI._scrollVelocity = 0;
-      }
       var t = g.input.consumeTap();
       if (!t) return;
-      // 先检查二级tab
-      if (g.renderer._upgradeSubTabAreas) {
-        for (var i = 0; i < g.renderer._upgradeSubTabAreas.length; i++) {
-          var a = g.renderer._upgradeSubTabAreas[i];
-          if (t.x >= a.x && t.x <= a.x + a.w && t.y >= a.y && t.y <= a.y + a.h) {
-            g.renderer._upgradeSubTab = a.idx; return;
-          }
-        }
-      }
-      // 再检查底部tab
-      if (g.renderer._chapterTabAreas) {
-        var tabs = g.renderer._chapterTabAreas;
-        if (tabs.battle && t.x >= tabs.battle.x && t.x <= tabs.battle.x + tabs.battle.w && t.y >= tabs.battle.y && t.y <= tabs.battle.y + tabs.battle.h) {
-          g.state = Config.STATE.CHAPTER_SELECT; return;
-        }
-        if (tabs.weapon && t.x >= tabs.weapon.x && t.x <= tabs.weapon.x + tabs.weapon.w && t.y >= tabs.weapon.y && t.y <= tabs.weapon.y + tabs.weapon.h) {
-          g.renderer._weaponDetailKey = null; g.state = Config.STATE.WEAPON_SHOP; return;
-        }
-      }
+      // 二级tab
+      if (this._checkSubTab(g, t)) return;
+      // 底部tab
+      if (this._checkLobbyTab(g, t)) return;
       // 委托给HangarUI
       var result = g._hangarUI.handleTouch(t.x, t.y, g.chipManager, g.saveManager);
-      if (result === 'gacha') g.renderer._upgradeSubTab = 2;
-      return;
-    }
-
-    // 抽奖子tab：委托给GachaUI处理
-    if (activeSubTab === 2) {
-      if (!g._gachaUI) g._gachaUI = new GachaUI();
-      var t = g.input.consumeTap();
-      if (!t) return;
-      // 先检查二级tab
-      if (g.renderer._upgradeSubTabAreas) {
-        for (var i = 0; i < g.renderer._upgradeSubTabAreas.length; i++) {
-          var a = g.renderer._upgradeSubTabAreas[i];
-          if (t.x >= a.x && t.x <= a.x + a.w && t.y >= a.y && t.y <= a.y + a.h) {
-            g.renderer._upgradeSubTab = a.idx; return;
-          }
-        }
-      }
-      // 再检查底部tab
-      if (g.renderer._chapterTabAreas) {
-        var tabs = g.renderer._chapterTabAreas;
-        if (tabs.battle && t.x >= tabs.battle.x && t.x <= tabs.battle.x + tabs.battle.w && t.y >= tabs.battle.y && t.y <= tabs.battle.y + tabs.battle.h) {
-          g.state = Config.STATE.CHAPTER_SELECT; return;
-        }
-        if (tabs.weapon && t.x >= tabs.weapon.x && t.x <= tabs.weapon.x + tabs.weapon.w && t.y >= tabs.weapon.y && t.y <= tabs.weapon.y + tabs.weapon.h) {
-          g.renderer._weaponDetailKey = null; g.state = Config.STATE.WEAPON_SHOP; return;
-        }
-      }
-      // 委托给GachaUI
-      var result = g._gachaUI.handleTouch(t.x, t.y, g.gachaManager, g.saveManager);
-      if (result === 'back') g.renderer._upgradeSubTab = 1;
-      else if (result && result.action === 'draw') {
-        var chips;
-        if (result.type === 'normal') chips = g.gachaManager.drawNormal(result.count);
-        else chips = g.gachaManager.drawPremium(result.count);
-        if (chips && chips.length > 0) g._gachaUI.showResults(chips);
-      }
       return;
     }
 
@@ -134,15 +77,8 @@ class UIController {
     var t = g.input.consumeTap();
     if (!t) return;
 
-    // 先检查二级tab
-    if (g.renderer._upgradeSubTabAreas) {
-      for (var i = 0; i < g.renderer._upgradeSubTabAreas.length; i++) {
-        var a = g.renderer._upgradeSubTabAreas[i];
-        if (t.x >= a.x && t.x <= a.x + a.w && t.y >= a.y && t.y <= a.y + a.h) {
-          g.renderer._upgradeSubTab = a.idx; return;
-        }
-      }
-    }
+    // 二级tab
+    if (this._checkSubTab(g, t)) return;
 
     if (g.renderer._chapterTabAreas) {
       var tabs = g.renderer._chapterTabAreas;
@@ -151,6 +87,9 @@ class UIController {
       }
       if (tabs.weapon && t.x >= tabs.weapon.x && t.x <= tabs.weapon.x + tabs.weapon.w && t.y >= tabs.weapon.y && t.y <= tabs.weapon.y + tabs.weapon.h) {
         g.renderer._weaponDetailKey = null; g.state = Config.STATE.WEAPON_SHOP; return;
+      }
+      if (tabs.shop && t.x >= tabs.shop.x && t.x <= tabs.shop.x + tabs.shop.w && t.y >= tabs.shop.y && t.y <= tabs.shop.y + tabs.shop.h) {
+        g.state = Config.STATE.SHOP; return;
       }
     }
     var r = g.renderer.getUpgradeShopHit(t);
@@ -216,6 +155,7 @@ class UIController {
         g._scrollVelocity = 0;
       } else if (r.tab === 'battle') g.state = Config.STATE.CHAPTER_SELECT;
       else if (r.tab === 'upgrade') g.state = Config.STATE.UPGRADE_SHOP;
+      else if (r.tab === 'shop') g.state = Config.STATE.SHOP;
     } else if (r.action === 'detail') {
       g.renderer._weaponDetailKey = r.key;
       g.renderer._weaponDetailTab = 0;
@@ -317,6 +257,56 @@ class UIController {
           return;
         }
       }
+    }
+  }
+
+  // === 辅助：检查二级tab点击 ===
+  _checkSubTab(g, t) {
+    if (g.renderer._upgradeSubTabAreas) {
+      for (var i = 0; i < g.renderer._upgradeSubTabAreas.length; i++) {
+        var a = g.renderer._upgradeSubTabAreas[i];
+        if (t.x >= a.x && t.x <= a.x + a.w && t.y >= a.y && t.y <= a.y + a.h) {
+          g.renderer._upgradeSubTab = a.idx; return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  // === 辅助：检查底部lobbyTab点击 ===
+  _checkLobbyTab(g, t) {
+    var tabs = g.renderer._chapterTabAreas;
+    if (!tabs) return false;
+    if (tabs.battle && t.x >= tabs.battle.x && t.x <= tabs.battle.x + tabs.battle.w && t.y >= tabs.battle.y && t.y <= tabs.battle.y + tabs.battle.h) {
+      g.state = Config.STATE.CHAPTER_SELECT; return true;
+    }
+    if (tabs.upgrade && t.x >= tabs.upgrade.x && t.x <= tabs.upgrade.x + tabs.upgrade.w && t.y >= tabs.upgrade.y && t.y <= tabs.upgrade.y + tabs.upgrade.h) {
+      g.state = Config.STATE.UPGRADE_SHOP; return true;
+    }
+    if (tabs.weapon && t.x >= tabs.weapon.x && t.x <= tabs.weapon.x + tabs.weapon.w && t.y >= tabs.weapon.y && t.y <= tabs.weapon.y + tabs.weapon.h) {
+      g.renderer._weaponDetailKey = null; g.state = Config.STATE.WEAPON_SHOP; return true;
+    }
+    if (tabs.shop && t.x >= tabs.shop.x && t.x <= tabs.shop.x + tabs.shop.w && t.y >= tabs.shop.y && t.y <= tabs.shop.y + tabs.shop.h) {
+      g.state = Config.STATE.SHOP; return true;
+    }
+    return false;
+  }
+
+  // ===== 商城 =====
+  updateShop() {
+    var g = this.game;
+    if (!g._gachaUI) g._gachaUI = new GachaUI();
+    var t = g.input.consumeTap();
+    if (!t) return;
+    // 底部tab
+    if (this._checkLobbyTab(g, t)) return;
+    // 委托给GachaUI
+    var result = g._gachaUI.handleTouch(t.x, t.y, g.gachaManager, g.saveManager);
+    if (result && result.action === 'draw') {
+      var chips;
+      if (result.type === 'normal') chips = g.gachaManager.drawNormal(result.count);
+      else chips = g.gachaManager.drawPremium(result.count);
+      if (chips && chips.length > 0) g._gachaUI.showResults(chips);
     }
   }
 }

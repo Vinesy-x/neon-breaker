@@ -95,6 +95,7 @@ const Config = {
     LEVEL_UP: 'LEVEL_UP',           // 经验升级三选一
     SKILL_CHOICE: 'SKILL_CHOICE',   // 技能宝箱三选一
     CHAPTER_CLEAR: 'CHAPTER_CLEAR', GAME_OVER: 'GAME_OVER',
+    SHOP: 'SHOP',  // 商城（含抽奖）
   },
 };
 

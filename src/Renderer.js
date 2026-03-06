@@ -142,9 +142,10 @@ class Renderer {
   get _weaponListMaxScroll() { return this.chapter._weaponListMaxScroll; }
 
   drawChapterSelect(maxChapter, records, coins) { this.chapter.drawChapterSelect(this.ctx, maxChapter, records, coins); }
-  drawUpgradeShop(saveManager) { this.chapter.drawUpgradeShop(this.ctx, saveManager); }
+  drawUpgradeShop(saveManager, chipManager) { this.chapter.drawUpgradeShop(this.ctx, saveManager, chipManager); }
   triggerUpgradeEffect(key) { this.chapter.triggerUpgradeEffect(key); }
   drawWeaponShop(saveManager) { this.chapter.drawWeaponShop(this.ctx, saveManager); }
+  drawShop(saveManager) { this.chapter.drawShop(this.ctx, saveManager); }
 
   getChapterSelectHit(tap) { return this.chapter.getChapterSelectHit(tap); }
   getUpgradeShopHit(tap) { return this.chapter.getUpgradeShopHit(tap); }
