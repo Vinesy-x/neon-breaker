@@ -327,6 +327,25 @@ class ChipManager {
   // ==================== 存档读写 ====================
 
   /** 从saveManager读取芯片相关数据 */
+
+  /**
+   * 检查并解锁新部位（通关新章节后调用）
+   */
+  checkPartUnlock() {
+    var ch = this.saveManager.getMaxChapter();
+    var unlocked = this.saveManager.getPartsUnlocked();
+    var changed = false;
+    for (var key in ChipConfig.PARTS) {
+      if (ChipConfig.PARTS[key].unlock <= ch && unlocked.indexOf(key) === -1) {
+        unlocked.push(key);
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.saveManager.setPartsUnlocked(unlocked);
+    }
+  }
+
   _loadFromSave() {
     const save = this.saveManager.getData();
 

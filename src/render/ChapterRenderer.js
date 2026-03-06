@@ -915,25 +915,23 @@ class ChapterRenderer {
   }
 
   _drawLobbyTabs(ctx, sw, sh, activeIdx) {
-    const tabH = 70, tabY = sh - Config.SAFE_BOTTOM - tabH, tabW = sw / 3;
-    const labels = ['关卡', '飞机', '武器'];
-    const tabIcons = ['tab_chapter', 'tab_upgrade', 'tab_weapon'];
-    const tabColors = ['#FFB830', '#00DDFF', '#FF3366'];
+    const tabH = 70, tabY = sh - Config.SAFE_BOTTOM - tabH, tabW = sw / 4;
+    const labels = ['关卡', '飞机', '武器', '改装'];
+    const tabIcons = ['tab_chapter', 'tab_upgrade', 'tab_weapon', 'tab_hangar'];
+    const tabColors = ['#FFB830', '#00DDFF', '#FF3366', '#BB66FF'];
     ctx.fillStyle = 'rgba(10, 10, 30, 0.95)'; ctx.fillRect(0, tabY, sw, tabH + Config.SAFE_BOTTOM);
     ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, tabY); ctx.lineTo(sw, tabY); ctx.stroke();
     const IL = getIconLoader();
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 4; i++) {
       const tx = tabW * i, tcx = tx + tabW / 2;
       if (i === activeIdx) { ctx.fillStyle = tabColors[i]; ctx.fillRect(tx, tabY, tabW, 3); }
-      // 图标
       IL.drawIcon(ctx, tabIcons[i], tcx, tabY + 24, 36);
-      // 文字
       ctx.fillStyle = i === activeIdx ? tabColors[i] : 'rgba(255,255,255,0.3)';
       ctx.font = i === activeIdx ? 'bold 12px monospace' : '12px monospace';
       ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(labels[i], tcx, tabY + 46);
-      if (i < 2) { ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.beginPath(); ctx.moveTo(tx + tabW, tabY + 10); ctx.lineTo(tx + tabW, tabY + tabH - 10); ctx.stroke(); }
+      if (i < 3) { ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.beginPath(); ctx.moveTo(tx + tabW, tabY + 10); ctx.lineTo(tx + tabW, tabY + tabH - 10); ctx.stroke(); }
     }
-    this._chapterTabAreas = { battle: { x: 0, y: tabY, w: tabW, h: tabH }, upgrade: { x: tabW, y: tabY, w: tabW, h: tabH }, weapon: { x: tabW * 2, y: tabY, w: tabW, h: tabH } };
+    this._chapterTabAreas = { battle: { x: 0, y: tabY, w: tabW, h: tabH }, upgrade: { x: tabW, y: tabY, w: tabW, h: tabH }, weapon: { x: tabW * 2, y: tabY, w: tabW, h: tabH }, hangar: { x: tabW * 3, y: tabY, w: tabW, h: tabH } };
   }
 
   // ===== 点击判定 =====
@@ -941,6 +939,7 @@ class ChapterRenderer {
     if (this._chapterTabAreas) {
       const u = this._chapterTabAreas.upgrade; if (u && tap.x >= u.x && tap.x <= u.x + u.w && tap.y >= u.y && tap.y <= u.y + u.h) return 'upgrade';
       const w = this._chapterTabAreas.weapon; if (w && tap.x >= w.x && tap.x <= w.x + w.w && tap.y >= w.y && tap.y <= w.y + w.h) return 'weapon';
+      const h = this._chapterTabAreas.hangar; if (h && tap.x >= h.x && tap.x <= h.x + h.w && tap.y >= h.y && tap.y <= h.y + h.h) return 'hangar';
     }
     if (this._chapterHitAreas) { for (let i = 0; i < this._chapterHitAreas.length; i++) { const a = this._chapterHitAreas[i]; if (tap.x >= a.x && tap.x <= a.x + a.w && tap.y >= a.y && tap.y <= a.y + a.h) return a.chapter; } }
     return null;
